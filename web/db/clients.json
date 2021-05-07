@@ -1,0 +1,79 @@
+{
+    "clients": [
+        {
+            "clientId": "d8aab16f-c50a-45ba-a8e2-b1d30411ac96",
+            "clientType": "SpeedTest",
+            "lastSeen": "2021-05-07 18:55:22",
+            "clientStatus": "online",
+            "appStatus": "stopped",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start speed test meassurement"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop speed test meassurement"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
+        },
+        {
+            "clientId": "c0c46094-5d5a-4a37-ad75-a40e425d31fd",
+            "clientType": "SpeedTest",
+            "lastSeen": "2021-05-07 18:55:41",
+            "clientStatus": "online",
+            "appStatus": "stopped",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start speed test meassurement"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop speed test meassurement"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
+        },
+        {
+            "clientId": "154ce871-1fc1-4d90-9b0e-eb3d8f19018b",
+            "clientType": "SpeedTest",
+            "lastSeen": "2021-05-07 18:56:49",
+            "clientStatus": "online",
+            "appStatus": "stopped",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start speed test meassurement"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop speed test meassurement"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
+        }
+    ]
+}
