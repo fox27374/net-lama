@@ -98,6 +98,9 @@ logTopic = mqttConfig['MQTT']['logTopic']
 wlanSensorConfig = getConfig('configs/Wlan-Sensor')
 iface = wlanSensorConfig['Wlan-Sensor']['interface']
 
+# Get frametypes
+frameTypes = getConfig('configs/Frametypes')
+
 # Connect to MQTT server and start subscription loop
 mqttClient = mqtt.Client()
 mqttClient.on_connect = mqttConnect
@@ -106,50 +109,49 @@ mqttClient.connect(mqttServer, int(mqttPort), 60)
 mqttClient.loop_start()
 mqttLog('Client registered with clientId ' + clientId)
 
-def tshark():
-    cmdFilter = ['-Y', 'wlan.fc.type==0 and wlan.fc.subtype==8']
-    cmd = 'tshark -i ' + iface + ' -l -e wlan.ssid -e wlan.bssid -e wlan_radio.channel -s 100 -Tek'
-    mqttLog('TShark command: %s' %cmd)
-    mqttLog('TShark filter: %s' %cmdFilter)
+def sensor():
+    #cmdFilter = ['-Y', 'wlan.ta==' + scanWLANBSSIDs[0] + ' or wlan.ra==' + scanWLANBSSIDs[0] + ' or wlan.sa==' + scanWLANBSSIDs[0]]
+    cmd = 'tshark -i ' + iface + ' -l -e wlan.fc.retry -e wlan.fc.type -e wlan.fc.subtype -e wlan.bssid -e wlan.ssid -e wlan.sa -e wlan.da -e wlan.ta -e wlan.ra -e wlan_radio.duration -e wlan_radio.preamble -e wlan_radio.channel -s 100 -T ek'
     cmd = cmd.split(' ')
-    cmd += cmdFilter
-    print(cmd)
-    procTshark = sp.Popen(cmd, stdout=sp.PIPE)
-    mqttLog('Starting tshark subprocess with PID: %s' %procTshark.pid)    
+    #cmd += cmdFilter
 
-    try:
-        output = procTshark.stdout.readline()
-        #if output == '' and procTshark.poll() is not None:
-        #    break
+    procSensor = sp.Popen(cmd, stdout=sp.PIPE)
+    mqttLog('Starting TShark subprocess with PID: %s' %procSensor.pid)
+    while True:
+        output = procSensor.stdout.readline()
+        if output == '' and procSensor.poll() is not None:
+            break
         if output:
             printOutput = output.strip().decode()
+            # Filter pkt header line that is send by TShark
             if 'index' not in printOutput:
-                # Filter pkt header line that is send by TShark
                 pktRaw = loads(output.strip())
-                pktSSID = pktRaw['layers']['wlan_ssid'][0]
-                pktBSSID = pktRaw['layers']['wlan_bssid'][0]
+                pktTime = pktRaw['timestamp']
+                pktTypeRaw = pktRaw['layers']['wlan_fc_type'][0]
+                pktType = frameTypes['Frametypes'][pktTypeRaw]['Name']
+                pktSubtypeRaw = pktRaw['layers']['wlan_fc_subtype'][0]
+                pktSubtype = frameTypes['Frametypes'][pktTypeRaw][pktSubtypeRaw]
+                pktSSID = pktBSSID = pktSA = pktDA = pktTA = pktRA = 'NA'
+                pktRetry = 'False'
+                if 'wlan_ssid' in pktRaw['layers'].keys(): pktSSID = pktRaw['layers']['wlan_ssid'][0]
+                if 'wlan_bssid' in pktRaw['layers'].keys(): pktBSSID = pktRaw['layers']['wlan_bssid'][0]
+                if 'wlan_sa' in pktRaw['layers'].keys(): pktSA = pktRaw['layers']['wlan_sa'][0]
+                if 'wlan_da' in pktRaw['layers'].keys(): pktDA = pktRaw['layers']['wlan_da'][0]
+                if 'wlan_ta' in pktRaw['layers'].keys(): pktTA = pktRaw['layers']['wlan_ta'][0]
+                if 'wlan_ra' in pktRaw['layers'].keys(): pktRA = pktRaw['layers']['wlan_ra'][0]
+                if pktRaw['layers']['wlan_fc_retry'][0] == '1': pktRetry = 'True'
+                pktDuration = 0
+                if 'wlan_radio_duration' in pktRaw['layers'].keys():
+                    pktDuration = int(pktRaw['layers']['wlan_radio_duration'][0]) + int(pktRaw['layers']['wlan_radio_preamble'][0])
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
-
-                data = {"ssid":pktSSID, "bssid":pktBSSID, "channel":pktChannel}
+                data = {"time":pktTime, "event":{"Type":pktType, "Subtype":pktSubtype, "SSID":pktSSID, "BSSID":pktBSSID, "SA":pktSA, "DA":pktDA, "TA":pktTA, "RA":pktRA, "Duration":pktDuration, "Channel":pktChannel, "Retry":pktRetry}}            
                 mqttClient.publish(dataTopic, dumps(data))
-            else:
-                print(output)
-
-        else:
-            print(output)
-
-        mqttLog('Stopping tshark subprocess with PID: %s' %procTshark.pid)
-        procTshark.terminate()
-
-    except:
-        mqttLog('Stopping tshark subprocess with PID: %s' %procTshark.pid)
-        procTshark.terminate()
-
+                
 # Main task, controlled by the cmdQueue switch
 while True:
     if cmdQueue[-1] == 'start':
         try:
-            tshark()
+            sensor()
             for channel in channels:
                 os.system("sudo iwconfig " + iface + " channel " + str(channel))
                 mqttLog('Changing interface channel to: %s' %channel)
