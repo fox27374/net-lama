@@ -92,7 +92,7 @@ logTopic = mqttConfig['MQTT']['logTopic']
 
 # Get application specific config
 speedTestConfig = getConfig('configs/SpeedTest')
-intervalSeconds = mqttConfig['SpeedTest']['intervalSeconds']
+intervalSeconds = speedTestConfig['SpeedTest']['intervalSeconds']
 
 # Connect to MQTT server and start subscription loop
 mqttClient = mqtt.Client()
