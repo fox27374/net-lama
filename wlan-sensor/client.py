@@ -123,7 +123,7 @@ def tshark(cmd):
                 data = {"ssid":pktSSID, "bssid":pktBSSID, "channel":pktChannel}
                 mqttClient.publish(dataTopic, dumps(data))
             else:
-            print(output)
+                print(output)
 
         else:
             print(output)
