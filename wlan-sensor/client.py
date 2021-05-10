@@ -31,7 +31,7 @@ capabilities = {
 }
 
 # Initialise application
-cmdQueue = ['stop']
+cmdQueue = ['start']
 
 def mqttConnect(client, userdata, flags, rc):
     """Subscripe to MQTT topic"""
@@ -92,7 +92,7 @@ dataTopic = mqttConfig['MQTT']['dataTopic']
 logTopic = mqttConfig['MQTT']['logTopic']
 
 # Get application specific config
-wlanSensorConfig = getConfig('configs/WLAN-Sensor')
+wlanSensorConfig = getConfig('configs/Wlan-Sensor')
 iface = wlanSensorConfig['Wlan-Sensor']['interface']
 
 # Connect to MQTT server and start subscription loop
@@ -122,6 +122,11 @@ def tshark(cmd):
 
                 data = {"ssid":pktSSID, "bssid":pktBSSID, "channel":pktChannel}
                 mqttClient.publish(dataTopic, dumps(data))
+            else:
+            print(output)
+
+        else:
+            print(output)
 
         mqttLog('Stopping tshark subprocess with PID: %s' %procTshark.pid)
         procTshark.terminate()

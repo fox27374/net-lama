@@ -24,6 +24,131 @@
                     "description": "Get configuration changes"
                 }
             }
+        },
+        {
+            "clientId": "be6b3e0f-505e-4601-99b8-2013f5eb6e7b",
+            "clientType": "WlanSensor",
+            "lastSeen": "2021-05-10 18:23:38",
+            "clientStatus": "online",
+            "appStatus": "stopped",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start WLAN tshark"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop WLAN tshark"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
+        },
+        {
+            "clientId": "9c51dc31-36a2-4f1f-af89-971e8261a310",
+            "clientType": "WlanSensor",
+            "lastSeen": "2021-05-10 18:23:43",
+            "clientStatus": "online",
+            "appStatus": "stopped",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start WLAN tshark"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop WLAN tshark"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
+        },
+        {
+            "clientId": "41b0855b-8a8c-4825-b2d1-f4414fc8710f",
+            "clientType": "WlanSensor",
+            "lastSeen": "2021-05-10 18:25:05",
+            "clientStatus": "online",
+            "appStatus": "stopped",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start WLAN tshark"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop WLAN tshark"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
+        },
+        {
+            "clientId": "bf2f0f45-8ce9-4bb3-964f-779b68f6df7b",
+            "clientType": "WlanSensor",
+            "lastSeen": "2021-05-10 18:25:39",
+            "clientStatus": "online",
+            "appStatus": "stopped",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start WLAN tshark"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop WLAN tshark"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
+        },
+        {
+            "clientId": "398d12db-c066-496a-ace9-7b962fb648d8",
+            "clientType": "WlanSensor",
+            "lastSeen": "2021-05-10 18:26:37",
+            "clientStatus": "online",
+            "appStatus": "running",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start WLAN tshark"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop WLAN tshark"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
         }
     ]
 }
