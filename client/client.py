@@ -90,6 +90,10 @@ commandTopic = mqttConfig['MQTT']['commandTopic']
 dataTopic = mqttConfig['MQTT']['dataTopic']
 logTopic = mqttConfig['MQTT']['logTopic']
 
+# Get application specific config
+speedTestConfig = getConfig('configs/SpeedTest')
+intervalSeconds = mqttConfig['SpeedTest']['intervalSeconds']
+
 # Connect to MQTT server and start subscription loop
 mqttClient = mqtt.Client()
 mqttClient.on_connect = mqttConnect
@@ -127,7 +131,7 @@ while True:
             mqttLog('An error occured during application execution: ' + e)
 
         mqttClient.publish(dataTopic, dumps(data))
-        sleep(60)
+        sleep(int(intervalSeconds))
 
     else:
         pass

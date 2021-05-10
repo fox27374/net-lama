@@ -17,6 +17,9 @@
         "Token": "b6b02802-eaf6-4d17-89b1-0fd6d66d2673",
         "Bulk": "1000"
     },
+    "SpeedTest": {
+        "intervalSeconds": "120"
+    },
     "Frametypes": {
         "0": {
             "Name": "Management",
