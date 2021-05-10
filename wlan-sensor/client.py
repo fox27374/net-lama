@@ -126,6 +126,7 @@ def sensor():
             # Filter pkt header line that is send by TShark
             if 'index' not in printOutput:
                 pktRaw = loads(output.strip())
+                print(output)
                 pktTime = pktRaw['timestamp']
                 pktTypeRaw = pktRaw['layers']['wlan_fc_type'][0]
                 pktType = frameTypes['Frametypes'][pktTypeRaw]['Name']
