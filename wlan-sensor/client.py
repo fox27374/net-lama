@@ -109,8 +109,8 @@ def tshark(cmd):
 
     try:
         output = procTshark.stdout.readline()
-        if output == '' and procTshark.poll() is not None:
-            break
+        #if output == '' and procTshark.poll() is not None:
+        #    break
         if output:
             printOutput = output.strip().decode()
             if 'index' not in printOutput:
