@@ -93,7 +93,7 @@ logTopic = mqttConfig['MQTT']['logTopic']
 
 # Get application specific config
 wlanSensorConfig = getConfig('configs/WLAN-Sensor')
-iface = wlanSensorConfig['WLAN-Sensor']['interface']
+iface = wlanSensorConfig['Wlan-Sensor']['interface']
 
 # Connect to MQTT server and start subscription loop
 mqttClient = mqtt.Client()
