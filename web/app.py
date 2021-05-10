@@ -12,6 +12,7 @@ configFile = 'configs/config.json'
 dbFile = 'db/clients.json'
 apiBaseUrl = '/api/v1/'
 hostIp = '10.140.80.1'
+debug = True
 minOutdated = 5
 
 def getCurrentTime():
@@ -61,7 +62,7 @@ def spec():
 def getConfigs(section = 'all'):
     currentConfig = readConfig(configFile)
     if section == 'all':
-        return jsonify(currentConfig)
+        return jsonify({'configs': list(currentConfig.keys())})
     else:
         if section in currentConfig.keys():
             return jsonify({section: currentConfig[section]})
@@ -155,4 +156,4 @@ def updateClient():
 def notFound(error):
     return make_response(jsonify({'error': 'Not found'}), 404)
 
-app.run(host=hostIp, debug=True)
+app.run(host=hostIp, debug=debug)

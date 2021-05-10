@@ -1,21 +1,21 @@
 {
-    "SensorPi": {
-        "Scantime": 80,
-        "Interface": "wlan0"
+    "Wlan-Sensor": {
+        "scantime": 80,
+        "interface": "wlan0"
     },
     "MQTT": {
-        "mqttServer": "0.0.0.0",
+        "mqttServer": "10.140.80.1",
         "mqttPort": "1883",
-        "commandTopic": "sensorpi/command",
-        "dataTopic": "sensorpi/data",
-        "logTopic": "sensorpi/log"
+        "commandTopic": "net-lama/command",
+        "dataTopic": "net-lama/data",
+        "logTopic": "net-lama/log"
     },
     "Splunk": {
-        "Server": "172.24.89.171",
-        "Port": "8088",
-        "URL": "/services/collector",
-        "Token": "b6b02802-eaf6-4d17-89b1-0fd6d66d2673",
-        "Bulk": "1000"
+        "server": "10.140.70.1",
+        "port": "8088",
+        "url": "/services/collector",
+        "token": "b6b02802-eaf6-4d17-89b1-0fd6d66d2673",
+        "bulk": "1000"
     },
     "SpeedTest": {
         "intervalSeconds": "120"
