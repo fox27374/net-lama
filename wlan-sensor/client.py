@@ -6,11 +6,14 @@ from splib import registerClient, updateClient, getConfig, getCurrentTime
 from time import sleep
 from json import dumps, loads
 import sys
-import speedtest
+import os
 
 clientId = False
 clientType = 'WlanSensor'
 commands = ['start', 'stop', 'status', 'update']
+channels= [1,6,11]
+scanTime = 10
+
 capabilities = {
     'start': {
         'command': 'start',
@@ -103,7 +106,14 @@ mqttClient.connect(mqttServer, int(mqttPort), 60)
 mqttClient.loop_start()
 mqttLog('Client registered with clientId ' + clientId)
 
-def tshark(cmd):
+def tshark():
+    cmdFilter = ['-Y', 'wlan.fc.type==0 and wlan.fc.subtype==8']
+    cmd = 'tshark -i ' + iface + ' -l -e wlan.ssid -e wlan.bssid -e wlan_radio.channel -s 100 -Tek'
+    mqttLog('TShark command: %s' %cmd)
+    mqttLog('TShark filter: %s' %cmdFilter)
+    cmd = cmd.split(' ')
+    cmd += cmdFilter
+    print(cmd)
     procTshark = sp.Popen(cmd, stdout=sp.PIPE)
     mqttLog('Starting tshark subprocess with PID: %s' %procTshark.pid)    
 
@@ -139,14 +149,11 @@ def tshark(cmd):
 while True:
     if cmdQueue[-1] == 'start':
         try:
-            cmdFilter = ['-Y', 'wlan.fc.type==0 and wlan.fc.subtype==8']
-            cmd = 'tshark -i ' + iface + ' -l -e wlan.ssid -e wlan.bssid -e wlan_radio.channel -s 100 -Tek'
-            mqttLog('TShark command: %s' %cmd)
-            mqttLog('TShark filter: %s' %cmdFilter)
-            cmd = cmd.split(' ')
-            cmd += cmdFilter
-
-            tshark(cmd)
+            tshark()
+            for channel in channels:
+                os.system("sudo iwconfig " + iface + " channel " + str(channel))
+                mqttLog('Changing interface channel to: %s' %channel)
+                sleep(int(scanTime))
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
             mqttLog('An error occured during application execution: ' + e)
