@@ -1,7 +1,7 @@
 {
     "Wlan-Sensor": {
         "scantime": 80,
-        "interface": "wlan0"
+        "interface": "wlan1"
     },
     "MQTT": {
         "mqttServer": "10.140.80.1",
@@ -10,11 +10,11 @@
         "dataTopic": "net-lama/data",
         "logTopic": "net-lama/log"
     },
-    "Splunk": {
+    "Hec-Forwarder": {
         "server": "10.140.70.1",
         "port": "8088",
         "url": "/services/collector",
-        "token": "b6b02802-eaf6-4d17-89b1-0fd6d66d2673",
+        "token": "5c9e948b-7b06-41d7-8258-2be21cc1a884",
         "bulk": "1000"
     },
     "SpeedTest": {
