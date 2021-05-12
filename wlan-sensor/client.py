@@ -181,10 +181,10 @@ def scanner():
                 if 'wlan_ssid' in pktRaw['layers'].keys(): pktSSID = pktRaw['layers']['wlan_ssid'][0]
                 if 'wlan_bssid' in pktRaw['layers'].keys(): pktBSSID = pktRaw['layers']['wlan_bssid'][0]
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
-                data = {"time":pktTime, "event":{"SSID":pktSSID, "BSSID":pktBSSID, "Channel":pktChannel}}
-                print(data)
+                data = {'time': pktTime, 'event': {'ssid': pktSSID, 'bssid': pktBSSID, 'channel': pktChannel}}
+                #print(data)
                 wlanInfos.append(data)
-                loop =+ 1
+                loop += 1
     procSensor.terminate()
                 
 # Main task, controlled by the cmdQueue switch
@@ -202,11 +202,12 @@ while True:
 
     if cmdQueue[-1] == 'scan':
         try:
-            scanner()
             for channel in channels:
                 system("sudo iwconfig " + iface + " channel " + str(channel))
                 mqttLog('Changing interface channel to: %s' %channel)
+                scanner()
             print(wlanInfos)
+            break
             
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}

@@ -1,9 +1,67 @@
 {
     "clients": [
         {
-            "clientId": "3c30bde1-0162-4375-9418-c791ee02380c",
+            "clientId": "ff5c3581-3db6-4bb1-85b5-fbc1fe543741",
             "clientType": "WlanSensor",
-            "lastSeen": "2021-05-12 19:01:47",
+            "lastSeen": "2021-05-12 19:16:26",
+            "clientStatus": "online",
+            "appStatus": "undefined",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start WLAN tshark"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop WLAN tshark"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "scan": {
+                    "command": "scan",
+                    "description": "Scan for nearby WLANs"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
+        },
+        {
+            "clientId": "45647f03-7ec7-4edc-adc4-ed6d75e20838",
+            "clientType": "WlanSensor",
+            "lastSeen": "2021-05-12 19:16:59",
+            "clientStatus": "online",
+            "appStatus": "undefined",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start WLAN tshark"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop WLAN tshark"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "scan": {
+                    "command": "scan",
+                    "description": "Scan for nearby WLANs"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
+        },
+        {
+            "clientId": "f0c55b91-5a11-45b0-b1be-aa350effe35e",
+            "clientType": "WlanSensor",
+            "lastSeen": "2021-05-12 19:19:27",
             "clientStatus": "online",
             "appStatus": "undefined",
             "capabilities": {
