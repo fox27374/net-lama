@@ -26,10 +26,18 @@ class SplunkSchema(Schema):
     Token = fields.Str()
     Bulk = fields.Int()
 
+class WlanSensorSchema(Schema):
+    scantime = fields.Int()
+    interface = fields.String()
+    channels = fields.List(fields.Int())
+    scanTime = fields.Int()
+    wlans = fields.Dict()
+
 class ConfigSchema(Schema):
     SensorPi = fields.Nested(SensorPiSchema)
     MQTT = fields.Nested(MQTTSchema)
     Splunk = fields.Nested(SplunkSchema)
+    WlanSensor = fields.Nested(WlanSensorSchema)
 
 class ClientSchema(Schema):
     clientType = fields.Str()

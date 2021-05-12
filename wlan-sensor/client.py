@@ -102,10 +102,10 @@ dataTopic = mqttConfig['MQTT']['dataTopic']
 logTopic = mqttConfig['MQTT']['logTopic']
 
 # Get application specific config
-wlanSensorConfig = getConfig('configs/Wlan-Sensor')
-iface = wlanSensorConfig['Wlan-Sensor']['interface']
-channels = wlanSensorConfig['Wlan-Sensor']['channels']
-scanTime = wlanSensorConfig['Wlan-Sensor']['scanTime']
+wlanSensorConfig = getConfig('configs/WlanSensor')
+iface = wlanSensorConfig['WlanSensor']['interface']
+channels = wlanSensorConfig['WlanSensor']['channels']
+scanTime = wlanSensorConfig['WlanSensor']['scanTime']
 
 # Get frametypes
 frameTypes = getConfig('configs/Frametypes')
@@ -208,9 +208,7 @@ while True:
                 system("sudo iwconfig " + iface + " channel " + str(channel))
                 mqttLog('Changing interface channel to: %s' %channel)
                 scanner()
-            print(wlanInfos)
             b = createWlanList(wlanInfos)
-            print(b)
             break
             
         except Exception as e:

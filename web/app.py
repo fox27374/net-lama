@@ -88,6 +88,7 @@ def getClients(client = 'all'):
 """Update configuration"""
 @app.route(apiBaseUrl + 'configs/update', methods = ['POST'])
 def updateConfig():
+    currentConfig = readConfig(configFile)
     configSchemaObject = apiSchema.ConfigSchema()
     postData = request.json
     error = configSchemaObject.validate(postData)
