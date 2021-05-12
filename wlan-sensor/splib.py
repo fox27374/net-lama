@@ -27,8 +27,8 @@ def getCurrentTime():
     return currentTime
 
 # Application specific functions
-def createWlanList(wlan):
-    frequencies = getConfig(gv.apiBaseUrl + 'config/Frequencies')
+def createWlanList(wlans):
+    #frequencies = getConfig(gv.apiBaseUrl + 'config/Frequencies')
     ssid = wlan['ssid']
     bssid = wlan['bssid']
     #channel = frequencies['fre2cha'][wlan['channel']]
@@ -39,15 +39,17 @@ def createWlanList(wlan):
     addValue = True
     
     # Append values if SSID exists (no duplicates)
-    if ssid in gv.wlans.keys():
-        for a in gv.wlans[ssid]:
+    if ssid in wlans.keys():
+        for a in wlans[ssid]:
             if a['bssid'] == bssid:
                 addValue = False
         if addValue == True:
-            gv.wlans[ssid].append(wlanValue)
+            wlans[ssid].append(wlanValue)
 
     # Add new SSID
     else:
         valueList = []
         valueList.append(wlanValue)
-        gv.wlans[ssid] = valueList
+        wlans[ssid] = valueList
+
+    return wlans
