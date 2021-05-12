@@ -30,6 +30,7 @@ def getCurrentTime():
 def createWlanList(wlanInfos):
     wlans = {}
     for wlanInfo in wlanInfos:
+        print(wlanInfo)
         ssid = wlanInfo['ssid']
         bssid = wlanInfo['bssid']
         channel = [wlanInfo['channel']]
