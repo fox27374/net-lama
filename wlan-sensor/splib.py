@@ -27,29 +27,27 @@ def getCurrentTime():
     return currentTime
 
 # Application specific functions
-def createWlanList(wlans):
-    #frequencies = getConfig(gv.apiBaseUrl + 'config/Frequencies')
-    ssid = wlan['ssid']
-    bssid = wlan['bssid']
-    #channel = frequencies['fre2cha'][wlan['channel']]
-    channel = [wlan['channel']]
-    #rssi = wlan['rssi']
-    wlanValue = {'bssid':bssid, 'channel':channel}
-    #wlanValue = {'bssid':bssid, 'channel':channel, 'rssi':rssi}
-    addValue = True
+def createWlanList(wlanInfos):
+    wlans = {}
+    for wlanInfo in wlanInfos:
+        ssid = wlanInfo['ssid']
+        bssid = wlanInfo['bssid']
+        channel = [wlanInfo['channel']]
+        wlanValue = {'bssid':bssid, 'channel':channel}
+        addValue = True
     
-    # Append values if SSID exists (no duplicates)
-    if ssid in wlans.keys():
-        for a in wlans[ssid]:
-            if a['bssid'] == bssid:
-                addValue = False
-        if addValue == True:
-            wlans[ssid].append(wlanValue)
+        # Append values if SSID exists (no duplicates)
+        if ssid in wlans.keys():
+            for a in wlans[ssid]:
+                if a['bssid'] == bssid:
+                    addValue = False
+            if addValue == True:
+                wlans[ssid].append(wlanValue)
 
-    # Add new SSID
-    else:
-        valueList = []
-        valueList.append(wlanValue)
-        wlans[ssid] = valueList
+        # Add new SSID
+        else:
+            valueList = []
+            valueList.append(wlanValue)
+            wlans[ssid] = valueList
 
     return wlans
