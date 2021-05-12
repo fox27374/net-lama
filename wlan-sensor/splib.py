@@ -32,43 +32,29 @@ def createWlanList(wlanInfos):
     for wlanInfo in wlanInfos:
         ssid = wlanInfo['ssid']
         if ssid not in wlans.keys():
-            wlans[ssid] = {}
+            wlans[ssid] = []
 
     for wlanInfo in wlanInfos:
         ssid = wlanInfo['ssid']
         bssid = wlanInfo['bssid']
-        if bssid not in wlans[ssid].keys():
-            wlans[ssid][bssid] = {}
-
-    for wlanInfo in wlanInfos:
-        ssid = wlanInfo['ssid']
-        bssid = wlanInfo['bssid']
-        channel = wlanInfo['channel']
-        rssi = wlanInfo['rssi']
-        if channel not in wlans[ssid][bssid].keys():
-            wlans[ssid][bssid]['channel'] = channel
-            wlans[ssid][bssid]['rssi'] = rssi
+        inList = False
+        for item in wlans[ssid]:
+            if item['bssid'] == bssid: inList = True
+        
+        if inList == False:
+            wlans[ssid].append({'bssid': bssid, 'channel': channel, 'rssi': rssi})
 
     # for wlanInfo in wlanInfos:
     #     ssid = wlanInfo['ssid']
     #     bssid = wlanInfo['bssid']
+    #     channel = wlanInfo['channel']
     #     rssi = wlanInfo['rssi']
-    #     channel = [wlanInfo['channel']]
-    #     wlanValue = {'bssid':bssid, 'channel':channel}
-    #     addValue = True
-    
-    #     # Append values if SSID exists (no duplicates)
-    #     if ssid in wlans.keys():
-    #         for a in wlans[ssid]:
-    #             if a['bssid'] == bssid:
-    #                 addValue = False
-    #         if addValue == True:
-    #             wlans[ssid].append(wlanValue)
-
-    #     # Add new SSID
-    #     else:
-    #         valueList = []
-    #         valueList.append(wlanValue)
-    #         wlans[ssid] = valueList
+    #     inList = False
+    #     for item in wlans[ssid]:
+    #         if item['bssid'] == bssid:
+    #             if item['']
+    #     if channel not in wlans[ssid][bssid].keys():
+    #         wlans[ssid][bssid]['channel'] = channel
+    #         wlans[ssid][bssid]['rssi'] = rssi
 
     return wlans
