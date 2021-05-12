@@ -207,6 +207,9 @@ while True:
                 mqttLog('Changing interface channel to: %s' %channel)
                 scanner()
             print(wlanInfos)
+            for wlanInfo in wlanInfos:
+                createWlanList(wlanInfo)
+            print(gv.wlans)
             break
             
         except Exception as e:
