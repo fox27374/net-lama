@@ -5,14 +5,14 @@ import subprocess as sp
 from splib import registerClient, updateClient, getConfig, getCurrentTime
 from time import sleep
 from json import dumps, loads
+from os import system
 import sys
-import os
+
 
 clientId = False
 clientType = 'WlanSensor'
 commands = ['start', 'stop', 'status', 'update']
-channels= [1,6,11]
-scanTime = 10
+wlans = {}
 
 capabilities = {
     'start': {
@@ -26,6 +26,10 @@ capabilities = {
     'status': {
         'command': 'status',
         'description': 'Send the current status to the api endpoint'
+    },
+    'scan': {
+        'command': 'scan',
+        'description': 'Scan for nearby WLANs'
     },
     'update': {
         'command': 'update',
@@ -69,6 +73,8 @@ def mqttMessage(client, userdata, msg):
                 mqttLog('Stopping application')
                 updateClient(clientId, clientType, 'stopped', capabilities)
                 mqttLog('Sending application status update to api endpoint')
+            elif message['command'] == 'scan':
+                createWlanList(message)
             elif message['command'] == 'update':
                 pass
                 # TODO
@@ -97,6 +103,8 @@ logTopic = mqttConfig['MQTT']['logTopic']
 # Get application specific config
 wlanSensorConfig = getConfig('configs/Wlan-Sensor')
 iface = wlanSensorConfig['Wlan-Sensor']['interface']
+channels = wlanSensorConfig['Wlan-Sensor']['channels']
+scanTime = wlanSensorConfig['Wlan-Sensor']['scanTime']
 
 # Get frametypes
 frameTypes = getConfig('configs/Frametypes')
@@ -147,6 +155,32 @@ def sensor():
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
                 data = {"time":pktTime, "event":{"Type":pktType, "Subtype":pktSubtype, "SSID":pktSSID, "BSSID":pktBSSID, "SA":pktSA, "DA":pktDA, "TA":pktTA, "RA":pktRA, "Duration":pktDuration, "Channel":pktChannel, "Retry":pktRetry}}            
                 mqttClient.publish(dataTopic, dumps(data))
+
+def scanner():
+    cmdFilter = ['-Y', 'wlan.fc.subtype==8']
+    cmd = 'tshark -i ' + iface + ' -l -e wlan.bssid -e wlan.ssid -e wlan_radio.channel -s 100 -T ek'
+    cmd = cmd.split(' ')
+    cmd += cmdFilter
+
+    procSensor = sp.Popen(cmd, stdout=sp.PIPE)
+    mqttLog('Starting TShark subprocess with PID: %s' %procSensor.pid)
+    while True:
+        output = procSensor.stdout.readline()
+        if output == '' and procSensor.poll() is not None:
+            break
+        if output:
+            printOutput = output.strip().decode()
+            # Filter pkt header line that is send by TShark
+            if 'index' not in printOutput:
+                pktRaw = loads(output.strip())
+                #print(output)
+                pktTime = pktRaw['timestamp']
+                pktSSID = 'NA'
+                if 'wlan_ssid' in pktRaw['layers'].keys(): pktSSID = pktRaw['layers']['wlan_ssid'][0]
+                if 'wlan_bssid' in pktRaw['layers'].keys(): pktBSSID = pktRaw['layers']['wlan_bssid'][0]
+                pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
+                data = {"time":pktTime, "event":{"SSID":pktSSID, "BSSID":pktBSSID, "Channel":pktChannel}}
+                print(data)
                 
 # Main task, controlled by the cmdQueue switch
 while True:
@@ -154,12 +188,17 @@ while True:
         try:
             sensor()
             for channel in channels:
-                os.system("sudo iwconfig " + iface + " channel " + str(channel))
+                system("sudo iwconfig " + iface + " channel " + str(channel))
                 mqttLog('Changing interface channel to: %s' %channel)
                 sleep(int(scanTime))
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
             mqttLog('An error occured during application execution: ' + e)
 
-    else:
-        pass
+    if cmdQueue[-1] == 'scan':
+        mqttClient.subscribe([(dataTopic, 0)])
+        for channel in channels:
+            system("sudo iwconfig " + iface + " channel " + str(channel))
+            mqttLog('Changing interface channel to: %s' %channel)
+            sleep(int(scanTime))
+        mqttClient.unsubscribe([(dataTopic, 0)])

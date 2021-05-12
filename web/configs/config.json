@@ -1,7 +1,9 @@
 {
     "Wlan-Sensor": {
         "scantime": 80,
-        "interface": "wlan1"
+        "interface": "wlan1",
+        "channels": [1, 6, 11],
+        "scanTime": "5"
     },
     "MQTT": {
         "mqttServer": "10.140.80.1",
