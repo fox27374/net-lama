@@ -166,7 +166,7 @@ def scanner():
 
     procSensor = sp.Popen(cmd, stdout=sp.PIPE)
     mqttLog('Starting TShark subprocess with PID: %s' %procSensor.pid)
-    while loop <= 100:
+    while loop <= 50:
         output = procSensor.stdout.readline()
         if output == '' and procSensor.poll() is not None:
             break
@@ -181,7 +181,7 @@ def scanner():
                 if 'wlan_ssid' in pktRaw['layers'].keys(): pktSSID = pktRaw['layers']['wlan_ssid'][0]
                 if 'wlan_bssid' in pktRaw['layers'].keys(): pktBSSID = pktRaw['layers']['wlan_bssid'][0]
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
-                data = {'time': pktTime, 'event': {'ssid': pktSSID, 'bssid': pktBSSID, 'channel': pktChannel}}
+                data = {'ssid': pktSSID, 'bssid': pktBSSID, 'channel': pktChannel}
                 #print(data)
                 wlanInfos.append(data)
                 loop += 1
