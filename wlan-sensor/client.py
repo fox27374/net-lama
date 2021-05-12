@@ -162,9 +162,11 @@ def scanner():
     cmd = cmd.split(' ')
     cmd += cmdFilter
 
+    loop = 0
+
     procSensor = sp.Popen(cmd, stdout=sp.PIPE)
     mqttLog('Starting TShark subprocess with PID: %s' %procSensor.pid)
-    while True:
+    while loop <= 100:
         output = procSensor.stdout.readline()
         if output == '' and procSensor.poll() is not None:
             break
@@ -181,6 +183,8 @@ def scanner():
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
                 data = {"time":pktTime, "event":{"SSID":pktSSID, "BSSID":pktBSSID, "Channel":pktChannel}}
                 print(data)
+                loop =+ 1
+    procSensor.terminate()
                 
 # Main task, controlled by the cmdQueue switch
 while True:
