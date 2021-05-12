@@ -3,6 +3,7 @@
 import paho.mqtt.client as mqtt
 import subprocess as sp
 from splib import registerClient, updateClient, getConfig, getCurrentTime, createWlanList
+import globalVars as gv
 from time import sleep
 from json import dumps, loads
 from os import system
