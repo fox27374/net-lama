@@ -31,7 +31,31 @@ def createWlanList(wlanInfos):
     wlans = {}
     for wlanInfo in wlanInfos:
         ssid = wlanInfo['ssid']
+        if ssid not in wlans.keys():
+            wlans[ssid] = {}
+
+    for wlanInfo in wlanInfos:
+        ssid = wlanInfo['ssid']
         bssid = wlanInfo['bssid']
+        if bssid not in wlans[ssid].keys():
+            wlans[ssid][bssid] = {}
+
+    for wlanInfo in wlanInfos:
+        ssid = wlanInfo['ssid']
+        bssid = wlanInfo['bssid']
+        channel = wlanInfo['channel']
+        rssi = wlanInfo['rssi']
+        if channel not in wlans[ssid][bssid].keys():
+            wlans[ssid][bssid][channel] = channel
+            wlans[ssid][bssid][rssi] = rssi
+
+
+
+
+"""     for wlanInfo in wlanInfos:
+        ssid = wlanInfo['ssid']
+        bssid = wlanInfo['bssid']
+        rssi = wlanInfo['rssi']
         channel = [wlanInfo['channel']]
         wlanValue = {'bssid':bssid, 'channel':channel}
         addValue = True
@@ -48,6 +72,6 @@ def createWlanList(wlanInfos):
         else:
             valueList = []
             valueList.append(wlanValue)
-            wlans[ssid] = valueList
+            wlans[ssid] = valueList """
 
     return wlans

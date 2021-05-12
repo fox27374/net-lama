@@ -178,11 +178,12 @@ def scanner():
                 pktRaw = loads(output.strip())
                 print(output)
                 pktTime = pktRaw['timestamp']
-                pktSSID = 'NA'
+                pktSSID = pktRSSI = 'NA'
                 if 'wlan_ssid' in pktRaw['layers'].keys(): pktSSID = pktRaw['layers']['wlan_ssid'][0]
                 if 'wlan_bssid' in pktRaw['layers'].keys(): pktBSSID = pktRaw['layers']['wlan_bssid'][0]
+                if 'wlan_radio_signal_dbm' in pktRaw['layers'].keys(): pktRSSI = pktRaw['layers']['wlan_radio_signal_dbm'][0]
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
-                data = {'ssid': pktSSID, 'bssid': pktBSSID, 'channel': pktChannel}
+                data = {'ssid': pktSSID, 'bssid': pktBSSID, 'rssi': pktRSSI, 'channel': pktChannel}
                 #print(data)
                 wlanInfos.append(data)
                 loop += 1
