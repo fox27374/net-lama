@@ -38,7 +38,7 @@ capabilities = {
 }
 
 # Initialise application
-cmdQueue = ['start']
+cmdQueue = ['scan']
 
 def mqttConnect(client, userdata, flags, rc):
     """Subscripe to MQTT topic"""
@@ -200,9 +200,5 @@ while True:
             mqttLog('An error occured during application execution: ' + e)
 
     if cmdQueue[-1] == 'scan':
-        mqttClient.subscribe([(dataTopic, 0)])
-        for channel in channels:
-            system("sudo iwconfig " + iface + " channel " + str(channel))
-            mqttLog('Changing interface channel to: %s' %channel)
-            sleep(int(scanTime))
-        mqttClient.unsubscribe([(dataTopic, 0)])
+        scanner()
+        break
