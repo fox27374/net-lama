@@ -159,7 +159,7 @@ def sensor():
 
 def scanner():
     cmdFilter = ['-Y', 'wlan.fc.subtype==8']
-    cmd = 'tshark -i ' + iface + ' -l -e wlan.bssid -e wlan.ssid -e wlan_radio.channel -s 100 -T ek'
+    cmd = 'tshark -i ' + iface + ' -l -e wlan.bssid -e wlan.ssid -e wlan_radio.channel -e wlan_radio.signal_dbm -s 100 -T ek'
     cmd = cmd.split(' ')
     cmd += cmdFilter
 
@@ -176,7 +176,7 @@ def scanner():
             # Filter pkt header line that is send by TShark
             if 'index' not in printOutput:
                 pktRaw = loads(output.strip())
-                #print(output)
+                print(output)
                 pktTime = pktRaw['timestamp']
                 pktSSID = 'NA'
                 if 'wlan_ssid' in pktRaw['layers'].keys(): pktSSID = pktRaw['layers']['wlan_ssid'][0]
