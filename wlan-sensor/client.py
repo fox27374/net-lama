@@ -12,7 +12,7 @@ import sys
 clientId = False
 clientType = 'WlanSensor'
 commands = ['start', 'stop', 'status', 'update']
-wlans = {}
+wlanInfos = []
 
 capabilities = {
     'start': {
@@ -183,6 +183,7 @@ def scanner():
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
                 data = {"time":pktTime, "event":{"SSID":pktSSID, "BSSID":pktBSSID, "Channel":pktChannel}}
                 print(data)
+                wlanInfos.append(data)
                 loop =+ 1
     procSensor.terminate()
                 
@@ -200,5 +201,13 @@ while True:
             mqttLog('An error occured during application execution: ' + e)
 
     if cmdQueue[-1] == 'scan':
-        scanner()
-        break
+        try:
+            scanner()
+            for channel in channels:
+                system("sudo iwconfig " + iface + " channel " + str(channel))
+                mqttLog('Changing interface channel to: %s' %channel)
+            print(wlanInfos)
+            
+        except Exception as e:
+            data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
+            mqttLog('An error occured during application execution: ' + e)

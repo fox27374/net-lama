@@ -1,11 +1,11 @@
 {
     "clients": [
         {
-            "clientId": "1d84b1c9-4c57-402a-b75a-346c2c9e675e",
+            "clientId": "3c30bde1-0162-4375-9418-c791ee02380c",
             "clientType": "WlanSensor",
-            "lastSeen": "2021-05-11 22:16:02",
+            "lastSeen": "2021-05-12 19:01:47",
             "clientStatus": "online",
-            "appStatus": "running",
+            "appStatus": "undefined",
             "capabilities": {
                 "start": {
                     "command": "start",
@@ -19,80 +19,9 @@
                     "command": "status",
                     "description": "Send the current status to the api endpoint"
                 },
-                "update": {
-                    "command": "update",
-                    "description": "Get configuration changes"
-                }
-            }
-        },
-        {
-            "clientId": "864e8ad8-bab3-435b-be25-28c94a5b80d2",
-            "clientType": "HEC-Forwarder",
-            "lastSeen": "2021-05-11 22:16:06",
-            "clientStatus": "online",
-            "appStatus": "running",
-            "capabilities": {
-                "start": {
-                    "command": "start",
-                    "description": "Start event forwarding"
-                },
-                "stop": {
-                    "command": "stop",
-                    "description": "Stop event forwarding"
-                },
-                "status": {
-                    "command": "status",
-                    "description": "Send the current status to the api endpoint"
-                },
-                "update": {
-                    "command": "update",
-                    "description": "Get configuration changes"
-                }
-            }
-        },
-        {
-            "clientId": "33637133-1470-4e95-98bd-cf03c534f588",
-            "clientType": "WlanSensor",
-            "lastSeen": "2021-05-11 22:19:32",
-            "clientStatus": "online",
-            "appStatus": "running",
-            "capabilities": {
-                "start": {
-                    "command": "start",
-                    "description": "Start WLAN tshark"
-                },
-                "stop": {
-                    "command": "stop",
-                    "description": "Stop WLAN tshark"
-                },
-                "status": {
-                    "command": "status",
-                    "description": "Send the current status to the api endpoint"
-                },
-                "update": {
-                    "command": "update",
-                    "description": "Get configuration changes"
-                }
-            }
-        },
-        {
-            "clientId": "d352bfbe-98d6-40a0-b3ed-396feb8bc85d",
-            "clientType": "HEC-Forwarder",
-            "lastSeen": "2021-05-11 22:19:38",
-            "clientStatus": "online",
-            "appStatus": "running",
-            "capabilities": {
-                "start": {
-                    "command": "start",
-                    "description": "Start event forwarding"
-                },
-                "stop": {
-                    "command": "stop",
-                    "description": "Stop event forwarding"
-                },
-                "status": {
-                    "command": "status",
-                    "description": "Send the current status to the api endpoint"
+                "scan": {
+                    "command": "scan",
+                    "description": "Scan for nearby WLANs"
                 },
                 "update": {
                     "command": "update",
