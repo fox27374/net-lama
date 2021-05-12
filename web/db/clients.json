@@ -1,38 +1,9 @@
 {
     "clients": [
         {
-            "clientId": "7686e0bd-f2ba-4cda-ba15-ac079657420e",
+            "clientId": "a9735a92-e734-4ca9-8387-074c5d07ed02",
             "clientType": "WlanSensor",
-            "lastSeen": "2021-05-12 20:22:54",
-            "clientStatus": "online",
-            "appStatus": "undefined",
-            "capabilities": {
-                "start": {
-                    "command": "start",
-                    "description": "Start WLAN tshark"
-                },
-                "stop": {
-                    "command": "stop",
-                    "description": "Stop WLAN tshark"
-                },
-                "status": {
-                    "command": "status",
-                    "description": "Send the current status to the api endpoint"
-                },
-                "scan": {
-                    "command": "scan",
-                    "description": "Scan for nearby WLANs"
-                },
-                "update": {
-                    "command": "update",
-                    "description": "Get configuration changes"
-                }
-            }
-        },
-        {
-            "clientId": "f584ae20-594e-4453-bfbd-cafb1c053dc4",
-            "clientType": "WlanSensor",
-            "lastSeen": "2021-05-12 20:26:56",
+            "lastSeen": "2021-05-12 20:53:33",
             "clientStatus": "online",
             "appStatus": "undefined",
             "capabilities": {

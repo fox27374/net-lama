@@ -46,8 +46,8 @@ def createWlanList(wlanInfos):
         channel = wlanInfo['channel']
         rssi = wlanInfo['rssi']
         if channel not in wlans[ssid][bssid].keys():
-            wlans[ssid][bssid][channel] = channel
-            wlans[ssid][bssid][rssi] = rssi
+            wlans[ssid][bssid]['channel'] = channel
+            wlans[ssid][bssid]['rssi'] = rssi
 
     # for wlanInfo in wlanInfos:
     #     ssid = wlanInfo['ssid']
