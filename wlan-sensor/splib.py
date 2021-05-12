@@ -28,7 +28,7 @@ def getCurrentTime():
 
 # Application specific functions
 def createWlanList(wlan):
-    frequencies = getConfig(apiBaseUrl + 'config/Frequencies')
+    frequencies = getConfig(gv.apiBaseUrl + 'config/Frequencies')
     ssid = wlan['ssid']
     bssid = wlan['bssid']
     #channel = frequencies['fre2cha'][wlan['channel']]
