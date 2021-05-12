@@ -49,29 +49,26 @@ def createWlanList(wlanInfos):
             wlans[ssid][bssid][channel] = channel
             wlans[ssid][bssid][rssi] = rssi
 
-
-
-
-"""     for wlanInfo in wlanInfos:
-        ssid = wlanInfo['ssid']
-        bssid = wlanInfo['bssid']
-        rssi = wlanInfo['rssi']
-        channel = [wlanInfo['channel']]
-        wlanValue = {'bssid':bssid, 'channel':channel}
-        addValue = True
+    # for wlanInfo in wlanInfos:
+    #     ssid = wlanInfo['ssid']
+    #     bssid = wlanInfo['bssid']
+    #     rssi = wlanInfo['rssi']
+    #     channel = [wlanInfo['channel']]
+    #     wlanValue = {'bssid':bssid, 'channel':channel}
+    #     addValue = True
     
-        # Append values if SSID exists (no duplicates)
-        if ssid in wlans.keys():
-            for a in wlans[ssid]:
-                if a['bssid'] == bssid:
-                    addValue = False
-            if addValue == True:
-                wlans[ssid].append(wlanValue)
+    #     # Append values if SSID exists (no duplicates)
+    #     if ssid in wlans.keys():
+    #         for a in wlans[ssid]:
+    #             if a['bssid'] == bssid:
+    #                 addValue = False
+    #         if addValue == True:
+    #             wlans[ssid].append(wlanValue)
 
-        # Add new SSID
-        else:
-            valueList = []
-            valueList.append(wlanValue)
-            wlans[ssid] = valueList """
+    #     # Add new SSID
+    #     else:
+    #         valueList = []
+    #         valueList.append(wlanValue)
+    #         wlans[ssid] = valueList
 
     return wlans
