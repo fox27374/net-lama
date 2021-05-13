@@ -93,6 +93,7 @@ if clientId == False:
 # Update client information at api endpoint
 if cmdQueue[-1] == 'start': appStatus = 'running'
 elif cmdQueue[-1] == 'stop': appStatus = 'stopped'
+elif cmdQueue[-1] == 'scan': appStatus = 'scanning'
 else: appStatus = 'undefined'
 updateClient(clientId, clientType, appStatus, capabilities)
 
