@@ -39,7 +39,7 @@ capabilities = {
 }
 
 # Initialise application
-cmdQueue = ['stop']
+cmdQueue = ['idle']
 sensorActive = False
 
 def mqttConnect(client, userdata, flags, rc):
@@ -204,7 +204,7 @@ while True:
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
             mqttLog('An error occured during application execution: ' + e)
-            cmdQueue.append('stop')
+            cmdQueue.append('idle')
 
     elif cmdQueue[-1] == 'scan':
         try:

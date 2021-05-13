@@ -1,11 +1,11 @@
 {
     "clients": [
         {
-            "clientId": "e010789f-f154-402e-93b5-21bd3aed6c48",
+            "clientId": "46f5571d-fce5-4e8e-be7e-f70371df1a05",
             "clientType": "WlanSensor",
-            "lastSeen": "2021-05-13 20:24:46",
+            "lastSeen": "2021-05-13 21:31:30",
             "clientStatus": "online",
-            "appStatus": "scanning",
+            "appStatus": "stopped",
             "capabilities": {
                 "start": {
                     "command": "start",
