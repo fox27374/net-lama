@@ -28,6 +28,35 @@
                     "description": "Get configuration changes"
                 }
             }
+        },
+        {
+            "clientId": "2c584e26-eb63-4d4e-b536-f52f92957310",
+            "clientType": "WlanSensor",
+            "lastSeen": "2021-05-13 19:22:39",
+            "clientStatus": "online",
+            "appStatus": "undefined",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start WLAN tshark"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop WLAN tshark"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "scan": {
+                    "command": "scan",
+                    "description": "Scan for nearby WLANs"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
         }
     ]
 }

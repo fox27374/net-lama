@@ -204,9 +204,9 @@ while True:
 
     if cmdQueue[-1] == 'scan':
         try:
-            for channel in channels:
-                system("sudo iwconfig " + iface + " channel " + str(channel))
-                mqttLog('Changing interface channel to: %s' %channel)
+            for scanChannel in scanChannels:
+                system("sudo iwconfig " + iface + " channel " + str(scanChannel))
+                mqttLog('Changing interface channel to: %s' %scanChannel)
                 scanner()
             wlanList = createWlanList(wlanInfos)
             configData = {'wlans': wlanList}
