@@ -20,11 +20,11 @@ class SensorPiSchema(Schema):
     logFile = fields.Str()
 
 class SplunkSchema(Schema):
-    Server = fields.Str()
-    Port = fields.Int()
-    URL = fields.Str()
-    Token = fields.Str()
-    Bulk = fields.Int()
+    server = fields.Str()
+    port = fields.Int()
+    url = fields.Str()
+    token = fields.Str()
+    bulk = fields.Int()
 
 class WlanSensorSchema(Schema):
     scantime = fields.Int()

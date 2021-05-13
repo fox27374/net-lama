@@ -96,7 +96,8 @@ def updateConfig():
         return error
     else:
         partialConfig = configSchemaObject.load(postData)
-        currentConfig.update(partialConfig)
+        section = list(partialConfig.keys())[0]
+        currentConfig[section].update(partialConfig[section])
         newConfig = currentConfig
         writeConfig(configFile, currentConfig)
         return make_response(jsonify({'success': 'true'}), 200)

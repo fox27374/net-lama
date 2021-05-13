@@ -1,9 +1,9 @@
 {
     "clients": [
         {
-            "clientId": "f7880df2-dbbb-40e0-84c7-a4a432d6757a",
+            "clientId": "63d08a47-73bf-4870-8a4e-4c754db887db",
             "clientType": "WlanSensor",
-            "lastSeen": "2021-05-12 21:21:07",
+            "lastSeen": "2021-05-13 18:25:06",
             "clientStatus": "online",
             "appStatus": "undefined",
             "capabilities": {
@@ -30,9 +30,9 @@
             }
         },
         {
-            "clientId": "a963a44b-0413-4035-890e-906071f940b9",
+            "clientId": "15b497ba-9452-43d0-ba82-5c4792348843",
             "clientType": "WlanSensor",
-            "lastSeen": "2021-05-12 21:21:52",
+            "lastSeen": "2021-05-13 18:26:06",
             "clientStatus": "online",
             "appStatus": "undefined",
             "capabilities": {
@@ -59,9 +59,9 @@
             }
         },
         {
-            "clientId": "91974906-4463-4963-85b6-46dbbc755907",
+            "clientId": "cc49e7d2-ee87-40f8-95f6-394b4146bf28",
             "clientType": "WlanSensor",
-            "lastSeen": "2021-05-12 21:25:12",
+            "lastSeen": "2021-05-13 18:28:17",
             "clientStatus": "online",
             "appStatus": "undefined",
             "capabilities": {

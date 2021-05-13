@@ -2,7 +2,7 @@
 
 import paho.mqtt.client as mqtt
 import subprocess as sp
-from splib import registerClient, updateClient, getConfig, getCurrentTime, createWlanList
+from splib import registerClient, updateClient, getConfig, getCurrentTime, createWlanList, updateConfig
 import globalVars as gv
 from time import sleep
 from json import dumps, loads
@@ -193,11 +193,10 @@ def scanner():
 while True:
     if cmdQueue[-1] == 'start':
         try:
+            system("sudo iwconfig " + iface + " channel " + str(sensorChannel))
+            mqttLog('Changing interface channel to: %s' %sensorChannel)
             sensor()
-            for channel in channels:
-                system("sudo iwconfig " + iface + " channel " + str(channel))
-                mqttLog('Changing interface channel to: %s' %channel)
-                sleep(int(scanTime))
+            mqttLog('Starting WLAN sensor')
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
             mqttLog('An error occured during application execution: ' + e)
@@ -208,9 +207,15 @@ while True:
                 system("sudo iwconfig " + iface + " channel " + str(channel))
                 mqttLog('Changing interface channel to: %s' %channel)
                 scanner()
-            b = createWlanList(wlanInfos)
-            break
+            wlanList = createWlanList(wlanInfos)
+            configData = {'wlans': wlanList}
+            updateConfig(clientType, configData)
+            cmdQueue.append('stop')
             
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
             mqttLog('An error occured during application execution: ' + e)
+            cmdQueue.append('stop')
+    
+    else:
+        pass

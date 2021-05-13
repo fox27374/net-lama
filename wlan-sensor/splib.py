@@ -16,6 +16,12 @@ def updateClient(clientId, clientType, appStatus, capabilities):
     response = post(url=gv.apiBaseUrl + 'clients/update', json=clientDict, headers={'Content-Type': 'application/json'})
     return response.json()
 
+def updateConfig(clientType, configData):
+    """Update application specific config"""
+    configDict = {clientType: configData}
+    response = post(url=gv.apiBaseUrl + 'configs/update', json=configDict, headers={'Content-Type': 'application/json'})
+    return response.json()
+
 def getConfig(apiUrl):
     response = get(gv.apiBaseUrl + apiUrl)
     return response.json()
