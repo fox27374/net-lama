@@ -118,7 +118,7 @@ def sensor():
 
     procSensor = sp.Popen(cmd, stdout=sp.PIPE)
     mqttLog('Starting TShark subprocess with PID: %s' %procSensor.pid)
-    while sensorActive:
+    while sensorActive == True
         output = procSensor.stdout.readline()
         if output == '' and procSensor.poll() is not None:
             break

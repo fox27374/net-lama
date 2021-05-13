@@ -1,9 +1,9 @@
 {
     "clients": [
         {
-            "clientId": "46f5571d-fce5-4e8e-be7e-f70371df1a05",
+            "clientId": "0b5e5365-8b6a-49e6-9975-a92caab9b6c0",
             "clientType": "WlanSensor",
-            "lastSeen": "2021-05-13 21:31:30",
+            "lastSeen": "2021-05-13 21:35:22",
             "clientStatus": "online",
             "appStatus": "stopped",
             "capabilities": {
@@ -30,11 +30,11 @@
             }
         },
         {
-            "clientId": "0b5e5365-8b6a-49e6-9975-a92caab9b6c0",
+            "clientId": "d03dcb82-f0c5-423d-8523-2e857f8b0c8d",
             "clientType": "WlanSensor",
-            "lastSeen": "2021-05-13 21:35:22",
+            "lastSeen": "2021-05-13 21:40:54",
             "clientStatus": "online",
-            "appStatus": "stopped",
+            "appStatus": "running",
             "capabilities": {
                 "start": {
                     "command": "start",
