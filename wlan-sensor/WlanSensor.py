@@ -104,8 +104,9 @@ logTopic = mqttConfig['MQTT']['logTopic']
 # Get application specific config
 wlanSensorConfig = getConfig('configs/WlanSensor')
 iface = wlanSensorConfig['WlanSensor']['interface']
-channels = wlanSensorConfig['WlanSensor']['channels']
+scanChannels = wlanSensorConfig['WlanSensor']['scanChannels']
 scanTime = wlanSensorConfig['WlanSensor']['scanTime']
+sensorChannel = wlanSensorConfig['WlanSensor']['sensorChannel']
 
 # Get frametypes
 frameTypes = getConfig('configs/Frametypes')
