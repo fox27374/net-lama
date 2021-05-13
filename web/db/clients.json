@@ -1,9 +1,9 @@
 {
     "clients": [
         {
-            "clientId": "e29c5762-bded-4873-b4fa-4a51eb4770d4",
+            "clientId": "666c18e4-e539-4bd7-a72e-9f1ff287f2c9",
             "clientType": "WlanSensor",
-            "lastSeen": "2021-05-13 22:04:20",
+            "lastSeen": "2021-05-13 22:16:10",
             "clientStatus": "online",
             "appStatus": "running",
             "capabilities": {

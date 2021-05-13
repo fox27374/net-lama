@@ -148,7 +148,7 @@ def sensor():
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
                 data = {"time":pktTime, "event":{"Type":pktType, "Subtype":pktSubtype, "SSID":pktSSID, "BSSID":pktBSSID, "SA":pktSA, "DA":pktDA, "TA":pktTA, "RA":pktRA, "Duration":pktDuration, "Channel":pktChannel, "Retry":pktRetry}}            
                 mqttClient.publish(dataTopic, dumps(data))
-                mqttLog('sensorActive: ' + sensorActive)
+                mqttLog('sensorActive: ' + str(sensorActive))
     procSensor.terminate()
 
 def scanner():
