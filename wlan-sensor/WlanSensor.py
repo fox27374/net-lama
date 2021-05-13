@@ -190,10 +190,11 @@ while True:
             system("sudo iwconfig " + iface + " channel " + str(sensorChannel))
             mqttLog('Changing interface channel to: %s' %sensorChannel)
             sensor()
+            cmdQueue.append('idle')
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
             mqttLog('An error occured during application execution: ' + e)
-            cmdQueue.append('stop')
+            cmdQueue.append('idle')
 
     elif cmdQueue[-1] == 'stop':
         try:
@@ -217,14 +218,14 @@ while True:
             wlanList = createWlanList(wlanInfos)
             configData = {'wlans': wlanList}
             updateConfig(clientType, configData)
-            cmdQueue.append('stop')
+            cmdQueue.append('idle')
             mqttLog('Stopping WLAN sensor scanning mode')
             updateClient(clientId, clientType, 'stopped', capabilities)
             
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
             mqttLog('An error occured during application execution: ' + e)
-            cmdQueue.append('stop')
+            cmdQueue.append('idle')
     
     else:
         pass

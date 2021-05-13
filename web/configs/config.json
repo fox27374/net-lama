@@ -9,18 +9,18 @@
         "scanTime": "5",
         "sensorChannel": "1",
         "wlans": {
-            "FRITZ!Box 7530 SF": [
+            "301282_EXT": [
                 {
-                    "bssid": "2c:91:ab:4b:00:8e",
+                    "bssid": "e4:f4:c6:d8:3b:e6",
                     "channel": "1",
-                    "rssi": "-94"
+                    "rssi": "-62"
                 }
             ],
             "atalt-intern": [
                 {
                     "bssid": "a0:f8:49:74:8b:20",
                     "channel": "1",
-                    "rssi": "-62"
+                    "rssi": "-64"
                 },
                 {
                     "bssid": "38:20:56:58:28:00",
@@ -42,7 +42,7 @@
                 {
                     "bssid": "38:20:56:58:28:02",
                     "channel": "6",
-                    "rssi": "-94"
+                    "rssi": "-92"
                 },
                 {
                     "bssid": "c0:25:5c:ec:bb:42",
@@ -54,50 +54,64 @@
                 {
                     "bssid": "f4:92:bf:2d:40:45",
                     "channel": "1",
-                    "rssi": "-98"
+                    "rssi": "-62"
+                }
+            ],
+            "FRITZ!Box 7530 SF": [
+                {
+                    "bssid": "2c:91:ab:4b:00:8e",
+                    "channel": "1",
+                    "rssi": "-96"
+                }
+            ],
+            "3neo_2.4Ghz_7B31": [
+                {
+                    "bssid": "74:4a:a4:cb:7b:31",
+                    "channel": "1",
+                    "rssi": "-96"
                 }
             ],
             "NA": [
                 {
                     "bssid": "a0:f8:49:74:8b:22",
                     "channel": "1",
-                    "rssi": "-66"
+                    "rssi": "-32"
                 }
             ],
             "HP-Print-84-ENVY 4500 series": [
                 {
                     "bssid": "30:8d:99:b6:85:84",
                     "channel": "6",
-                    "rssi": "-96"
-                }
-            ],
-            "Xegony": [
-                {
-                    "bssid": "2c:3a:fd:d0:f3:61",
-                    "channel": "6",
-                    "rssi": "-78"
-                },
-                {
-                    "bssid": "2c:3a:fd:8b:1e:56",
-                    "channel": "11",
-                    "rssi": "-86"
+                    "rssi": "-92"
                 }
             ],
             "": [
                 {
                     "bssid": "f2:81:73:f2:1c:07",
                     "channel": "6",
-                    "rssi": "-92"
-                },
-                {
-                    "bssid": "0a:12:a5:83:b1:fd",
-                    "channel": "11",
-                    "rssi": "-78"
+                    "rssi": "-96"
                 },
                 {
                     "bssid": "1a:e8:29:57:40:0a",
                     "channel": "11",
                     "rssi": "-78"
+                },
+                {
+                    "bssid": "0a:12:a5:83:b1:fd",
+                    "channel": "11",
+                    "rssi": "-78"
+                }
+            ],
+            "Xegony": [
+                {
+                    "bssid": "2c:3a:fd:8b:1e:56",
+                    "channel": "11",
+                    "rssi": "-88"
+                },
+                {
+                    "bssid": "2c:3a:fd:d0:f3:61",
+                    "channel": "11",
+                    "rssi": "-80"
                 }
             ],
             "FRITZ!Box 7530 FR": [
