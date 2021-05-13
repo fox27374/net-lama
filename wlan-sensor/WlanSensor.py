@@ -12,7 +12,7 @@ import sys
 
 clientId = False
 clientType = 'WlanSensor'
-commands = ['start', 'stop', 'status', 'update']
+commands = ['start', 'stop', 'status', 'update', 'scan']
 wlanInfos = []
 
 capabilities = {
