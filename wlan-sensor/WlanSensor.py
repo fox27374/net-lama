@@ -40,6 +40,7 @@ capabilities = {
 
 # Initialise application
 cmdQueue = ['stop']
+sensorActive = False
 
 def mqttConnect(client, userdata, flags, rc):
     """Subscripe to MQTT topic"""
@@ -64,24 +65,10 @@ def mqttMessage(client, userdata, msg):
                 else: appStatus = 'undefined'
                 updateClient(clientId, clientType, appStatus, capabilities)
                 mqttLog('Sending status update to api endpoint')
-            elif message['command'] == 'start':
-                cmdQueue.append('start')
-                mqttLog('Starting application')
-                updateClient(clientId, clientType, 'running', capabilities)
-                mqttLog('Sending application status update to api endpoint')
-            elif message['command'] == 'stop':
-                cmdQueue.append('stop')
-                mqttLog('Stopping application')
-                updateClient(clientId, clientType, 'stopped', capabilities)
-                mqttLog('Sending application status update to api endpoint')
-            elif message['command'] == 'scan':
-                cmdQueue.append('scan')
-                mqttLog('Starting WLAN scan')
-                updateClient(clientId, clientType, 'scanning', capabilities)
-                mqttLog('Sending application status update to api endpoint')
-            elif message['command'] == 'update':
-                pass
-                # TODO
+            elif message['command'] == 'start': cmdQueue.append('start')
+            elif message['command'] == 'stop': cmdQueue.append('stop')
+            elif message['command'] == 'scan': cmdQueue.append('scan')
+            elif message['command'] == 'update': pass # TODO
         else:
             mqttLog('Command ' + message['command'] + ' not implemented')
 
@@ -131,7 +118,7 @@ def sensor():
 
     procSensor = sp.Popen(cmd, stdout=sp.PIPE)
     mqttLog('Starting TShark subprocess with PID: %s' %procSensor.pid)
-    while True:
+    while sensorActive:
         output = procSensor.stdout.readline()
         if output == '' and procSensor.poll() is not None:
             break
@@ -161,6 +148,7 @@ def sensor():
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
                 data = {"time":pktTime, "event":{"Type":pktType, "Subtype":pktSubtype, "SSID":pktSSID, "BSSID":pktBSSID, "SA":pktSA, "DA":pktDA, "TA":pktTA, "RA":pktRA, "Duration":pktDuration, "Channel":pktChannel, "Retry":pktRetry}}            
                 mqttClient.publish(dataTopic, dumps(data))
+    procSensor.terminate()
 
 def scanner():
     cmdFilter = ['-Y', 'wlan.fc.subtype==8']
@@ -196,16 +184,32 @@ def scanner():
 while True:
     if cmdQueue[-1] == 'start':
         try:
+            sensorActive = True
+            mqttLog('Starting WLAN sensor')
+            updateClient(clientId, clientType, 'running', capabilities)
             system("sudo iwconfig " + iface + " channel " + str(sensorChannel))
             mqttLog('Changing interface channel to: %s' %sensorChannel)
             sensor()
-            mqttLog('Starting WLAN sensor')
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
             mqttLog('An error occured during application execution: ' + e)
+            cmdQueue.append('stop')
 
-    if cmdQueue[-1] == 'scan':
+    elif cmdQueue[-1] == 'stop':
         try:
+            sensorActive = False
+            mqttLog('Stopping WLAN sensor')
+            updateClient(clientId, clientType, 'stopped', capabilities)
+
+        except Exception as e:
+            data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
+            mqttLog('An error occured during application execution: ' + e)
+            cmdQueue.append('stop')
+
+    elif cmdQueue[-1] == 'scan':
+        try:
+            mqttLog('Starting WLAN sensor in scanning mode')
+            updateClient(clientId, clientType, 'scanning', capabilities)
             for scanChannel in scanChannels:
                 system("sudo iwconfig " + iface + " channel " + str(scanChannel))
                 mqttLog('Changing interface channel to: %s' %scanChannel)
@@ -214,6 +218,8 @@ while True:
             configData = {'wlans': wlanList}
             updateConfig(clientType, configData)
             cmdQueue.append('stop')
+            mqttLog('Stopping WLAN sensor scanning mode')
+            updateClient(clientId, clientType, 'stopped', capabilities)
             
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
