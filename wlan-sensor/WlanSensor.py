@@ -39,7 +39,7 @@ capabilities = {
 }
 
 # Initialise application
-cmdQueue = ['scan']
+cmdQueue = ['stop']
 
 def mqttConnect(client, userdata, flags, rc):
     """Subscripe to MQTT topic"""
@@ -75,7 +75,10 @@ def mqttMessage(client, userdata, msg):
                 updateClient(clientId, clientType, 'stopped', capabilities)
                 mqttLog('Sending application status update to api endpoint')
             elif message['command'] == 'scan':
-                createWlanList(message)
+                cmdQueue.append('scan')
+                mqttLog('Starting WLAN scan')
+                updateClient(clientId, clientType, 'scanning', capabilities)
+                mqttLog('Sending application status update to api endpoint')
             elif message['command'] == 'update':
                 pass
                 # TODO
@@ -177,7 +180,6 @@ def scanner():
             # Filter pkt header line that is send by TShark
             if 'index' not in printOutput:
                 pktRaw = loads(output.strip())
-                print(output)
                 pktTime = pktRaw['timestamp']
                 pktSSID = pktRSSI = 'NA'
                 if 'wlan_ssid' in pktRaw['layers'].keys(): pktSSID = pktRaw['layers']['wlan_ssid'][0]
@@ -185,7 +187,6 @@ def scanner():
                 if 'wlan_radio_signal_dbm' in pktRaw['layers'].keys(): pktRSSI = pktRaw['layers']['wlan_radio_signal_dbm'][0]
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
                 data = {'ssid': pktSSID, 'bssid': pktBSSID, 'rssi': pktRSSI, 'channel': pktChannel}
-                #print(data)
                 wlanInfos.append(data)
                 loop += 1
     procSensor.terminate()
