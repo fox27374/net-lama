@@ -229,7 +229,7 @@ while True:
                         data = {"time":pktTime, "event":{"Type":pktType, "Subtype":pktSubtype, "SSID":pktSSID, "BSSID":pktBSSID, "SA":pktSA, "DA":pktDA, "TA":pktTA, "RA":pktRA, "Duration":pktDuration, "Channel":pktChannel, "Retry":pktRetry}}            
                         mqttClient.publish(dataTopic, dumps(data))
                         mqttLog('sensorActive: ' + str(sensorActive))
-                        if sensorActive == 0: break
+                        if cmdQueue[-1] != 'start': break
             # Stop process
             procSensor.terminate()
             cmdQueue.append('idle')
