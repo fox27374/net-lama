@@ -13,24 +13,24 @@
                 {
                     "bssid": "a0:f8:49:74:8b:20",
                     "channel": "1",
-                    "rssi": "-62"
+                    "rssi": "-54"
                 },
                 {
                     "bssid": "38:20:56:58:28:00",
                     "channel": "6",
-                    "rssi": "-94"
+                    "rssi": "-92"
                 },
                 {
                     "bssid": "c0:25:5c:ec:bb:40",
                     "channel": "11",
-                    "rssi": "-72"
+                    "rssi": "-74"
                 }
             ],
             "atalt-iot": [
                 {
                     "bssid": "a0:f8:49:74:8b:22",
                     "channel": "1",
-                    "rssi": "-62"
+                    "rssi": "-54"
                 },
                 {
                     "bssid": "38:20:56:58:28:02",
@@ -40,50 +40,57 @@
                 {
                     "bssid": "c0:25:5c:ec:bb:42",
                     "channel": "11",
-                    "rssi": "-72"
+                    "rssi": "-74"
                 }
             ],
             "Kellerjoch32": [
                 {
                     "bssid": "f4:92:bf:2d:40:45",
                     "channel": "1",
-                    "rssi": "-62"
+                    "rssi": "-54"
                 }
             ],
-            "3neo_2.4Ghz_7B31": [
+            "301282_EXT": [
                 {
-                    "bssid": "74:4a:a4:cb:7b:31",
+                    "bssid": "e4:f4:c6:d8:3b:e6",
                     "channel": "1",
-                    "rssi": "-62"
+                    "rssi": "-92"
                 }
             ],
             "NA": [
                 {
                     "bssid": "a0:f8:49:74:8b:22",
                     "channel": "1",
-                    "rssi": "-32"
+                    "rssi": "-30"
                 },
                 {
                     "bssid": "2c:91:ab:4b:02:1d",
                     "channel": "6",
-                    "rssi": "-92"
+                    "rssi": "-88"
+                },
+                {
+                    "bssid": "c0:25:5c:ec:bb:42",
+                    "channel": "11",
+                    "rssi": "-80"
                 }
             ],
-            "": [
+            "Xegony": [
                 {
-                    "bssid": "f2:81:73:f2:1c:07",
+                    "bssid": "2c:3a:fd:8b:1e:56",
                     "channel": "6",
-                    "rssi": "-94"
+                    "rssi": "-86"
                 },
                 {
-                    "bssid": "1a:e8:29:57:40:0a",
+                    "bssid": "2c:3a:fd:d0:f3:61",
                     "channel": "11",
-                    "rssi": "-72"
-                },
+                    "rssi": "-86"
+                }
+            ],
+            "FRITZ!Box 7530 FR": [
                 {
-                    "bssid": "0a:12:a5:83:b1:fd",
-                    "channel": "11",
-                    "rssi": "-78"
+                    "bssid": "2c:91:ab:4b:92:ed",
+                    "channel": "6",
+                    "rssi": "-88"
                 }
             ],
             "HP-Print-84-ENVY 4500 series": [
@@ -93,30 +100,16 @@
                     "rssi": "-96"
                 }
             ],
-            "FRITZ!Box 7530 FR": [
+            "": [
                 {
-                    "bssid": "2c:91:ab:4b:92:ed",
+                    "bssid": "1a:e8:29:57:40:0a",
                     "channel": "11",
-                    "rssi": "-86"
-                }
-            ],
-            "Xegony": [
-                {
-                    "bssid": "2c:3a:fd:d0:f3:61",
-                    "channel": "11",
-                    "rssi": "-82"
+                    "rssi": "-76"
                 },
                 {
-                    "bssid": "2c:3a:fd:8b:1e:56",
+                    "bssid": "0a:12:a5:83:b1:fd",
                     "channel": "11",
-                    "rssi": "-88"
-                }
-            ],
-            "FRITZ!Box 7530 SF": [
-                {
-                    "bssid": "2c:91:ab:4b:00:8e",
-                    "channel": "11",
-                    "rssi": "-94"
+                    "rssi": "-76"
                 }
             ]
         }
