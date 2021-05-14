@@ -11,8 +11,8 @@ app = Flask(__name__)
 configFile = 'configs/config.json'
 dbFile = 'db/clients.json'
 apiBaseUrl = '/api/v1/'
-hostIp = '10.140.80.1'
-debug = True
+hostIp = '0.0.0.0'
+debug = False
 minOutdated = 5
 
 def getCurrentTime():
