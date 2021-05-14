@@ -40,7 +40,7 @@ capabilities = {
 
 # Initialise application
 cmdQueue = ['idle']
-sensorActive = False
+gv.sensorActive = False
 
 def mqttConnect(client, userdata, flags, rc):
     """Subscripe to MQTT topic"""
@@ -118,7 +118,7 @@ def sensor():
 
     procSensor = sp.Popen(cmd, stdout=sp.PIPE)
     mqttLog('Starting TShark subprocess with PID: %s' %procSensor.pid)
-    while sensorActive == True:
+    while gv.sensorActive == True:
         output = procSensor.stdout.readline()
         if output == '' and procSensor.poll() is not None:
             break
@@ -148,7 +148,7 @@ def sensor():
                 pktChannel = pktRaw['layers']['wlan_radio_channel'][0]
                 data = {"time":pktTime, "event":{"Type":pktType, "Subtype":pktSubtype, "SSID":pktSSID, "BSSID":pktBSSID, "SA":pktSA, "DA":pktDA, "TA":pktTA, "RA":pktRA, "Duration":pktDuration, "Channel":pktChannel, "Retry":pktRetry}}            
                 mqttClient.publish(dataTopic, dumps(data))
-                mqttLog('sensorActive: ' + str(sensorActive))
+                mqttLog('sensorActive: ' + str(gv.sensorActive))
     procSensor.terminate()
 
 def scanner():
@@ -185,7 +185,7 @@ def scanner():
 while True:
     if cmdQueue[-1] == 'start':
         try:
-            sensorActive = True
+            gv.sensorActive = True
             mqttLog('Starting WLAN sensor')
             updateClient(clientId, clientType, 'running', capabilities)
             system("sudo iwconfig " + iface + " channel " + str(sensorChannel))
@@ -199,7 +199,7 @@ while True:
 
     elif cmdQueue[-1] == 'stop':
         try:
-            sensorActive = False
+            gv.sensorActive = False
             mqttLog('Stopping WLAN sensor')
             updateClient(clientId, clientType, 'stopped', capabilities)
 

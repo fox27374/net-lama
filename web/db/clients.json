@@ -28,6 +28,64 @@
                     "description": "Get configuration changes"
                 }
             }
+        },
+        {
+            "clientId": "210c7850-2e30-4e62-87a0-307398813dd8",
+            "clientType": "WlanSensor",
+            "lastSeen": "2021-05-13 22:18:53",
+            "clientStatus": "online",
+            "appStatus": "running",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start WLAN tshark"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop WLAN tshark"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "scan": {
+                    "command": "scan",
+                    "description": "Scan for nearby WLANs"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
+        },
+        {
+            "clientId": "fbc404ca-5661-4427-9d18-80d8fc8a6b90",
+            "clientType": "WlanSensor",
+            "lastSeen": "2021-05-13 22:20:29",
+            "clientStatus": "online",
+            "appStatus": "running",
+            "capabilities": {
+                "start": {
+                    "command": "start",
+                    "description": "Start WLAN tshark"
+                },
+                "stop": {
+                    "command": "stop",
+                    "description": "Stop WLAN tshark"
+                },
+                "status": {
+                    "command": "status",
+                    "description": "Send the current status to the api endpoint"
+                },
+                "scan": {
+                    "command": "scan",
+                    "description": "Scan for nearby WLANs"
+                },
+                "update": {
+                    "command": "update",
+                    "description": "Get configuration changes"
+                }
+            }
         }
     ]
 }
