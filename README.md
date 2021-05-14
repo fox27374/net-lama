@@ -1,4 +1,4 @@
-![Overview](https://github.com/fox27374/sensorpi/blob/master/overview.png)
+![Overview](https://github.com/fox27374/net-lama/blob/master/doc/net-lama-overview.png)
 
 # Net-Lama (still under development)
 Intendet to be a flexible, modular environment to communicate between different client applications. Commands to the clients are done via MQTT. The clients itself update their status via REST API calls to the API endpoint. This way the whole state and capability information can be held on the central server which acts as API endpoint and webgui for user interaction.  
