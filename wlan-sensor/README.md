@@ -16,4 +16,5 @@ Config section:
         "scanTime": "5",
         "sensorChannel": "1",
         "wlans": {}
+    }
 ```
