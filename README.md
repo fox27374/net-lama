@@ -10,3 +10,4 @@ The idea of the API endpoint is, that most of the clients can be deployed as doc
 * Error handling improvement
 * MQTT authentication
 * HTTPS for REST communication
+* Add Swagger documentation
