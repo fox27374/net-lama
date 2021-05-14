@@ -158,4 +158,5 @@ def updateClient():
 def notFound(error):
     return make_response(jsonify({'error': 'Not found'}), 404)
 
-app.run(host=hostIp, debug=debug)
+#app.run(host=hostIp, debug=debug)
+app.run(debug=debug)
