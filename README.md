@@ -7,4 +7,6 @@ The idea of the API endpoint is, that most of the clients can be deployed as doc
 
 ## ToDo
 * Create webgui for configuration (flask)
-* Implement error handling
+* Error handling improvement
+* MQTT authentication
+* HTTPS for REST communication
