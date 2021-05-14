@@ -70,7 +70,7 @@ def mqttMessage(client, userdata, msg):
             mqttLog('Command ' + message['command'] + ' not implemented')
 
 def switchState(state, updateQueue):
-    """Change state, send log and update client with api endpoint"""
+    """Change state queue, send log and update client info with api endpoint"""
     mqttLog('Changing to %s state' %state)
     mqttLog('Sending state update to api endpoint')
     updateClient(clientId, clientType, state, capabilities)
