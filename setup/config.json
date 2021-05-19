@@ -1,5 +1,6 @@
 {
     "general": {
+        "version": "1.0",
         "installDir": "/opt",
         "sysRequirements": [
             "git",
@@ -29,12 +30,12 @@
         },
         {
             "name": "speedtest",
-            "install": "",
+            "install": "True",
             "installType": ""
         },
         {
             "name": "hec-forwarder",
-            "install": "",
+            "install": "True",
             "installType": ""
         },
         {

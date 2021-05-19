@@ -48,7 +48,7 @@ else:
 
         if appInstall == 'True' and appInstallType == 'docker':
             print('Building image for ' + appName)
-            buildCmd = 'docker build -t ' + appName + ' ../' + appName
+            buildCmd = 'docker build -t ' + appName + ':' + config['general']['version'] + ' ../' + appName
             buildCmd = buildCmd.split(' ')
             try:
                 sp.run(buildCmd, capture_output=True, text=True, check=True)
