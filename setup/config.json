@@ -1,0 +1,46 @@
+{
+    "general": {
+        "installDir": "/opt",
+        "sysRequirements": [
+            "git",
+            "docker",
+            "python",
+            "pip"
+        ],
+        "pythonRequirements": [
+            "venv",
+            "pip"
+        ]
+    },
+    "default": {
+        "install": "False",
+        "installType": "docker"
+    },
+    "docker": {
+        "nwName": "net-lama",
+        "nwSubnet": "172.20.254.0/26",
+        "nwGateway": "172.20.254.62/26"
+    },
+    "applications": [
+        {
+            "name": "net-lama",
+            "install": "True",
+            "installType": ""
+        },
+        {
+            "name": "speedtest",
+            "install": "",
+            "installType": ""
+        },
+        {
+            "name": "hec-forwarder",
+            "install": "",
+            "installType": ""
+        },
+        {
+            "name": "wlan-sensor",
+            "install": "",
+            "installType": "native"
+        }
+    ]
+}
