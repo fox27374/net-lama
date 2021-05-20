@@ -41,7 +41,7 @@ if False in requirementsMet:
     print('Not all requirements met, cannot continue')
 else:
     print('All requirements met, we are good to go')
-
+    
     # Check if images needs to be build
     images = client.images.list(name="net-lama/*")
     versions = []
@@ -76,5 +76,5 @@ else:
                 print ('A problem occured during the build process')
             
     # Run containers
-    
+
     
