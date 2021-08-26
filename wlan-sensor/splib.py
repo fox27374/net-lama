@@ -15,16 +15,16 @@ def processRequest(apiUrl, clientData):
         else:
             data = get(gv.apiBaseUrl + apiUrl)
 
-    except requests.exceptions.HTTPError as errh:
+    except exceptions.HTTPError as errh:
         status = 'error'
         data = 'Http Error: ' + errh
-    except requests.exceptions.ConnectionError as errc:
+    except exceptions.ConnectionError as errc:
         status = 'error'
         data = 'Connection Error: ' + errc
-    except requests.exceptions.Timeout as errt:
+    except exceptions.Timeout as errt:
         status = 'error'
         data = 'Timeout Error: ' + errt
-    except requests.exceptions.RequestException as err:
+    except exceptions.RequestException as err:
         status = 'error'
         data = 'General Error: ' + err
 
