@@ -12,6 +12,8 @@ def processRequest(requestType, apiUrl, clientData):
     try:
         if requestType == 'post':
             data = post(url=gv.apiBaseUrl + apiUrl, json=clientData, headers=headers)
+            print(data)
+            print(data.json())
         else:
             data = get(gv.apiBaseUrl + apiUrl)
 
