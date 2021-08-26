@@ -55,7 +55,7 @@ def mqttMessage(client, userdata, msg):
     #topic = msg.topic
     message = loads((msg.payload).decode('UTF-8'))
 
-    # Check if the command is for out clientId
+    # Check if the command is for our clientId
     if message['clientId'] == clientId:
         if message['command'] in commands:
             mqttLog('Command ' + message['command'] + ' received')
@@ -77,9 +77,13 @@ def switchState(state, updateQueue):
     if updateQueue == True: cmdQueue.append(state)
 
 # Register client and get ID used for further communication
+# Exit if registration fails
 if clientId == False:
     register = registerClient(clientType)
-    clientId = register['client']['clientId']
+    if register['status'] == 'ok': clientId = register['data']['client']['clientId']
+    else:
+        print('An error occured: ' + register['data'])
+        sys.exit()
 
 # Update client information at api endpoint
 updateClient(clientId, clientType, cmdQueue[-1], capabilities)

@@ -8,29 +8,29 @@ def processRequest(requestType, apiUrl, clientData):
     """Process requests and error handling"""
     headers = {'Content-Type': 'application/json'}
     data = ''
-    status = 'success'
+    status = 'ok'
     try:
         if requestType == 'post':
             data = post(url=gv.apiBaseUrl + apiUrl, json=clientData, headers=headers)
-            print(data)
-            print(data.json())
+            data.raise_for_status()
         else:
             data = get(gv.apiBaseUrl + apiUrl)
+            data.raise_for_status()
 
     except exceptions.HTTPError as errh:
         status = 'error'
-        data = 'Http Error: ' + errh
+        data = 'Http Error: ' + str(errh)
     except exceptions.ConnectionError as errc:
         status = 'error'
-        data = 'Connection Error: ' + errc
+        data = 'Connection Error: ' + str(errc)
     except exceptions.Timeout as errt:
         status = 'error'
-        data = 'Timeout Error: ' + errt
+        data = 'Timeout Error: ' + str(errt)
     except exceptions.RequestException as err:
         status = 'error'
-        data = 'General Error: ' + err
+        data = 'General Error: ' + str(err)
 
-    if status == 'success': data = data.json()
+    if status == 'ok': data = data.json()
     return {'status': status, 'data': data}
 
 
@@ -40,10 +40,7 @@ def registerClient(clientType):
     apiUrl = 'clients/register'
     clientData = {'client': {'clientType': clientType}}
     response = processRequest(requestType, apiUrl, clientData)
-
-    if response['status'] == 'error': print(response['data'])
-    else:
-        return response['data']
+    return response
 
 def updateClient(clientId, clientType, appStatus, capabilities):
     """Update client information and status"""
@@ -88,3 +85,4 @@ def createWlanList(wlanInfos):
             wlans[ssid].append({'bssid': bssid, 'channel': channel, 'rssi': rssi})
 
     return wlans
+    
