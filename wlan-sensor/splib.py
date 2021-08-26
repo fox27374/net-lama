@@ -36,7 +36,7 @@ def registerClient(clientType):
     """Register client at central server"""
     apiUrl = 'clients/register'
     clientData = {'client': {'clientType': clientType}}
-    response = processRequest(apiUrl, clientDict)
+    response = processRequest(apiUrl, clientData)
 
     if response['status'] == 'error': print(response['data'])
     else:
