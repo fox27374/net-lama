@@ -4,6 +4,7 @@
 import subprocess as sp
 import json
 import docker
+import sys
 
 # Variables
 configFile = 'config.json'
@@ -74,7 +75,30 @@ else:
                 client.images.build(tag='net-lama/' + appName + ':' + config['general']['version'], rm=True, path='../' + appName)
             except:
                 print ('A problem occured during the build process')
+
+    # Create network
+    nwName = config['docker']['nwName']
+    nwSubnet = config['docker']['nwSubnet']
+    nwGateway = config['docker']['nwGateway']
+
+    ipam_pool = docker.types.IPAMPool(subnet = nwSubnet, gateway = nwGateway)
+    ipam_config = docker.types.IPAMConfig(pool_configs = [ipam_pool])
+
+    print('Creating network ' + nwName)
+    print('Parameters: Subnet ' + nwSubnet + ', Gateway: ' + nwGateway)
+    client.networks.create(nwName, driver = "bridge", ipam = ipam_config)
             
     # Run containers
+    for application in config['applications']:
+        appName = application['name']
+        appInstall = application['install']
+        appInstallType = application['installType'] if application['installType'] else config['default']['installType']
 
-    
+        if appInstall == 'True' and appInstallType == 'docker' and appName == 'net-lama':
+            print('Starting container ' + appName)
+            try:
+                container = client.containers.run(name=appName, image='net-lama/' + appName + ':' + config['general']['version'], 
+                detach=True, network=nwName, ports = {'5000/tcp': ('10.140.80.1', 5000)}, remove=True)
+            except:
+                print ('A problem occured during the starting process')
+                print(sys.exc_info()[0])

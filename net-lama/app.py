@@ -11,8 +11,9 @@ app = Flask(__name__)
 configFile = 'configs/config.json'
 dbFile = 'db/clients.json'
 apiBaseUrl = '/api/v1/'
-#hostIp = '0.0.0.0'
-hostIp = '10.140.80.1'
+hostIp = '0.0.0.0'
+#hostIp = '10.140.80.1'
+port = 5000
 debug = False
 minOutdated = 5
 
@@ -159,5 +160,4 @@ def updateClient():
 def notFound(error):
     return make_response(jsonify({'error': 'Not found'}), 404)
 
-app.run(host=hostIp, debug=debug)
-#app.run(debug=debug)
+app.run(host=hostIp, port = port, debug = debug)

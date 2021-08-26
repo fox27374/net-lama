@@ -20,7 +20,7 @@
     "docker": {
         "nwName": "net-lama",
         "nwSubnet": "172.20.254.0/26",
-        "nwGateway": "172.20.254.62/26"
+        "nwGateway": "172.20.254.62"
     },
     "applications": [
         {
