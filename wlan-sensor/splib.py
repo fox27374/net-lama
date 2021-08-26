@@ -4,7 +4,7 @@ import paho.mqtt.client as mqtt
 import globalVars as gv
 
 # API calls
-def processRequest(apiUrl, clientData):
+def processRequest(requestType, apiUrl, clientData):
     """Process requests and error handling"""
     headers = {'Content-Type': 'application/json'}
     data = ''
@@ -34,9 +34,10 @@ def processRequest(apiUrl, clientData):
 
 def registerClient(clientType):
     """Register client at central server"""
+    requestType = 'post'
     apiUrl = 'clients/register'
     clientData = {'client': {'clientType': clientType}}
-    response = processRequest(apiUrl, clientData)
+    response = processRequest(requestType, apiUrl, clientData)
 
     if response['status'] == 'error': print(response['data'])
     else:
