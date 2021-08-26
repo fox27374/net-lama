@@ -1,14 +1,46 @@
-from requests import get, post
+from requests import get, post, exceptions
 from datetime import datetime
 import paho.mqtt.client as mqtt
 import globalVars as gv
 
 # API calls
+def processRequest(apiUrl, clientData):
+    """Process requests and error handling"""
+    headers = {'Content-Type': 'application/json'}
+    data = ''
+    status = 'success'
+    try:
+        if requestType == 'get':
+            data = post(url=gv.apiBaseUrl + apiUrl, json=clientData, headers=headers)
+        else:
+            data = get(gv.apiBaseUrl + apiUrl)
+
+    except requests.exceptions.HTTPError as errh:
+        status = 'error'
+        data = 'Http Error: ' + errh
+    except requests.exceptions.ConnectionError as errc:
+        status = 'error'
+        data = 'Connection Error: ' + errc
+    except requests.exceptions.Timeout as errt:
+        status = 'error'
+        data = 'Timeout Error: ' + errt
+    except requests.exceptions.RequestException as err:
+        status = 'error'
+        data = 'General Error: ' + err
+
+    if status == 'success': data = data.json()
+    return {'status': status, 'data': data}
+
+
 def registerClient(clientType):
     """Register client at central server"""
-    clientDict = {'client': {'clientType': clientType}}
-    response = post(url=gv.apiBaseUrl + 'clients/register', json=clientDict, headers={'Content-Type': 'application/json'})
-    return response.json()
+    apiUrl = 'clients/register'
+    clientData = {'client': {'clientType': clientType}}
+    response = processRequest(apiUrl, clientDict)
+
+    if response['status'] == 'error': print(response['data'])
+    else:
+        return response['data']
 
 def updateClient(clientId, clientType, appStatus, capabilities):
     """Update client information and status"""
