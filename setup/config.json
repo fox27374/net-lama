@@ -26,22 +26,41 @@
         {
             "name": "net-lama",
             "install": "True",
-            "installType": ""
+            "installType": "",
+            "hostIp": "10.140.80.1",
+            "hostPort": "5000",
+            "containerIp": "172.20.254.10",
+            "containerPort": "5000",
+            "protocol": "tcp"
         },
         {
             "name": "speedtest",
             "install": "True",
-            "installType": ""
+            "installType": "",
+            "hostIp": "",
+            "hostPort": "",
+            "containerIp": "",
+            "containerPort": "",
+            "protocol": ""
         },
         {
             "name": "hec-forwarder",
             "install": "True",
-            "installType": ""
+            "installType": "",
+            "hostIp": "",
+            "hostPort": "",
+            "containerIp": "",
+            "containerPort": "",
+            "protocol": ""
         },
         {
             "name": "wlan-sensor",
             "install": "",
-            "installType": "native"
+            "installType": "native",
+            "hostIp": "",
+            "hostPort": "",
+            "containerPort": "",
+            "protocol": ""
         }
     ]
 }

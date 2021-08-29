@@ -44,7 +44,7 @@ else:
     print('All requirements met, we are good to go')
     
     # Check if images needs to be build
-    images = client.images.list(name="net-lama/*")
+    images = client.images.list(name = "net-lama/*")
     versions = []
 
     # If images available, check the version
@@ -52,17 +52,34 @@ else:
         tag = image.tags
         version = tag[0][tag[0].find(':')+1:]
         #if version != config['general']['version']: versions.append(False)
-        if version != '0.1': versions.append(False)
+        if version != '1.1': versions.append(False)
         else: versions.append(True)
 
-    # If versions are not correct, delete the images
-    print(versions)
+    # If versions are not correct, stop containers and delete images
     if False in versions:
+        for container in client.containers.list():
+            for image in images:
+                if container.image == image:
+                    print('Stopping container ' + container.name)
+                    container.stop()
+
+        # Prune stopped containers
+        client.containers.prune()
+
+        # Delete images
         for image in images:
             print('Deleting image ' + image.tags[0])
             client.images.remove(image.tags[0])
+
    
-    
+    # Delete network if it exists
+    nwName = config['docker']['nwName']
+    for network in client.networks.list():
+        if network.name == nwName:
+            print('Deleting network ' + network.name)
+            network.remove()
+
+
     # Build docker images for the applications
     for application in config['applications']:
         appName = application['name']
@@ -77,28 +94,33 @@ else:
                 print ('A problem occured during the build process')
 
     # Create network
-    nwName = config['docker']['nwName']
     nwSubnet = config['docker']['nwSubnet']
     nwGateway = config['docker']['nwGateway']
 
     ipam_pool = docker.types.IPAMPool(subnet = nwSubnet, gateway = nwGateway)
     ipam_config = docker.types.IPAMConfig(pool_configs = [ipam_pool])
 
-    print('Creating network ' + nwName)
-    print('Parameters: Subnet ' + nwSubnet + ', Gateway: ' + nwGateway)
+    print('Creating network ' + nwName + ' with parameters: Subnet ' + nwSubnet + ', Gateway: ' + nwGateway)
     client.networks.create(nwName, driver = "bridge", ipam = ipam_config)
             
     # Run containers
     for application in config['applications']:
         appName = application['name']
         appInstall = application['install']
-        appInstallType = application['installType'] if application['installType'] else config['default']['installType']
+        hostIp = application['hostIp']
+        hostPort = application['hostPort']
+        containerPort = application['containerPort']
+        protocol = application['protocol']
+        ports = {}
 
-        if appInstall == 'True' and appInstallType == 'docker' and appName == 'net-lama':
+        if hostPort != '':
+            ports = {containerPort + '/' + protocol: (hostIp, int(hostPort))}
+
+        if appInstall == 'True':
             print('Starting container ' + appName)
             try:
-                container = client.containers.run(name=appName, image='net-lama/' + appName + ':' + config['general']['version'], 
-                detach=True, network=nwName, ports = {'5000/tcp': ('10.140.80.1', 5000)}, remove=True)
+                container = client.containers.run(name = appName, image = 'net-lama/' + appName + ':' + config['general']['version'], 
+                detach = True, network = nwName, ports = ports, remove = True)
             except:
                 print ('A problem occured during the starting process')
                 print(sys.exc_info()[0])
