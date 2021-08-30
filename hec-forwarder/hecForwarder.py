@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 import paho.mqtt.client as mqtt
-from splib import registerClient, updateClient, getConfig, getCurrentTime
+from splib import checkApiEndpoint, registerClient, updateClient, getConfig, getCurrentTime
+from time import sleep
 from json import dumps, loads
 from requests import post
 
@@ -75,10 +76,17 @@ def mqttMessage(client, userdata, msg):
                 mqttLog('Command ' + message['command'] + ' not implemented')
 
 
+# Wait for the api endpoint
+checkApiEndpoint()
+
 # Register client and get ID used for further communication
+# Exit if registration fails
 if clientId == False:
     register = registerClient(clientType)
-    clientId = register['client']['clientId']
+    if register['status'] == 'ok': clientId = register['data']['client']['clientId']
+    else:
+        print('An error occured: ' + register['data'])
+        sys.exit()
 
 # Update client information at api endpoint
 if cmdQueue[-1] == 'start': appStatus = 'running'
