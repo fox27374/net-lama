@@ -20,7 +20,7 @@ USER $USER
 WORKDIR $HOME
 
 # Copy source files
-COPY . .
+COPY --chown=$USER:$GROUP . .
 
 # Set environment to the net-lama directory
 ENV VIRTUAL_ENV=$HOME/venv

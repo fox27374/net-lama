@@ -1,1 +1,1 @@
-apiBaseUrl = 'http://172.20.254.10:5000/api/v1/'
+apiBaseUrl = 'http://net-lama:5000/api/v1/'

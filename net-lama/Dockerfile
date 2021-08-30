@@ -15,12 +15,12 @@ ENV HOME /home/$USER
 RUN addgroup $GROUP
 RUN adduser -G $GROUP -h $HOME -D $USER
 
-# Use new user and directory
-USER $USER
+# Use new directory and user
 WORKDIR $HOME
+USER $USER
 
 # Copy source files
-COPY . .
+COPY --chown=$USER:$GROUP . .
 
 # Set environment to the net-lama directory
 ENV VIRTUAL_ENV=$HOME/venv
