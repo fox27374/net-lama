@@ -29,7 +29,6 @@
             "installType": "",
             "hostIp": "10.140.80.1",
             "hostPort": "5000",
-            "containerIp": "172.20.254.10",
             "containerPort": "5000",
             "protocol": "tcp"
         },
@@ -39,7 +38,6 @@
             "installType": "",
             "hostIp": "",
             "hostPort": "",
-            "containerIp": "",
             "containerPort": "",
             "protocol": ""
         },
@@ -49,7 +47,6 @@
             "installType": "",
             "hostIp": "",
             "hostPort": "",
-            "containerIp": "",
             "containerPort": "",
             "protocol": ""
         },
@@ -61,6 +58,15 @@
             "hostPort": "",
             "containerPort": "",
             "protocol": ""
+        },
+        {
+            "name": "net-lama-mqtt",
+            "install": "True",
+            "installType": "",
+            "hostIp": "10.140.80.1",
+            "hostPort": "1883",
+            "containerPort": "1883",
+            "protocol": "tcp"
         }
     ]
 }
