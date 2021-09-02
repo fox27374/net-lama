@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+	  <title>net-lama</title>
+	  <link rel= "stylesheet" type= "text/css" href= "{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    </head>
+    <body>
+		<nav class="navbar navbar-expand-sm bg-dark navbar-dark">
+			<div class="navbar-brand">net-lama</div>
+		</nav>
+		<section id="status">
+			<div class="container">
+				<div class="row">
+					<div class="col-lg-8 mx-auto">
+						<h1>Status</h1>
+						{% block status %}{% endblock %}
+					</div>
+				</div>
+			</div>
+		</section>
+		<section id="configuration">
+			<div class="container">
+				<div class="row">
+					<div class="col-lg-8 mx-auto">
+						<h1>Configuration</h1>
+						{% block configform %}{% endblock %}
+					</div>
+				</div>
+			</div>
+		</section>
+	</body>
+</html>

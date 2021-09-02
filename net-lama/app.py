@@ -152,7 +152,10 @@ def updateClient():
         writeClientDb(dbFile, currentClients)
         return jsonify(clientData)
 
-
+# WebUI
+@app.route(apiBaseUrl + '/ui')
+def userInterface():
+    return render_template('swaggerui.html')
 
 # Error handling
 """Error - Not found"""

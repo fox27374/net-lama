@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block configform %}
+
+<form action="" method="post">
+    {{ form.csrf_token }}
+    <table class="table">
+        <tr>
+            <td>{{form.sensorPiInterface.label}}</td>
+            <td>{{form.sensorPiInterface}}</td>
+        </tr>
+        <tr>
+            <td>{{form.sensorPiChannels.label}}</td>
+            <td>{{form.sensorPiChannels(size=30)}}</td>
+        </tr>
+        <tr>
+            <td>{{form.mqttServer.label}}</td>
+            <td>{{form.mqttServer(size=30)}}</td>
+        </tr>
+        <tr>
+            <td>{{form.mqttPort.label}}</td>
+            <td>{{form.mqttPort(size=30)}}</td>
+        </tr>
+        <tr>
+            <td>{{form.splunkServer.label}}</td>
+            <td>{{form.splunkServer(size=30)}}</td>
+        </tr>
+        <tr>
+            <td>{{form.splunkPort.label}}</td>
+            <td>{{form.splunkPort(size=30)}}</td>
+        </tr>
+        <tr>
+            <td>{{form.splunkToken.label}}</td>
+            <td>{{form.splunkToken(size=30)}}</td>
+        </tr>
+        <tr>
+            <td></td>
+            <td>{{form.submit(class="btn btn-dark")}}</td>
+        </tr>
+    </table>
+</form>
+
+{% endblock %}
