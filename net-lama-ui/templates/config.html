@@ -1,37 +1,30 @@
-<form action="" method="post">
-    {{ form.csrf_token }}
-    <table class="table">
-        <tr>
-            <td>{{form.sensorPiInterface.label}}</td>
-            <td>{{form.sensorPiInterface}}</td>
-        </tr>
-        <tr>
-            <td>{{form.sensorPiChannels.label}}</td>
-            <td>{{form.sensorPiChannels(size=30)}}</td>
-        </tr>
-        <tr>
-            <td>{{form.mqttServer.label}}</td>
-            <td>{{form.mqttServer(size=30)}}</td>
-        </tr>
-        <tr>
-            <td>{{form.mqttPort.label}}</td>
-            <td>{{form.mqttPort(size=30)}}</td>
-        </tr>
-        <tr>
-            <td>{{form.splunkServer.label}}</td>
-            <td>{{form.splunkServer(size=30)}}</td>
-        </tr>
-        <tr>
-            <td>{{form.splunkPort.label}}</td>
-            <td>{{form.splunkPort(size=30)}}</td>
-        </tr>
-        <tr>
-            <td>{{form.splunkToken.label}}</td>
-            <td>{{form.splunkToken(size=30)}}</td>
-        </tr>
-        <tr>
-            <td></td>
-            <td>{{form.submit(class="btn btn-dark")}}</td>
-        </tr>
-    </table>
-</form>
+{% extends 'base.html' %}
+{% block config %}
+<section id="config">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 mx-auto">
+        {% for configKey, configValue in configList.items() %}
+        <h2>{{ configKey }}</h2>
+        <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Setting</th>
+                <th scope="col">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+                <tr>
+                {% for appKey, appValue in configValue.items() %}
+                <td>{{ appKey }}</td>
+                <td>{{ appValue }}</td>
+              </tr>
+                {% endfor %}
+            </tbody>
+          </table>
+          {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

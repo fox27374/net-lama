@@ -1,9 +1,10 @@
+{% extends 'base.html' %}
+{% block status %}
 <section id="status">
   <div class="container">
     <div class="row">
       <div class="col-lg-8 mx-auto">
         <table class="table">
-          <h1>Status</h1>
             <thead>
               <tr>
                 <th scope="col">Service</th>
@@ -12,24 +13,18 @@
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Sensor</td>
-                <td>Running</td>
+              
+                {% for client in clients %}
+                <tr>
+                <td>{{ client['clientType'] }}</td>
+                <td>{{ client['clientStatus'] }}</td>
                 <td>
                   <form action="/restart/" method="post">
                   <button class="btn btn-dark" name="Restart" type="submit">Restart</button>
-              </form></td>
+                  </form>
+                </td>
               </tr>
-              <tr>
-                <td>Logger</td>
-                <td>Running</td>
-                <td>Restart</td>
-              </tr>
-              <tr>
-               <td>Forwarder</td>
-               <td>Running</td>
-               <td>Restart</td>
-             </tr>
+                {% endfor %}
             </tbody>
           </table>
           <h2>System</h2>
@@ -53,3 +48,4 @@
     </div>
   </div>
 </section>
+{% endblock %}
