@@ -4,7 +4,7 @@ FROM python:3.8-alpine
 
 # Labeling
 LABEL "org.lnxnet.project"="net-lama"
-LABEL "org.lnxnet.application"="speedtest"
+LABEL "org.lnxnet.application"="networktest"
 
 # Set variables
 ENV USER=net-lama
@@ -32,4 +32,4 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Run the application:
-CMD ["python", "speedTest.py"]
+CMD ["python", "networkTest.py"]

@@ -2,22 +2,23 @@
 
 import paho.mqtt.client as mqtt
 from splib import checkApiEndpoint, registerClient, updateClient, getConfig, getCurrentTime
-from time import sleep
+#from time import sleep
 from json import dumps, loads
 import sys
 import speedtest
+import re
 
 clientId = False
-clientType = 'SpeedTest'
+clientType = 'NetworkTest'
 commands = ['start', 'stop', 'status', 'update']
 capabilities = {
     'start': {
         'command': 'start',
-        'description': 'Start speed test meassurement'
+        'description': 'Start network test'
     },
     'stop': {
         'command': 'stop',
-        'description': 'Stop speed test meassurement'
+        'description': 'Stop network test'
     },
     'status': {
         'command': 'status',
@@ -45,7 +46,7 @@ def mqttMessage(client, userdata, msg):
     #topic = msg.topic
     message = loads((msg.payload).decode('UTF-8'))
 
-    # Check if the command is for out clientId
+    # Check if the command is for our clientId
     if message['clientId'] == clientId:
         if message['command'] in commands:
             mqttLog('Command ' + message['command'] + ' received')
@@ -70,6 +71,72 @@ def mqttMessage(client, userdata, msg):
                 # TODO
         else:
             mqttLog('Command ' + message['command'] + ' not implemented')
+
+def getPingTime(host):
+    """Ping a host and return the average round-trip-time"""
+
+    command = ['ping', '-4', '-n', '-i', '0.2', '-c', '5', host]
+
+    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output, errors = p.communicate()
+    output = output.decode("utf-8").splitlines()
+
+    host = 'NA'
+    timeMs = []
+
+    for line in output:
+        if '---' in line:
+            host = re.findall('---\s{1}(\S+)', line)
+            host = host[0]
+        if 'icmp' in line:
+            ms = re.findall('time=(\d+\.\d+)', line)
+            timeMs.append(float(ms[0]))
+
+    avgTimeMs = round((sum(timeMs)/len(timeMs)), 2)
+
+    return({"Host": host, "Time": avgTimeMs})
+
+def getDnsTime(host, server):
+    """Do a DNS lookup and retuen the query time"""
+
+    command = ['dig', '-4', '-u', '+timeout=1', '@' + server, host]
+
+    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output, errors = p.communicate()
+    output = output.decode("utf-8").splitlines()
+
+    for line in output:
+        if 'Query time' in line:
+            ms = re.findall('Query\stime:\s(\d+)', line)
+            ms = round(float(ms[0])/1024, 2)
+
+        if 'timed out' in line:
+            ms = 3000
+
+    return({"Host": host, "Server": server, "Time": ms})
+
+def getSpeedTest():
+    servers = []
+    threads = None
+    s = speedtest.Speedtest()
+    #s.get_servers(servers)
+    #s.get_best_server()
+    s.download(threads=threads)
+    s.upload(threads=threads)
+    results = s.results.dict()
+    
+    # Extract fields and convert to Mbit/s, round ms
+    timestamp = results['timestamp']
+    downMbit = round((results['download'])/1024/1024)
+    upMbit = round((results['upload'])/1024/1024)
+    pingMs = round(results['ping'])
+    ip = results['client']['ip']
+    isp = results['client']['isp']
+
+    data = {'clientId': clientId, 'clientType': clientType, 'data': {'Time': timestamp, 'Down': downMbit, 'Up': upMbit, 'Ping': pingMs, 'IP': ip, 'isp': isp}}
+
+    return data
+
 
 # Wait for the api endpoint
 checkApiEndpoint()
@@ -98,8 +165,8 @@ dataTopic = mqttConfig['MQTT']['dataTopic']
 logTopic = mqttConfig['MQTT']['logTopic']
 
 # Get application specific config
-speedTestConfig = getConfig('configs/SpeedTest')
-intervalSeconds = speedTestConfig['SpeedTest']['intervalSeconds']
+networkTestConfig = getConfig('configs/NetworkTest')
+intervalSeconds = networkTestConfig['NetworkTest']['intervalSeconds']
 
 # Connect to MQTT server and start subscription loop
 mqttClient = mqtt.Client()
@@ -113,24 +180,12 @@ mqttLog('Client registered with clientId ' + clientId)
 while True:
     if cmdQueue[-1] == 'start':
         try:
-            servers = []
-            threads = None
-            s = speedtest.Speedtest()
-            #s.get_servers(servers)
-            #s.get_best_server()
-            s.download(threads=threads)
-            s.upload(threads=threads)
-            results = s.results.dict()
-            
-            # Extract fields and convert to Mbit/s, round ms
-            timestamp = results['timestamp']
-            downMbit = round((results['download'])/1024/1024)
-            upMbit = round((results['upload'])/1024/1024)
-            pingMs = round(results['ping'])
-            ip = results['client']['ip']
-            isp = results['client']['isp']
-
-            data = {'clientId': clientId, 'clientType': clientType, 'data': {'Time': timestamp, 'Down': downMbit, 'Up': upMbit, 'Ping': pingMs, 'IP': ip, 'isp': isp}}
+            counter = int(intervalSeconds)
+            while counter >= 0:
+                getPingTime(host)
+                getDnsTime(host, server)
+                counter = counter - 1
+            getSpeedTest()
             mqttLog('Speedtest finished, sending data to data topic')
 
         except Exception as e:
@@ -138,7 +193,7 @@ while True:
             mqttLog('An error occured during application execution: ' + e)
 
         mqttClient.publish(dataTopic, dumps(data))
-        sleep(int(intervalSeconds))
+        #sleep(int(intervalSeconds))
 
     else:
         pass

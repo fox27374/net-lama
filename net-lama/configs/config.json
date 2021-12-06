@@ -128,7 +128,7 @@
         "token": "5c9e948b-7b06-41d7-8258-2be21cc1a884",
         "bulk": "1000"
     },
-    "SpeedTest": {
+    "NetworkTest": {
         "intervalSeconds": "120"
     },
     "Frametypes": {
