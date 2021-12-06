@@ -1,0 +1,159 @@
+openapi: 3.0.3
+info:
+  version: 1.0.0
+  title: Net-Lama API
+  description: API for communication and configuration with Net-Lama clients
+servers:
+  - url: http://<net-lama IP>:5000/api/v1
+paths:
+  /configs:
+    get:
+      tags:
+        - Config
+      description: Returns the whole Net-Lama config
+      responses:
+        '200':
+          description: Desired configuration in JSON format
+          content:
+            json:
+              schema:
+                type: object
+                example:
+                  commandTopic: net-lama/command
+                  dataTopic: net-lama/data
+                  logTopic: net-lama/log
+                  mqttPort: '1883'
+                  mqttServer: 0.0.0.0
+        '404':
+          description: Not found
+          content:
+            text/plain:
+              schema:
+                type: object
+                example:
+                  error: Not found
+                  
+  /configs/{section}:
+    get:
+      tags:
+        - Config
+      description: Returns the config for a specific client
+      parameters:
+        - in: path
+          name: section
+          required: true
+          description: config section
+          schema:
+            type: string
+            example: MQTT
+      responses:
+        '200':
+          description: Desired configuration in JSON format
+          content:
+            text/plain:
+              schema:
+                type: object
+                example:
+                  commandTopic: net-lama/command
+                  dataTopic: net-lama/data
+                  logTopic: net-lama/log
+                  mqttPort: '1883'
+                  mqttServer: 0.0.0.0
+        '404':
+          description: Not found
+          content:
+            text/plain:
+              schema:
+                type: object
+                example:
+                  error: Not found
+                  
+  /configs/update:
+    post:
+      tags:
+        - Config
+      description: Update parts of the configuration
+      responses:
+        '200':
+          description: Desired configuration in JSON format
+          content:
+            json:
+              schema:
+                type: object
+                
+  /clients:
+    get:
+      tags:
+        - Clients
+      description: Get current client information
+      responses:
+        '200':
+          description: Desired configuration in JSON format
+          content:
+            json:
+              schema:
+                type: object
+                
+  /clients/{client}:
+    get:
+      tags:
+        - Clients
+      description: Get current client information
+      parameters:
+        - in: path
+          name: client
+          required: true
+          description: Client name or ID
+          schema:
+            type: string
+            example: MQTT
+      responses:
+        '200':
+          description: Desired configuration in JSON format
+          content:
+            json:
+              schema:
+                type: object
+                
+  /clients/register:
+    post:
+      tags:
+        - Clients
+      description: Register new client at the API endpoint
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                client:
+                  clientType: SpeedTest
+
+
+      responses:
+        '200':
+          description: Desired configuration in JSON format
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  client:
+                    clientId: 0c95f98d-ac6f-43fd-9344-f302b0d8fd58
+                    clientType: SpeedTest
+                    lastSeen: '2021-08-26 16:41:09'
+                
+  /clients/update:
+    post:
+      tags:
+        - Clients
+      description: Update client information
+      responses:
+        '200':
+          description: Desired configuration in JSON format
+          content:
+            json:
+              schema:
+                type: object
+                  
+ 
