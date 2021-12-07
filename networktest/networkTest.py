@@ -142,12 +142,6 @@ def getSpeedTest():
 
         return 'Error: ' + e
 
-
-    
-    
-    
-
-
 # Wait for the api endpoint
 checkApiEndpoint()
 
