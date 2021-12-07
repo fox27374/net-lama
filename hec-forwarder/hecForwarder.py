@@ -11,6 +11,7 @@ clientType = 'HEC-Forwarder'
 commands = ['start', 'stop', 'status', 'update']
 dataQueue = []
 
+
 capabilities = {
     'start': {
         'command': 'start',
@@ -48,6 +49,7 @@ def mqttMessage(client, userdata, msg):
 
     if topic == dataTopic:
         dataQueue.append(message)
+        
     if topic == commandTopic:
         # Check if the command is for out clientId
         if message['clientId'] == clientId:
@@ -119,18 +121,21 @@ mqttClient.loop_start()
 mqttLog('Client registered with clientId ' + clientId)
 
 
-def sendData(pkts):
+def sendData(dataQueue):
     splunkUrl = 'http://' + server + ':' + port + url
     authHeader = {'Authorization': 'Splunk %s' %token}
-    print(pkts)
-    req = post(splunkUrl, headers=authHeader, json=pkts, verify=False)
-    mqttLog('Sending data to Splunk server: %s' %req)
+    
+    for data in dataQueue:
+        event = {'host': 'HEC-Forwarder', 'event': data}
+        print(event)
+        req = post(splunkUrl, headers=authHeader, json=event, verify=False)
+        mqttLog('Sending data to Splunk server: %s' %req)
 
 # Main task, controlled by the cmdQueue switch
 while True:
     if cmdQueue[-1] == 'start':
         try:
-            if len(dataQueue) >= int(bulk):
+            if len(dataQueue) != 0:
                 sendData(dataQueue)
                 dataQueue.clear()
 

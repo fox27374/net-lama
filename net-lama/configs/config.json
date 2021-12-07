@@ -126,9 +126,12 @@
         "port": "8088",
         "url": "/services/collector",
         "token": "5c9e948b-7b06-41d7-8258-2be21cc1a884",
-        "bulk": "1000"
+        "bulk": "10"
     },
     "SpeedTest": {
+        "intervalSeconds": "120"
+    },
+    "NetworkTest": {
         "intervalSeconds": "120"
     },
     "Frametypes": {

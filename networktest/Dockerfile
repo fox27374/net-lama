@@ -4,7 +4,7 @@ FROM python:3.8-alpine
 
 # Labeling
 LABEL "org.lnxnet.project"="net-lama"
-LABEL "org.lnxnet.application"="hec-forwarder"
+LABEL "org.lnxnet.application"="networktest"
 
 # Set variables
 ENV USER=net-lama
@@ -21,7 +21,7 @@ WORKDIR $HOME
 
 # Copy source files
 COPY --chown=$USER:$GROUP . .
-#COPY --chown=$USER:$GROUP ../modules/splib.py .
+COPY --chown=$USER:$GROUP ../lib/splib.py .
 
 # Set environment to the net-lama directory
 ENV VIRTUAL_ENV=$HOME/venv
@@ -32,4 +32,4 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Run the application:
-CMD ["python", "hecForwarder.py"]
+CMD ["python", "networkTest.py"]

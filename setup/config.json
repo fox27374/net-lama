@@ -34,7 +34,7 @@
         },
         {
             "name": "speedtest",
-            "install": "True",
+            "install": "",
             "installType": "",
             "hostIp": "",
             "hostPort": "",
