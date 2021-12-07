@@ -1,3 +1,0 @@
-requests
-paho-mqtt
-speedtest-cli
