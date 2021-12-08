@@ -6,6 +6,7 @@ from time import sleep
 from json import dumps, loads
 import sys
 import speedtest
+import subprocess
 import re
 
 clientId = False
@@ -31,7 +32,7 @@ capabilities = {
 }
 
 # Initialise application
-cmdQueue = ['stop']
+cmdQueue = ['start']
 
 def mqttConnect(client, userdata, flags, rc):
     """Subscripe to MQTT topic"""
@@ -94,7 +95,9 @@ def getPingTime(host):
 
     avgTimeMs = round((sum(timeMs)/len(timeMs)), 2)
 
-    return({"Host": host, "Time": avgTimeMs})
+    data = {'clientId': clientId, 'clientType': clientType, 'data': {"Test": "Ping", "Host": host, "Time": avgTimeMs}}
+
+    return data
 
 def getDnsTime(host, server):
     """Do a DNS lookup and retuen the query time"""
@@ -113,7 +116,9 @@ def getDnsTime(host, server):
         if 'timed out' in line:
             ms = 3000
 
-    return({"Host": host, "Server": server, "Time": ms})
+    data = {'clientId': clientId, 'clientType': clientType, 'data': {"Test": "DNS", "Host": host, "Server": server, "Time": ms}}
+
+    return data
 
 def getSpeedTest():
     servers = []
@@ -170,7 +175,10 @@ logTopic = mqttConfig['MQTT']['logTopic']
 
 # Get application specific config
 networkTestConfig = getConfig('configs/NetworkTest')
-intervalSeconds = networkTestConfig['NetworkTest']['intervalSeconds']
+speedTestInterval = networkTestConfig['NetworkTest']['speedTestInterval']
+pingDestination = networkTestConfig['NetworkTest']['pingDestination']
+dnsQuery = networkTestConfig['NetworkTest']['dnsQuery']
+dnsServer = networkTestConfig['NetworkTest']['dnsServer']
 
 # Connect to MQTT server and start subscription loop
 mqttClient = mqtt.Client()
@@ -184,23 +192,27 @@ mqttLog('Client registered with clientId ' + clientId)
 while True:
     if cmdQueue[-1] == 'start':
         try:
-            #counter = int(intervalSeconds)
-            counter = 5
+            counter = int(speedTestInterval)
+
             while counter >= 0:
-                pingTime = getPingTime('www.google.co.uk')
-                dnsTime = getDnsTime('www.google.co.uk', '8.8.4.4')
-                mqttClient.publish(dataTopic, dumps(pingTime))
-                mqttClient.publish(dataTopic, dumps(dnsTime))
-                mqttLog('Ping and DNS test finished, sending data to data topic')
-                counter = counter - 1
+                for destination in pingDestination:
+                    pingTime = getPingTime(destination)
+                    mqttClient.publish(dataTopic, dumps(pingTime))
+                for server in dnsServer:
+                    for query in dnsQuery:
+                        dnsTime = getDnsTime(query, server)
+                        mqttClient.publish(dataTopic, dumps(dnsTime))
+
+                mqttLog('Ping and DNS test finished')
                 sleep(1)
+
             speedTest = getSpeedTest()
             if 'error' in speedTest:
                 pass
             else:
                 mqttClient.publish(dataTopic, dumps(speedTest))
                 mqttLog('Speedtest finished, sending data to data topic')
-                counter = 5
+                counter = int(speedTestInterval)
 
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}

@@ -129,10 +129,10 @@
         "bulk": "10"
     },
     "NetworkTest": {
-        "intervalSeconds": "120"
-    },
-    "NetworkTest": {
-        "intervalSeconds": "120"
+        "speedTestInterval": "120",
+        "pingDestination": ["www.google.at"],
+        "dnsQuery": ["www.google.co.uk"],
+        "dnsServer": ["192.168.1.1", "213.33.99.70", "80.120.17.70"]
     },
     "Frametypes": {
         "0": {
