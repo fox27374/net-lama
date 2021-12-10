@@ -91,7 +91,12 @@ def getPingTime(host):
             host = host[0]
         if 'icmp' in line:
             ms = re.findall('time=(\d+\.\d+)', line)
-            timeMs.append(float(ms[0]))
+
+            if ms:
+                timeMs.append(float(ms[0]))
+            else:
+                ms = 3000
+                timeMs.append(float(ms))
 
     avgTimeMs = round((sum(timeMs)/len(timeMs)), 2)
 
@@ -204,6 +209,7 @@ while True:
                         mqttClient.publish(dataTopic, dumps(dnsTime))
 
                 mqttLog('Ping and DNS test finished')
+                counter = counter - 1
                 sleep(1)
 
             speedTest = getSpeedTest()
