@@ -33,8 +33,8 @@
             "protocol": "tcp"
         },
         {
-            "name": "speedtest",
-            "install": "",
+            "name": "networktest",
+            "install": "True",
             "installType": "",
             "hostIp": "",
             "hostPort": "",

@@ -21,7 +21,6 @@ WORKDIR $HOME
 
 # Copy source files
 COPY --chown=$USER:$GROUP . .
-COPY --chown=$USER:$GROUP ../lib/splib.py .
 
 # Set environment to the net-lama directory
 ENV VIRTUAL_ENV=$HOME/venv

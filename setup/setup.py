@@ -5,6 +5,7 @@ import subprocess as sp
 import json
 import docker
 import sys
+import shutil
 
 # Variables
 configFile = 'config.json'
@@ -88,10 +89,18 @@ else:
 
         if appInstall == 'True' and appInstallType == 'docker':
             print('Building image for ' + appName)
+
+            # Temporarily copy library file from outside the build context
+            shutil.copy('../modules/splib.py', '../' + appName + '/splib.py')
+
             try:
                 client.images.build(tag='net-lama/' + appName + ':' + config['general']['version'], rm=True, path='../' + appName)
+                # Remove temp file
+                shutil.rmtree('../' + appName + '/splib.py')
             except:
                 print ('A problem occured during the build process')
+
+        
 
     # Create network
     nwSubnet = config['docker']['nwSubnet']

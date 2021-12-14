@@ -40,7 +40,8 @@ def mqttConnect(client, userdata, flags, rc):
 
 def mqttLog(data):
     now = getCurrentTime()
-    mqttClient.publish(logTopic, now + ' ' + clientId + ' ' + data)
+    logData = {'clientId': clientId, 'clientType': clientType, 'data': {'Time': now, 'Log': data}}
+    mqttClient.publish(logTopic, dumps(logData))
 
 def mqttMessage(client, userdata, msg):
     """Process incoming MQTT message"""
@@ -98,7 +99,7 @@ def getPingTime(host):
                 ms = 3000
                 timeMs.append(float(ms))
 
-    avgTimeMs = round((sum(timeMs)/len(timeMs)), 2)
+        avgTimeMs = round((sum(timeMs)/len(timeMs)), 2)
 
     data = {'clientId': clientId, 'clientType': clientType, 'data': {"Test": "Ping", "Host": host, "Time": avgTimeMs}}
 
