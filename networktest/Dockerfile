@@ -11,6 +11,9 @@ ENV USER=net-lama
 ENV GROUP=net-lama
 ENV HOME /home/$USER
 
+# Install software
+RUN apk add --no-cache bind-tools iputils
+
 # Create user and group
 RUN addgroup $GROUP
 RUN adduser -G $GROUP -h $HOME -D $USER

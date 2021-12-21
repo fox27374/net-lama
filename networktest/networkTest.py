@@ -76,34 +76,31 @@ def mqttMessage(client, userdata, msg):
 
 def getPingTime(host):
     """Ping a host and return the average round-trip-time"""
-
     command = ['ping', '-4', '-n', '-i', '0.2', '-c', '5', host]
 
     p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output, errors = p.communicate()
     output = output.decode("utf-8").splitlines()
 
-    host = 'NA'
+    avgTimeMs = 'NA'
     timeMs = []
 
     for line in output:
-        if '---' in line:
-            host = re.findall('---\s{1}(\S+)', line)
-            host = host[0]
-        if 'icmp' in line:
+        if 'time=' in line:
             ms = re.findall('time=(\d+\.\d+)', line)
-
+            
             if ms:
                 timeMs.append(float(ms[0]))
             else:
                 ms = 3000
                 timeMs.append(float(ms))
 
-        avgTimeMs = round((sum(timeMs)/len(timeMs)), 2)
+            avgTimeMs = round((sum(timeMs)/len(timeMs)), 2)
 
     data = {'clientId': clientId, 'clientType': clientType, 'data': {"Test": "Ping", "Host": host, "Time": avgTimeMs}}
 
     return data
+
 
 def getDnsTime(host, server):
     """Do a DNS lookup and retuen the query time"""

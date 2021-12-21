@@ -61,7 +61,7 @@
         },
         {
             "name": "net-lama-mqtt",
-            "install": "True",
+            "install": "",
             "installType": "",
             "hostIp": "10.140.80.1",
             "hostPort": "1883",

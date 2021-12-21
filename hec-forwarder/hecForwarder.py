@@ -40,7 +40,8 @@ def mqttConnect(client, userdata, flags, rc):
 
 def mqttLog(data):
     now = getCurrentTime()
-    mqttClient.publish(logTopic, now + ' ' + clientId + ' ' + data)
+    logData = {'clientId': clientId, 'clientType': clientType, 'data': {'Time': now, 'Log': data}}
+    mqttClient.publish(logTopic, dumps(logData))
 
 def mqttMessage(client, userdata, msg):
     """Process incoming MQTT message"""
