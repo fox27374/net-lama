@@ -212,7 +212,7 @@ while True:
 
             speedTest = getSpeedTest()
             if 'error' in speedTest:
-                pass
+                mqttLog('Speedtest failed: ' + speedTest)
             else:
                 mqttClient.publish(dataTopic, dumps(speedTest))
                 mqttLog('Speedtest finished, sending data to data topic')
@@ -221,9 +221,6 @@ while True:
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
             mqttLog('An error occured during application execution: ' + e)
-
-        #mqttClient.publish(dataTopic, dumps(data))
-        #sleep(int(intervalSeconds))
 
     else:
         pass
