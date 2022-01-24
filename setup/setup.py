@@ -21,28 +21,28 @@ def readConfig(configFile):
 config = readConfig(configFile)
 
 # Check docker permissions
-print('Checking requirements')
+print("Checking requirements")
 requirementsMet = []
-print('Checking Docker')
+print("Checking Docker")
 try:
     dockerCmd = sp.run(['docker', 'ps'], capture_output=True, text=True, check=True)
     requirementsMet.append(True)
 except sp.CalledProcessError:
-    print ('Docker not running or missing permissions')
+    print("Docker not running or missing permissions")
     requirementsMet.append(False)
 
-print('Checking Python')
+print("Checking Python")
 try:
     dockerCmd = sp.run(['python3', '--version'], capture_output=True, text=True, check=True)
     requirementsMet.append(True)
 except sp.CalledProcessError:
-    print ('Python not installed')
+    print("Python not installed")
     requirementsMet.append(False)
 
 if False in requirementsMet:
-    print('Not all requirements met, cannot continue')
+    print("Not all requirements met, cannot continue")
 else:
-    print('All requirements met, we are good to go')
+    print("All requirements met, we are good to go")
     
     # Check if images needs to be build
     images = client.images.list(name = "net-lama/*")
@@ -61,7 +61,7 @@ else:
         for container in client.containers.list():
             for image in images:
                 if container.image == image:
-                    print(f'Stopping container {container.name}')
+                    print(f"Stopping container {container.name}")
                     container.stop()
 
         # Prune stopped containers
@@ -69,7 +69,7 @@ else:
 
         # Delete images
         for image in images:
-            print(f'Deleting image {image.tags[0]}')
+            print(f"Deleting image {image.tags[0]}")
             client.images.remove(image.tags[0])
 
    
@@ -77,7 +77,7 @@ else:
     nwName = config['docker']['nwName']
     for network in client.networks.list():
         if network.name == nwName:
-            print(f'Deleting network {network.name}')
+            print(f"Deleting network {network.name}")
             network.remove()
 
 
@@ -88,7 +88,7 @@ else:
         appInstallType = application['installType'] if application['installType'] else config['default']['installType']
 
         if appInstall == 'True' and appInstallType == 'docker':
-            print(f'Building image for {appName}')
+            print(f"Building image for {appName}")
 
             # Temporarily copy library file from outside the build context
             os.popen('cp ../modules/splib.py ../' + appName + '/splib.py')
@@ -98,7 +98,7 @@ else:
                 # Remove temp file
                 #os.popen('rm ../' + appName + '/splib.py')
             except Exception as e:
-                print (f'A problem occured during the build process: {e}')
+                print (f"A problem occured during the build process: {e}")
 
         
 
@@ -109,7 +109,7 @@ else:
     ipam_pool = docker.types.IPAMPool(subnet = nwSubnet, gateway = nwGateway)
     ipam_config = docker.types.IPAMConfig(pool_configs = [ipam_pool])
 
-    print(f'Creating network {nwName} with parameters: Subnet {nwSubnet}, Gateway: {nwGateway}')
+    print(f"Creating network {nwName} with parameters: Subnet {nwSubnet}, Gateway: {nwGateway}")
     client.networks.create(nwName, driver = "bridge", ipam = ipam_config)
             
     # Run containers
@@ -126,10 +126,10 @@ else:
             ports = {containerPort + '/' + protocol: (hostIp, int(hostPort))}
 
         if appInstall == 'True':
-            print(f'Starting container {appName}')
+            print(f"Starting container {appName}")
             try:
                 container = client.containers.run(name = appName, image = 'net-lama/' + appName + ':' + config['general']['version'], 
                 detach = True, network = nwName, ports = ports, remove = True)
             except Exception as e:
-                print (f'A problem occured during the starting process: {e}')
+                print (f"A problem occured during the starting process: {e}")
                 print(sys.exc_info()[0])

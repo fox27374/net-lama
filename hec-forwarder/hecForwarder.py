@@ -88,7 +88,7 @@ if clientId == False:
     register = registerClient(clientType)
     if register['status'] == 'ok': clientId = register['data']['client']['clientId']
     else:
-        print('An error occured: ' + register['data'])
+        print(f"An error occured: {register['data']}")
         sys.exit()
 
 # Update client information at api endpoint
@@ -119,7 +119,7 @@ mqttClient.on_connect = mqttConnect
 mqttClient.on_message = mqttMessage
 mqttClient.connect(mqttServer, int(mqttPort), 60)
 mqttClient.loop_start()
-mqttLog('Client registered with clientId ' + clientId)
+mqttLog(f"Client registered with clientId {clientId}")
 
 
 def sendData(dataQueue):
@@ -130,7 +130,7 @@ def sendData(dataQueue):
         event = {'host': 'HEC-Forwarder', 'event': data}
         print(event)
         req = post(splunkUrl, headers=authHeader, json=event, verify=False)
-        mqttLog('Sending data to Splunk server: %s' %req)
+        mqttLog(f"Sending data to Splunk server: {req}")
 
 # Main task, controlled by the cmdQueue switch
 while True:
@@ -142,7 +142,7 @@ while True:
 
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
-            mqttLog('An error occured during application execution: ' + e)
+            mqttLog(f"An error occured during application execution: {e}")
 
     else:
         pass

@@ -41,7 +41,7 @@ def checkApiEndpoint():
         response = processRequest('get', 'configs/all', '')
         if response['status'] == 'ok': reachable = True
         else:
-            print('An error occured: ' + response['data'])
+            print(f"An error occured: {response['data']}")
             sleep(1)
            
 def registerClient(clientType):
@@ -54,7 +54,7 @@ def registerClient(clientType):
         response = processRequest(requestType, apiUrl, clientData)
         if response['status'] == 'ok': registered = True
         else:
-            print('An error occured: ' + response['data'])
+            print(f"An error occured: {response['data']}")
             sleep(1)
     return response    
 

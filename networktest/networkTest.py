@@ -51,28 +51,28 @@ def mqttMessage(client, userdata, msg):
     # Check if the command is for our clientId
     if message['clientId'] == clientId:
         if message['command'] in commands:
-            mqttLog('Command ' + message['command'] + ' received')
+            mqttLog(f"Command {message['command']} received")
             if message['command'] == 'status':
                 if cmdQueue[-1] == 'start': appStatus = 'running'
                 elif cmdQueue[-1] == 'stop': appStatus = 'stopped'
                 else: appStatus = 'undefined'
                 updateClient(clientId, clientType, appStatus, capabilities)
-                mqttLog('Sending status update to api endpoint')
+                mqttLog("Sending status update to api endpoint")
             elif message['command'] == 'start':
                 cmdQueue.append('start')
-                mqttLog('Starting application')
+                mqttLog("Starting application")
                 updateClient(clientId, clientType, 'running', capabilities)
-                mqttLog('Sending application status update to api endpoint')
+                mqttLog("Sending application status update to api endpoint")
             elif message['command'] == 'stop':
                 cmdQueue.append('stop')
-                mqttLog('Stopping application')
+                mqttLog("Stopping application")
                 updateClient(clientId, clientType, 'stopped', capabilities)
-                mqttLog('Sending application status update to api endpoint')
+                mqttLog("Sending application status update to api endpoint")
             elif message['command'] == 'update':
                 pass
                 # TODO
         else:
-            mqttLog('Command ' + message['command'] + ' not implemented')
+            mqttLog(f"Command {message['command']} not implemented")
 
 def getPingTime(host):
     """Ping a host and return the average round-trip-time"""
@@ -146,7 +146,7 @@ def getSpeedTest():
         
     except Exception as e:
         data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
-        mqttLog('An error occured during application execution: ' + e)
+        mqttLog(f"An error occured during application execution: {e}")
 
         return 'Error: ' + e
 
@@ -159,7 +159,7 @@ if clientId == False:
     register = registerClient(clientType)
     if register['status'] == 'ok': clientId = register['data']['client']['clientId']
     else:
-        print('An error occured: ' + register['data'])
+        print(f"An error occured: {register['data']}")
         sys.exit()
 
 # Update client information at api endpoint
@@ -189,7 +189,7 @@ mqttClient.on_connect = mqttConnect
 mqttClient.on_message = mqttMessage
 mqttClient.connect(mqttServer, int(mqttPort), 60)
 mqttClient.loop_start()
-mqttLog('Client registered with clientId ' + clientId)
+mqttLog(f"Client registered with clientId {clientId}")
 
 # Main task, controlled by the cmdQueue switch
 while True:
@@ -206,21 +206,21 @@ while True:
                         dnsTime = getDnsTime(query, server)
                         mqttClient.publish(dataTopic, dumps(dnsTime))
 
-                mqttLog('Ping and DNS test finished')
+                mqttLog("Ping and DNS test finished")
                 counter = counter - 1
                 sleep(1)
 
             speedTest = getSpeedTest()
             if 'error' in speedTest:
-                mqttLog('Speedtest failed: ' + speedTest)
+                mqttLog(f"Speedtest failed: {speedTest}")
             else:
                 mqttClient.publish(dataTopic, dumps(speedTest))
-                mqttLog('Speedtest finished, sending data to data topic')
+                mqttLog("Speedtest finished, sending data to data topic")
                 counter = int(speedTestInterval)
 
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
-            mqttLog('An error occured during application execution: ' + e)
+            mqttLog(f"An error occured during application execution: {e}")
 
     else:
         pass

@@ -58,21 +58,21 @@ def mqttMessage(client, userdata, msg):
     # Check if the command is for our clientId
     if message['clientId'] == clientId:
         if message['command'] in commands:
-            mqttLog('Command ' + message['command'] + ' received')
+            mqttLog(f"Command {message['command']} received")
             if message['command'] == 'status':
                 updateClient(clientId, clientType, cmdQueue[-1], capabilities)
-                mqttLog('Sending status update to api endpoint')
+                mqttLog("Sending status update to api endpoint")
             elif message['command'] == 'start': cmdQueue.append('start')
             elif message['command'] == 'stop': cmdQueue.append('stop')
             elif message['command'] == 'scan': cmdQueue.append('scan')
             elif message['command'] == 'update': pass # TODO
         else:
-            mqttLog('Command ' + message['command'] + ' not implemented')
+            mqttLog(f"Command {message['command']} not implemented")
 
 def switchState(state, updateQueue):
     """Change state queue, send log and update client info with api endpoint"""
-    mqttLog('Changing to %s state' %state)
-    mqttLog('Sending state update to api endpoint')
+    mqttLog("Changing to state {state}")
+    mqttLog("Sending state update to api endpoint")
     updateClient(clientId, clientType, state, capabilities)
     if updateQueue == True: cmdQueue.append(state)
 
@@ -82,7 +82,7 @@ if clientId == False:
     register = registerClient(clientType)
     if register['status'] == 'ok': clientId = register['data']['client']['clientId']
     else:
-        print('An error occured: ' + register['data'])
+        print(f"An error occured: {register['data']}")
         sys.exit()
 
 # Update client information at api endpoint
@@ -112,16 +112,16 @@ mqttClient.on_connect = mqttConnect
 mqttClient.on_message = mqttMessage
 mqttClient.connect(mqttServer, int(mqttPort), 60)
 mqttClient.loop_start()
-mqttLog('Client registered with clientId ' + clientId)
+mqttLog(f"Client registered with clientId {clientId}")
 
 def sensor():
     #cmdFilter = ['-Y', 'wlan.ta==' + scanWLANBSSIDs[0] + ' or wlan.ra==' + scanWLANBSSIDs[0] + ' or wlan.sa==' + scanWLANBSSIDs[0]]
-    cmd = 'tshark -i ' + iface + ' -l -e wlan.fc.retry -e wlan.fc.type -e wlan.fc.subtype -e wlan.bssid -e wlan.ssid -e wlan.sa -e wlan.da -e wlan.ta -e wlan.ra -e wlan_radio.duration -e wlan_radio.preamble -e wlan_radio.channel -s 100 -T ek'
+    cmd = f"tshark -i {iface} -l -e wlan.fc.retry -e wlan.fc.type -e wlan.fc.subtype -e wlan.bssid -e wlan.ssid -e wlan.sa -e wlan.da -e wlan.ta -e wlan.ra -e wlan_radio.duration -e wlan_radio.preamble -e wlan_radio.channel -s 100 -T ek"
     cmd = cmd.split(' ')
     #cmd += cmdFilter
 
     procSensor = sp.Popen(cmd, stdout=sp.PIPE)
-    mqttLog('Starting TShark subprocess with PID: %s' %procSensor.pid)
+    mqttLog(f"Starting TShark subprocess with PID: {procSensor.pid}")
     while True:
         output = procSensor.stdout.readline()
         if output == '' and procSensor.poll() is not None:
@@ -156,18 +156,18 @@ def sensor():
                 if cmdQueue[-1] != 'start': break
     # Stop process
     procSensor.terminate()
-    mqttLog('Terminating TShark subprocess with PID: %s' %procSensor.pid)
+    mqttLog(f"Terminating TShark subprocess with PID: {procSensor.pid}")
 
 def scanner():
     cmdFilter = ['-Y', 'wlan.fc.subtype==8']
-    cmd = 'tshark -i ' + iface + ' -l -e wlan.bssid -e wlan.ssid -e wlan_radio.channel -e wlan_radio.signal_dbm -s 100 -T ek'
+    cmd = f"tshark -i {iface} -l -e wlan.bssid -e wlan.ssid -e wlan_radio.channel -e wlan_radio.signal_dbm -s 100 -T ek"
     cmd = cmd.split(' ')
     cmd += cmdFilter
 
     loop = 0
 
     procSensor = sp.Popen(cmd, stdout=sp.PIPE)
-    mqttLog('Starting TShark subprocess with PID: %s' %procSensor.pid)
+    mqttLog(f"Starting TShark subprocess with PID: {procSensor.pid}")
     while loop <= 50:
         output = procSensor.stdout.readline()
         if output == '' and procSensor.poll() is not None:
@@ -193,45 +193,45 @@ def scanner():
 while True:
     if cmdQueue[-1] == 'start':
         try:
-            mqttLog('Starting WLAN sensor')
+            mqttLog("Starting WLAN sensor")
             switchState(cmdQueue[-1], False)
-            system("sudo iwconfig " + iface + " channel " + str(sensorChannel))
-            mqttLog('Changing interface channel to: %s' %sensorChannel)
+            system(f"sudo iwconfig {iface} channel {str(sensorChannel)}")
+            mqttLog(f"Changing interface channel to: {sensorChannel}")
 
             # Start sensor loop
             sensor()
             switchState('idle', True)
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
-            mqttLog('An error occured during application execution: ' + e)
+            mqttLog(f"An error occured during application execution: {e}")
             switchState('idle', True)
 
     elif cmdQueue[-1] == 'stop':
         try:
-            mqttLog('Stopping WLAN sensor')
+            mqttLog("Stopping WLAN sensor")
             switchState('idle', True)
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
-            mqttLog('An error occured during application execution: ' + e)
+            mqttLog(f"An error occured during application execution: {e}")
             switchState('idle', True)
 
     elif cmdQueue[-1] == 'scan':
         try:
-            mqttLog('Starting WLAN sensor in scanning mode')
+            mqttLog("Starting WLAN sensor in scanning mode")
             switchState(cmdQueue[-1], False)
             for scanChannel in scanChannels:
-                system("sudo iwconfig " + iface + " channel " + str(scanChannel))
-                mqttLog('Changing interface channel to: %s' %scanChannel)
+                system(f"sudo iwconfig {iface} channel {str(scanChannel)}")
+                mqttLog(f"Changing interface channel to: {sensorChannel}")
                 scanner()
             wlanList = createWlanList(wlanInfos)
             configData = {'wlans': wlanList}
             updateConfig(clientType, configData)
-            mqttLog('Stopping WLAN sensor scanning mode')
+            mqttLog("Stopping WLAN sensor scanning mode")
             switchState('idle', True)
             
         except Exception as e:
             data = {'clientId': clientId, 'clientType': clientType, 'data': {'Error': e}}
-            mqttLog('An error occured during application execution: ' + e)
+            mqttLog(f"An error occured during application execution: {e}")
             switchState('idle', True)
     
     else:
