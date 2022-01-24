@@ -1,7 +1,6 @@
 from requests import get, post, exceptions
 from datetime import datetime
 from time import sleep
-import paho.mqtt.client as mqtt
 import globalVars as gv
 
 # API calls

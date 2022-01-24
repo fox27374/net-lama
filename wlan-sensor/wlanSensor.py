@@ -5,7 +5,6 @@ path.append('../includes/')
 import paho.mqtt.client as mqtt
 import subprocess as sp
 from splib import registerClient, updateClient, getConfig, getCurrentTime, createWlanList, updateConfig
-from time import sleep
 from json import dumps, loads
 from os import system
 
