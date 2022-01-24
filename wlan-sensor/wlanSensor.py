@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from sys import path, exit
+path.append('../includes/')
 
 import paho.mqtt.client as mqtt
 import subprocess as sp
@@ -7,7 +9,7 @@ import globalVars as gv
 from time import sleep
 from json import dumps, loads
 from os import system
-import sys
+
 
 
 clientId = False
@@ -83,7 +85,7 @@ if clientId == False:
     if register['status'] == 'ok': clientId = register['data']['client']['clientId']
     else:
         print(f"An error occured: {register['data']}")
-        sys.exit()
+        exit()
 
 # Update client information at api endpoint
 updateClient(clientId, clientType, cmdQueue[-1], capabilities)
