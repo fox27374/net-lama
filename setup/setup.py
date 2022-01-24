@@ -61,7 +61,7 @@ else:
         for container in client.containers.list():
             for image in images:
                 if container.image == image:
-                    print('Stopping container ' + container.name)
+                    print(f'Stopping container {container.name}')
                     container.stop()
 
         # Prune stopped containers
@@ -69,7 +69,7 @@ else:
 
         # Delete images
         for image in images:
-            print('Deleting image ' + image.tags[0])
+            print(f'Deleting image {image.tags[0]}')
             client.images.remove(image.tags[0])
 
    
@@ -77,7 +77,7 @@ else:
     nwName = config['docker']['nwName']
     for network in client.networks.list():
         if network.name == nwName:
-            print('Deleting network ' + network.name)
+            print(f'Deleting network {network.name}')
             network.remove()
 
 
@@ -88,7 +88,7 @@ else:
         appInstallType = application['installType'] if application['installType'] else config['default']['installType']
 
         if appInstall == 'True' and appInstallType == 'docker':
-            print('Building image for ' + appName)
+            print(f'Building image for {appName}')
 
             # Temporarily copy library file from outside the build context
             os.popen('cp ../modules/splib.py ../' + appName + '/splib.py')
@@ -98,7 +98,7 @@ else:
                 # Remove temp file
                 #os.popen('rm ../' + appName + '/splib.py')
             except Exception as e:
-                print ('A problem occured during the build process: ' + e)
+                print (f'A problem occured during the build process: {e}')
 
         
 
@@ -109,7 +109,7 @@ else:
     ipam_pool = docker.types.IPAMPool(subnet = nwSubnet, gateway = nwGateway)
     ipam_config = docker.types.IPAMConfig(pool_configs = [ipam_pool])
 
-    print('Creating network ' + nwName + ' with parameters: Subnet ' + nwSubnet + ', Gateway: ' + nwGateway)
+    print(f'Creating network {nwName} with parameters: Subnet {nwSubnet}, Gateway: {nwGateway}')
     client.networks.create(nwName, driver = "bridge", ipam = ipam_config)
             
     # Run containers
@@ -126,10 +126,10 @@ else:
             ports = {containerPort + '/' + protocol: (hostIp, int(hostPort))}
 
         if appInstall == 'True':
-            print('Starting container ' + appName)
+            print(f'Starting container {appName}')
             try:
                 container = client.containers.run(name = appName, image = 'net-lama/' + appName + ':' + config['general']['version'], 
                 detach = True, network = nwName, ports = ports, remove = True)
             except Exception as e:
-                print ('A problem occured during the starting process: ' + e)
+                print (f'A problem occured during the starting process: {e}')
                 print(sys.exc_info()[0])
