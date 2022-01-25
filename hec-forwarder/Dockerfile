@@ -20,8 +20,12 @@ USER $USER
 WORKDIR $HOME
 
 # Copy source files
-COPY --chown=$USER:$GROUP . .
-#COPY --chown=$USER:$GROUP ../modules/splib.py .
+COPY --chown=$USER:$GROUP hecForwarder.py .
+COPY --chown=$USER:$GROUP clientId.json .
+COPY --chown=$USER:$GROUP requirements.txt .
+COPY --chown=$USER:$GROUP globalVars.py .
+COPY --chown=$USER:$GROUP splib.py .
+
 
 # Set environment to the net-lama directory
 ENV VIRTUAL_ENV=$HOME/venv

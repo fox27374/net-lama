@@ -28,6 +28,11 @@ for application in config['applications']:
     appInstallType = application['installType'] if application['installType'] else config['default']['installType']
 
     if appInstall == 'True' and appInstallType == 'docker':
+
+        # Temporarily copy library files from outside the build context
+        os.popen('cp ../includes/splib.py ../' + application['name'] + '/splib.py')
+        os.popen('cp ../includes/globalVars.py ../' + application['name'] + '/globalVars.py')
+
         clientIdFile = '../' + application['name'] + '/clientId.json'
 
         with open(clientIdFile) as inFile:
@@ -112,13 +117,11 @@ else:
         if appInstall == 'True' and appInstallType == 'docker':
             print(f"Building image for {appName}")
 
-            # Temporarily copy library file from outside the build context
-            os.popen('cp ../includes/splib.py ../' + appName + '/splib.py')
-
             try:
                 client.images.build(tag='net-lama/' + appName + ':' + config['general']['version'], rm=True, path='../' + appName)
-                # Remove temp file
+                # Remove temp files
                 os.popen('rm ../' + appName + '/splib.py')
+                os.popen('rm ../' + appName + '/globalVars.py')
             except Exception as e:
                 print (f"A problem occured during the build process: {e}")
 

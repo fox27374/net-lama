@@ -26,7 +26,7 @@
         {
             "name": "net-lama",
             "id": "",
-            "install": "False",
+            "install": "True",
             "installType": "",
             "hostIp": "10.140.80.1",
             "hostPort": "5000",
@@ -46,7 +46,7 @@
         {
             "name": "hec-forwarder",
             "id": "",
-            "install": "False",
+            "install": "True",
             "installType": "",
             "hostIp": "",
             "hostPort": "",

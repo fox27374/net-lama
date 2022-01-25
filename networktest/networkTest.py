@@ -6,7 +6,7 @@ path.append('../includes/')
 import paho.mqtt.client as mqtt
 from splib import checkApiEndpoint, registerClient, updateClient, getConfig, getCurrentTime
 from time import sleep
-from json import dumps, loads
+from json import dumps, loads, load
 import speedtest
 import subprocess
 import re
@@ -38,7 +38,7 @@ cmdQueue = ['start']
 
 def getClientId():
     with open('clientId.json') as inFile:
-        clientIdData = loads(inFile)
+        clientIdData = load(inFile)
 
     return clientIdData['clientId']
 
