@@ -36,6 +36,12 @@ capabilities = {
 # Initialise application
 cmdQueue = ['start']
 
+def getClientId():
+    with open('clientId.json') as inFile:
+        clientIdData = loads(inFile)
+
+    return clientIdData['clientId']
+
 def mqttConnect(client, userdata, flags, rc):
     """Subscripe to MQTT topic"""
     mqttClient.subscribe([(commandTopic, 0)])
@@ -163,6 +169,8 @@ if clientId == False:
     else:
         print(f"An error occured: {register['data']}")
         exit()
+
+clientId = getClientId()
 
 # Update client information at api endpoint
 if cmdQueue[-1] == 'start': appStatus = 'running'

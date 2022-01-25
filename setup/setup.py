@@ -6,10 +6,12 @@ import json
 import docker
 import sys
 import os
+from uuid import uuid4
 
 # Variables
 configFile = 'config.json'
 client = docker.from_env()
+clientId = ''
 
 # Functions
 def readConfig(configFile):
@@ -19,6 +21,26 @@ def readConfig(configFile):
 
 # Load config file
 config = readConfig(configFile)
+
+# Check if applications have IDs assigned
+for application in config['applications']:
+    appInstall = application['install']
+    appInstallType = application['installType'] if application['installType'] else config['default']['installType']
+
+    if appInstall == 'True' and appInstallType == 'docker':
+        clientIdFile = '../' + application['name'] + '/clientId.json'
+
+        with open(clientIdFile) as inFile:
+            clientIdData = json.load(inFile)
+
+        clientId = clientIdData['clientId']
+
+        if clientId == 'None':
+            clientId = str(uuid4())[:8]
+            clientIdData['clientId'] = clientId
+
+            with open(clientIdFile, 'w') as outFile:
+                json.dump(clientIdData, outFile)
 
 # Check docker permissions
 print("Checking requirements")
@@ -91,12 +113,12 @@ else:
             print(f"Building image for {appName}")
 
             # Temporarily copy library file from outside the build context
-            os.popen('cp ../modules/splib.py ../' + appName + '/splib.py')
+            os.popen('cp ../includes/splib.py ../' + appName + '/splib.py')
 
             try:
                 client.images.build(tag='net-lama/' + appName + ':' + config['general']['version'], rm=True, path='../' + appName)
                 # Remove temp file
-                #os.popen('rm ../' + appName + '/splib.py')
+                os.popen('rm ../' + appName + '/splib.py')
             except Exception as e:
                 print (f"A problem occured during the build process: {e}")
 
@@ -127,8 +149,10 @@ else:
 
         if appInstall == 'True':
             print(f"Starting container {appName}")
+            image = 'net-lama/' + appName + ':' + config['general']['version']
+            #volumes = {'/home/net-lama/static/': {'bind': '/opt/net-lama/' + appName, 'mode': 'rw'}}
             try:
-                container = client.containers.run(name = appName, image = 'net-lama/' + appName + ':' + config['general']['version'], 
+                container = client.containers.run(name = appName, image = image, 
                 detach = True, network = nwName, ports = ports, remove = True)
             except Exception as e:
                 print (f"A problem occured during the starting process: {e}")
