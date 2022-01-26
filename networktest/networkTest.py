@@ -4,9 +4,9 @@ from sys import path, exit
 path.append('../includes/')
 
 import paho.mqtt.client as mqtt
-from splib import checkApiEndpoint, registerClient, updateClient, getConfig, getCurrentTime
+from splib import checkApiEndpoint, registerClient, updateClient, getConfig, getCurrentTime, getClientId
 from time import sleep
-from json import dumps, loads, load
+from json import dumps, loads
 import speedtest
 import subprocess
 import re
@@ -35,12 +35,6 @@ capabilities = {
 
 # Initialise application
 cmdQueue = ['start']
-
-def getClientId():
-    with open('clientId.json') as inFile:
-        clientIdData = load(inFile)
-
-    return clientIdData['clientId']
 
 def mqttConnect(client, userdata, flags, rc):
     """Subscripe to MQTT topic"""
@@ -161,16 +155,15 @@ def getSpeedTest():
 # Wait for the api endpoint
 checkApiEndpoint()
 
+clientId = getClientId()
+
 # Register client and get ID used for further communication
 # Exit if registration fails
-if clientId == False:
-    register = registerClient(clientType)
-    if register['status'] == 'ok': clientId = register['data']['client']['clientId']
-    else:
-        print(f"An error occured: {register['data']}")
-        exit()
-
-clientId = getClientId()
+register = registerClient(clientType, clientId)
+if register['status'] == 'ok': clientId = register['data']['client']['clientId']
+else:
+    print(f"An error occured: {register['data']}")
+    exit()
 
 # Update client information at api endpoint
 if cmdQueue[-1] == 'start': appStatus = 'running'

@@ -116,8 +116,9 @@ def registerClient():
     if error:
         return error
     else:
-        newClientId = str(uuid4())[:8]
-        clientData = {'clientId': newClientId, 'clientType': postData['client']['clientType'], 'lastSeen': getCurrentTime()}
+        #newClientId = str(uuid4())[:8]
+        #clientData = {'clientId': newClientId, 'clientType': postData['client']['clientType'], 'lastSeen': getCurrentTime()}
+        clientData = {'clientId': postData['client']['clientId'], 'clientType': postData['client']['clientType'], 'lastSeen': getCurrentTime()}
         currentClients['clients'].append(clientData)
         writeClientDb(dbFile, currentClients)
         return jsonify({'client': clientData})

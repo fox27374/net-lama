@@ -1,6 +1,7 @@
 from requests import get, post, exceptions
 from datetime import datetime
 from time import sleep
+from json import load
 import globalVars as gv
 
 # API calls
@@ -43,12 +44,12 @@ def checkApiEndpoint():
             print(f"An error occured: {response['data']}")
             sleep(1)
            
-def registerClient(clientType):
+def registerClient(clientType, clientId):
     """Register client at central server"""
     registered = False
     requestType = 'post'
     apiUrl = 'clients/register'
-    clientData = {'client': {'clientType': clientType}}
+    clientData = {'client': {'clientType': clientType, 'clientId': clientId}}
     while not registered:
         response = processRequest(requestType, apiUrl, clientData)
         if response['status'] == 'ok': registered = True
@@ -74,6 +75,11 @@ def getConfig(apiUrl):
     return response.json()
 
 # Support functions
+def getClientId():
+    with open('clientId.json') as inFile:
+        clientIdData = load(inFile)
+    return clientIdData['clientId']
+
 def getCurrentTime():
     now = datetime.now()
     currentTime = now.strftime('%Y-%m-%d %H:%M:%S')
@@ -98,5 +104,4 @@ def createWlanList(wlanInfos):
         
         if inList == False:
             wlans[ssid].append({'bssid': bssid, 'channel': channel, 'rssi': rssi})
-
     return wlans 
