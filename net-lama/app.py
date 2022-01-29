@@ -84,6 +84,19 @@ def getClients(client = 'all'):
         else:
             abort(404)
 
+"""Get sites"""
+@app.route(apiBaseUrl + 'sites/', methods = ['GET'])
+@app.route(apiBaseUrl + 'sites/<site>', methods = ['GET'])
+def getSites(site = 'all'):
+    currentSites = readConfig(dbFile)
+    if site == 'all':
+        return jsonify(currentSites['sites'])
+    else:
+        if site in currentSites['sites'].keys():
+            return jsonify(currentSites['sites'][site])
+        else:
+            abort(404)
+
 
 
 # POST requests

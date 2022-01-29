@@ -1,8 +1,77 @@
 from requests import get, post, exceptions
 from datetime import datetime
 from time import sleep
-from json import load
+from json import load, loads, dumps
 import globalVars as gv
+import paho.mqtt.client as mqtt
+
+# MQTT
+class Client:
+    def __init__(self, **mqttInfo):
+        self.clientId = mqttInfo['clientId']
+        self.clientType = mqttInfo['clientType']
+        self.commandTopic = mqttInfo['commandTopic']
+        self.dataTopic = mqttInfo['dataTopic']
+        self.logTopic = mqttInfo['logTopic']
+        self.mqttServer = mqttInfo['mqttServer']
+        self.mqttPort = mqttInfo['mqttPort']
+        self.commands = mqttInfo['commands']
+        self.capabilities = mqttInfo['capabilities']
+        self.cmdQueue = []
+
+    def create(self):
+        self.mqttClient = mqtt.Client()
+        self.mqttClient.on_connect = self.connect
+        self.mqttClient.on_message = self.message
+        self.mqttClient.connect(self.mqttServer, int(self.mqttPort), 60)
+        self.mqttClient.loop_start()
+        self.log(f"Client registered with clientId {self.clientId}")
+
+    def connect(self, *args):
+        self.mqttClient.subscribe([(self.commandTopic, 0)])
+        self.log(f"Client {self.clientId} subscribed to {self.commandTopic}")
+
+    def log(self, data):
+        now = getCurrentTime()
+        clientInfo = {'clientId': self.clientId, 'clientType': self.clientType}
+        logInfo = {'Time': now, 'Log': data}
+        self.mqttClient.publish(self.logTopic, dumps({**clientInfo, **logInfo}))
+
+    def data(self, data):
+        now = getCurrentTime()
+        clientInfo = {'clientId': self.clientId, 'clientType': self.clientType}
+        logInfo = {'Time': now, 'Data': data}
+        self.mqttClient.publish(self.dataTopic, dumps({**clientInfo, **logInfo}))
+
+    def message(self, client, userdata, msg):
+        message = loads((msg.payload).decode('UTF-8'))
+
+        # Check if the command is for our clientId
+        if message['clientId'] == self.clientId:
+            if message['command'] in self.commands:
+                self.log(f"Command {message['command']} received")
+                if message['command'] == 'status':
+                    if self.cmdQueue[-1] == 'start': appStatus = 'running'
+                    elif self.cmdQueue[-1] == 'stop': appStatus = 'stopped'
+                    else: appStatus = 'undefined'
+                    updateClient(self.clientId, self.clientType, appStatus, self.capabilities)
+                    self.log("Sending status update to api endpoint")
+                elif message['command'] == 'start':
+                    self.cmdQueue.append('start')
+                    self.log("Starting application")
+                    updateClient(self.clientId, self.clientType, 'running', self.capabilities)
+                    self.log("Sending application status update to api endpoint")
+                elif message['command'] == 'stop':
+                    self.cmdQueue.append('stop')
+                    self.log("Stopping application")
+                    updateClient(self.clientId, self.clientType, 'stopped', self.capabilities)
+                    self.log("Sending application status update to api endpoint")
+                elif message['command'] == 'update':
+                    pass
+                    # TODO
+            else:
+                self.log(f"Command {message['command']} not implemented")
+
 
 # API calls
 def processRequest(requestType, apiUrl, clientData):
@@ -75,10 +144,9 @@ def getConfig(apiUrl):
     return response.json()
 
 # Support functions
-def getClientId():
-    with open('clientId.json') as inFile:
-        clientIdData = load(inFile)
-    return clientIdData['clientId']
+def getClientInfo():
+    with open('clientInfo.json') as inFile:
+        return load(inFile)
 
 def getCurrentTime():
     now = datetime.now()
