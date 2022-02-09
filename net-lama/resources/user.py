@@ -50,7 +50,7 @@ class User(Resource):
         data = User.parser.parse_args()
         user = UserModel.findByName(userName)       
         
-        # Create a new Client
+        # Create a new user
         if user is None and userName is None:
             user = UserModel(**data)
         elif user is None and userName:
