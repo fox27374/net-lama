@@ -1,12 +1,12 @@
 from models.user import UserModel
 from werkzeug.security import safe_str_cmp
 
-def authenticate(username, password):
-    user = UserModel.find_by_username(username)
-    if user and safe_str_cmp(user.password, password):
+def authenticate(userName, userPass):
+    user = UserModel.findByName(userName)
+    if user and safe_str_cmp(user.userPass, userPass):
         return user
 
 def identity(payload):
-    user_id = payload['identity']
-    print(user_id)
-    return UserModel.find_by_id(user_id)
+    userId = payload['identity']
+    print(userId)
+    return UserModel.findById(userId)

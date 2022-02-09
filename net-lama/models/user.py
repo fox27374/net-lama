@@ -22,7 +22,12 @@ class UserModel(db.Model):
 
     @classmethod
     def findByName(cls, userName):
+        print("xxx" + cls.query.filter_by(userName=userName).first())
         return cls.query.filter_by(userName=userName).first()
+
+    @classmethod
+    def findById(cls, userId):
+        return cls.query.filter_by(_id=userId).first()
 
     def delete(self):
         db.session.delete(self)
