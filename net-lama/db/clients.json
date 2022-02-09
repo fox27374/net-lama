@@ -33,6 +33,16 @@
                     "description": "Get configuration changes"
                 }
             }
+        },
+        {
+            "clientId": "apoesrdfuihpaoisf",
+            "clientType": "TestClient",
+            "lastSeen": "2022-02-01 11:42:10"
+        },
+        {
+            "clientId": "apoesrdfuihpaoisf",
+            "clientType": "TestClient",
+            "lastSeen": "2022-02-01 13:13:08"
         }
     ]
 }

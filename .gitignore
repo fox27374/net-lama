@@ -1,3 +1,6 @@
+# App specific
+data.db
+
 # VScode
 .vscode/
 *.code-workspace

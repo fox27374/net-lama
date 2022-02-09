@@ -4,6 +4,7 @@ from time import sleep
 from json import load, loads, dumps
 import globalVars as gv
 import paho.mqtt.client as mqtt
+from datetime import datetime, timedelta
 
 # MQTT
 class Client:
@@ -154,6 +155,36 @@ def getCurrentTime():
     return currentTime
 
 # Application specific functions
+def readConfig(configFile):
+    with open(configFile, 'r') as cf:
+        configDict = load(cf)
+    return configDict
+
+def writeConfig(configFile, configData):
+    cf = open(configFile, 'w')
+    cf.write(dumps(configData, indent=4))
+    cf.close()
+
+def writeClientDb(dbFile, clientData):
+    cf = open(dbFile, 'w')
+    cf.write(dumps(clientData, indent=4))
+    cf.close()
+
+def dbHousekeeping(minOutdated):
+    now = datetime.now()
+    compareTime = now - timedelta(minutes=minOutdated)
+    print(compareTime)
+    currentClients = readConfig(dbFile)
+    newClients = []
+    for client in currentClients['clients']:
+        print(client['lastSeen'])
+        print(client['clientId'])
+        lastSeen = datetime.strptime(client['lastSeen'], '%Y-%m-%d %H:%M:%S')
+        if lastSeen > compareTime:
+            newClients.append(client)
+    currentClients['clients'] = newClients
+    writeClientDb(dbFile, currentClients)
+
 def createWlanList(wlanInfos):
     wlans = {}
     for wlanInfo in wlanInfos:

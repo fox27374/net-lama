@@ -1,0 +1,11 @@
+{
+    "clientId": "d82b9c3b",
+    "clientType": "HEC-Forwarder",
+    "capabilities": {
+        "start": {"command": "start", "description": "Start event forwarding"},
+        "stop": {"command": "stop", "description": "Stop event forwarding"},
+        "status": {"command": "status", "description": "Send the current status to the api endpoint"},
+        "update": {"command": "update", "description": "Get configuration changes" }
+    },
+    "commands": ["start", "stop", "status", "update"]
+}

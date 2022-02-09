@@ -1,2 +1,7 @@
-flask
+Flask
+Flask-RESTful
+Flask-JWT
+Flask-SQLAlchemy
 marshmallow
+requests
+paho-mqtt

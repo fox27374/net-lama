@@ -3,11 +3,11 @@
 from sys import path, exit
 path.append('../includes/')
 
-from splib import *
+from splib import Client, checkApiEndpoint, getClientInfo, getConfig, registerClient, updateClient
 from time import sleep
-import speedtest
-import subprocess
-import re
+from speedtest import Speedtest
+from subprocess import Popen, PIPE
+from re import findall
 
 # Read local client config
 localConfig = getClientInfo()
@@ -51,7 +51,7 @@ def getPingTime(host):
     """Ping a host and return the average round-trip-time"""
     command = ['ping', '-4', '-n', '-i', '0.2', '-c', '5', host]
 
-    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = Popen(command, stdout=PIPE, stderr=PIPE)
     output, errors = p.communicate()
     output = output.decode("utf-8").splitlines()
 
@@ -60,7 +60,7 @@ def getPingTime(host):
 
     for line in output:
         if 'time=' in line:
-            ms = re.findall('time=(\d+\.\d+)', line)
+            ms = findall('time=(\d+\.\d+)', line)
             
             if ms:
                 timeMs.append(float(ms[0]))
@@ -79,13 +79,13 @@ def getDnsTime(host, server):
 
     command = ['dig', '-4', '-u', '+timeout=1', '@' + server, host]
 
-    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = Popen(command, stdout=PIPE, stderr=PIPE)
     output, errors = p.communicate()
     output = output.decode("utf-8").splitlines()
 
     for line in output:
         if 'Query time' in line:
-            ms = re.findall('Query\stime:\s(\d+)', line)
+            ms = findall('Query\stime:\s(\d+)', line)
             ms = round(float(ms[0])/1024, 2)
 
         if 'timed out' in line:
@@ -98,7 +98,7 @@ def getDnsTime(host, server):
 def getSpeedTest():
     servers = []
     threads = None
-    s = speedtest.Speedtest()
+    s = Speedtest()
     try:
         s.download(threads=threads)
         s.upload(threads=threads)
