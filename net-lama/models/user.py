@@ -2,13 +2,13 @@ from db.db import db
 
 class UserModel(db.Model):
     __tablename__ = 'user'
-    _id = db.Column(db.Integer, primary_key=True)
-    userName = db.Column(db.String(80))
-    userPass = db.Column(db.String(80))
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80))
+    password = db.Column(db.String(80))
 
-    def __init__(self, userName, userPass):
-        self.userName = userName
-        self.userPass = userPass
+    def __init__(self, username, password):
+        self.username = username
+        self.password = password
 
     def save(self):
         db.session.add(self)
@@ -16,18 +16,17 @@ class UserModel(db.Model):
 
     def json(self):
         return {
-            "userName": self.userName,
-            "userPass": self.userPass,
+            "username": self.username,
+            "password": self.password,
             }
 
     @classmethod
-    def findByName(cls, userName):
-        print("xxx" + cls.query.filter_by(userName=userName).first())
-        return cls.query.filter_by(userName=userName).first()
+    def findByName(cls, username):
+        return cls.query.filter_by(username=username).first()
 
     @classmethod
     def findById(cls, userId):
-        return cls.query.filter_by(_id=userId).first()
+        return cls.query.filter_by(id=userId).first()
 
     def delete(self):
         db.session.delete(self)

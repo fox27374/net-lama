@@ -9,7 +9,7 @@ from flask_jwt import JWT
 #from splib import getCurrentTime, readConfig, writeConfig, writeClientDb, dbHousekeeping
 from security import authenticate, identity
 from resources.client import Client
-from resources.config import Mqtt
+from resources.config import ConfigList, Mqtt, HecForwarder, NetworkTest
 from resources.organization import Organization
 from resources.site import Site
 from resources.user import User
@@ -40,6 +40,10 @@ api.add_resource(Organization, f"{apiBaseUrl}/organizations", f"{apiBaseUrl}/org
 api.add_resource(Site, f"{apiBaseUrl}/sites", f"{apiBaseUrl}/sites/<string:siteId>")
 api.add_resource(Client, f"{apiBaseUrl}/clients", f"{apiBaseUrl}/clients/<string:clientId>")
 api.add_resource(User, f"{apiBaseUrl}/user", f"{apiBaseUrl}/user/<string:userName>")
+api.add_resource(Mqtt, f"{apiBaseUrl}/configs/mqtt", f"{apiBaseUrl}/configs/mqtt/<string:configId>")
+api.add_resource(HecForwarder, f"{apiBaseUrl}/configs/hecForwarder", f"{apiBaseUrl}/configs/hecForwarder/<string:configId>")
+api.add_resource(NetworkTest, f"{apiBaseUrl}/configs/networkTest", f"{apiBaseUrl}/configs/networkTest/<string:configId>")
+api.add_resource(ConfigList, f"{apiBaseUrl}/configs")
 
 if __name__ == '__main__':
     db.init_app(app)

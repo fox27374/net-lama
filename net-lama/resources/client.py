@@ -18,11 +18,11 @@ class Client(Resource):
     def get(self, clientId=None):
         # Return a list of all Clients of no clientId is given
         if clientId == None:
-            return {'Clients': [org.json() for org in ClientModel.query.all()]}
+            return {'Clients': [client.json() for client in ClientModel.query.all()]}
 
-        org = ClientModel.findById(clientId)
-        if org:
-            return org.json()
+        client = ClientModel.findById(clientId)
+        if client:
+            return client.json()
         return {"message": f"Client {clientId} not found"}, 404
 
     def post(self, clientId=None):
@@ -31,41 +31,41 @@ class Client(Resource):
 
         data = Client.parser.parse_args()
         print(f"Client data: {data}") 
-        org = ClientModel(**data)
+        client = ClientModel(**data)
 
         try:
-            org.save()
+            client.save()
         except:
             return {"message": "An error occured inserting the client"}, 500 
 
-        return org.json(), 201
+        return client.json(), 201
 
     def delete(self, clientId=None):
         if clientId == None:
             return {"message": "clientId has to be send in the request"}, 400
 
-        org = ClientModel.findById(clientId)
-        if org:
-            org.delete()
+        client = ClientModel.findById(clientId)
+        if client:
+            client.delete()
             return {"message": f"Client {clientId} deleted"}
 
         return {"message": f"Client {clientId} not found"}, 404
 
     def put(self, clientId=None):
         data = Client.parser.parse_args()
-        org = ClientModel.findById(clientId)       
+        client = ClientModel.findById(clientId)       
         
         # Create a new Client
-        if org is None and clientId is None:
-            org = ClientModel(**data)
-        elif org is None and clientId:
+        if client is None and clientId is None:
+            client = ClientModel(**data)
+        elif client is None and clientId:
             return {"message": f"Client with clientId {clientId} not found"}, 400
-        elif org and clientId is None:
+        elif client and clientId is None:
             return {"message": "clientId has to be statet in order to update the Client"}, 400
         else:
-            org.clientType = data['clientType']
+            client.clientType = data['clientType']
 
-        org.save()
+        client.save()
          
-        return org.json()
+        return client.json()
         

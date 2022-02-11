@@ -4,61 +4,61 @@ from flask_restful import Resource, reqparse
 class User(Resource):
     parser = reqparse.RequestParser()
     parser.add_argument(
-        'userName', 
+        'username', 
         type=str,
         required=False,
-        help="Cannot be left blank")
+        help="username be left blank")
     parser.add_argument(
-        'userPass', 
+        'password', 
         type=str,
         required=True,
-        help="Cannot be left blank")
+        help="password be left blank")
 
-    def get(self, userName=None):
-        # Return a list of all user if no userName is given
-        if userName == None:
+    def get(self, username=None):
+        # Return a list of all user if no username is given
+        if username == None:
             return {'User': [user.json() for user in UserModel.query.all()]}
 
-        user = UserModel.findByName(userName)
+        user = UserModel.findByName(username)
         if user:
             return user.json()
-        return {"message": f"User {userName} not found"}, 404
+        return {"message": f"User {username} not found"}, 404
 
     def post(self):
         data = User.parser.parse_args()
 
-        if UserModel.findByName(data['userName']):
-            return {"message": f"User {data['userName']} already exists"}, 400
+        if UserModel.findByName(data['username']):
+            return {"message": f"User {data['username']} already exists"}, 400
 
         user = UserModel(**data)
         user.save()
 
-        return {"message": f"User {data['userName']} created successfully"}, 201
+        return {"message": f"User {data['username']} created successfully"}, 201
 
-    def delete(self, userName=None):
-        if userName == None:
-            return {"message": "userName has to be send in the request"}, 400
+    def delete(self, username=None):
+        if username == None:
+            return {"message": "username has to be send in the request"}, 400
 
-        user = UserModel.findByName(userName)
+        user = UserModel.findByName(username)
         if user:
             user.delete()
-            return {"message": f"User {userName} deleted"}
+            return {"message": f"User {username} deleted"}
 
-        return {"message": f"User {userName} not found"}, 404
+        return {"message": f"User {username} not found"}, 404
 
-    def put(self, userName=None):
+    def put(self, username=None):
         data = User.parser.parse_args()
-        user = UserModel.findByName(userName)       
+        user = UserModel.findByName(username)       
         
         # Create a new user
-        if user is None and userName is None:
+        if user is None and username is None:
             user = UserModel(**data)
-        elif user is None and userName:
-            return {"message": f"User {userName} not found"}, 400
-        elif user and userName is None:
-            return {"message": "userName has to be statet in order to update the user"}, 400
+        elif user is None and username:
+            return {"message": f"User {username} not found"}, 400
+        elif user and username is None:
+            return {"message": "username has to be statet in order to update the user"}, 400
         else:
-            user.userPass = data['userPass']
+            user.password = data['password']
 
         user.save()
          
