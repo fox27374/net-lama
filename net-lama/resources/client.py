@@ -15,6 +15,7 @@ class Client(Resource):
         required=True,
         help="Cannot be left blank")
 
+    @jwt_required()
     def get(self, clientId=None):
         # Return a list of all Clients of no clientId is given
         if clientId == None:
@@ -25,6 +26,7 @@ class Client(Resource):
             return client.json()
         return {"message": f"Client {clientId} not found"}, 404
 
+    @jwt_required()
     def post(self, clientId=None):
         if clientId:
             return {"message": "clientId not allowed in the request"}, 400
@@ -40,6 +42,7 @@ class Client(Resource):
 
         return client.json(), 201
 
+    @jwt_required()
     def delete(self, clientId=None):
         if clientId == None:
             return {"message": "clientId has to be send in the request"}, 400
@@ -51,6 +54,7 @@ class Client(Resource):
 
         return {"message": f"Client {clientId} not found"}, 404
 
+    @jwt_required()
     def put(self, clientId=None):
         data = Client.parser.parse_args()
         client = ClientModel.findById(clientId)       

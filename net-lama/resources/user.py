@@ -1,4 +1,5 @@
 from models.user import UserModel
+from flask_jwt import jwt_required
 from flask_restful import Resource, reqparse
 
 class User(Resource):
@@ -14,6 +15,7 @@ class User(Resource):
         required=True,
         help="password be left blank")
 
+    @jwt_required()
     def get(self, username=None):
         # Return a list of all user if no username is given
         if username == None:
@@ -24,6 +26,7 @@ class User(Resource):
             return user.json()
         return {"message": f"User {username} not found"}, 404
 
+    #@jwt_required()
     def post(self):
         data = User.parser.parse_args()
 
@@ -35,6 +38,7 @@ class User(Resource):
 
         return {"message": f"User {data['username']} created successfully"}, 201
 
+    @jwt_required()
     def delete(self, username=None):
         if username == None:
             return {"message": "username has to be send in the request"}, 400
@@ -46,6 +50,7 @@ class User(Resource):
 
         return {"message": f"User {username} not found"}, 404
 
+    @jwt_required()
     def put(self, username=None):
         data = User.parser.parse_args()
         user = UserModel.findByName(username)       

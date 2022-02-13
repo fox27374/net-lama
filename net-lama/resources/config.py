@@ -1,6 +1,7 @@
 from flask_restful import Resource, reqparse
-#from flask_jwt import jwt_required
+from flask_jwt import jwt_required
 from models.config import MqttModel, HecForwarderModel, NetworkTestModel
+from json import dumps, dump
 
 class Mqtt(Resource):
     parser = reqparse.RequestParser()
@@ -30,7 +31,7 @@ class Mqtt(Resource):
         required=True,
         help="Cannot be left blank")
 
-    #@jwt_required()
+    @jwt_required()
     def get(self, configId=None):
         if configId == None:
             return {'mqtt': [config.json() for config in MqttModel.query.all()]}
@@ -40,6 +41,7 @@ class Mqtt(Resource):
             return config.json()
         return {"message": "Config not found"}, 404
 
+    @jwt_required()
     def post(self, configId=None):
         if configId:
             return {"message": "configId not allowed in the request"}, 400
@@ -54,6 +56,7 @@ class Mqtt(Resource):
 
         return config.json(), 201
 
+    @jwt_required()
     def delete(self, configId):
         config = MqttModel.find(configId)
         if config:
@@ -61,6 +64,7 @@ class Mqtt(Resource):
 
         return {"message": "Config deleted"}
 
+    @jwt_required()
     def put(self, configId):
         data = Mqtt.parser.parse_args()
         config = MqttModel.find(configId)
@@ -103,7 +107,7 @@ class HecForwarder(Resource):
         required=True,
         help="Cannot be left blank")
 
-    #@jwt_required()
+    @jwt_required()
     def get(self, configId=None):
         if configId == None:
             return {'mqtt': [config.json() for config in HecForwarderModel.query.all()]}
@@ -113,6 +117,7 @@ class HecForwarder(Resource):
             return config.json()
         return {"message": "Config not found"}, 404
 
+    @jwt_required()
     def post(self, configId=None):
         if configId:
             return {"message": "configId not allowed in the request"}, 400
@@ -127,6 +132,7 @@ class HecForwarder(Resource):
 
         return config.json(), 201
 
+    @jwt_required()
     def delete(self, configId):
         config = HecForwarderModel.find(configId)
         if config:
@@ -134,6 +140,7 @@ class HecForwarder(Resource):
 
         return {"message": "Config deleted"}
 
+    @jwt_required()
     def put(self, configId):
         data = Mqtt.parser.parse_args()
         config = HecForwarderModel.find(configId)
@@ -162,7 +169,7 @@ class NetworkTest(Resource):
         help="Cannot be left blank")
     parser.add_argument(
         'pingDestination', 
-        type=list,
+        type=str,
         required=True,
         help="Cannot be left blank")
     parser.add_argument(
@@ -176,7 +183,7 @@ class NetworkTest(Resource):
         required=True,
         help="Cannot be left blank")
 
-    #@jwt_required()
+    @jwt_required()
     def get(self, configId=None):
         if configId == None:
             return {'mqtt': [config.json() for config in NetworkTestModel.query.all()]}
@@ -186,20 +193,25 @@ class NetworkTest(Resource):
             return config.json()
         return {"message": "Config not found"}, 404
 
+    @jwt_required()
     def post(self, configId=None):
         if configId:
             return {"message": "configId not allowed in the request"}, 400
       
         data = NetworkTest.parser.parse_args()
+        data['pingDestination'] = dumps(data['pingDestination'])
+        data['dnsQuery'] = dumps(data['dnsQuery'])
+        data['dnsServer'] = dumps(data['dnsServer'])
         config = NetworkTestModel(**data)
 
         try:
             config.save()
-        except:
-            return {"message": "an error occured inserting the config"}, 500 
+        except Exception as e:
+            return {"message": f"an error occured inserting the config: {e}"}, 500 
 
         return config.json(), 201
 
+    @jwt_required()
     def delete(self, configId):
         config = NetworkTestModel.find(configId)
         if config:
@@ -207,6 +219,7 @@ class NetworkTest(Resource):
 
         return {"message": "Config deleted"}
 
+    @jwt_required()
     def put(self, configId):
         data = Mqtt.parser.parse_args()
         config = NetworkTestModel.find(configId)
@@ -227,6 +240,7 @@ class NetworkTest(Resource):
 
 
 class ConfigList(Resource):
+    @jwt_required()
     def get(self):
         configs = {}
         configs['mqtt'] = [config.json() for config in MqttModel.query.all()]

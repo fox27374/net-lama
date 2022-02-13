@@ -10,7 +10,7 @@ class Site(Resource):
         required=True,
         help="Cannot be left blank")
 
-    #@jwt_required()
+    @jwt_required()
     def get(self, siteId=None):
         # Return a list of all Sites of no siteId is given
         if siteId == None:
@@ -21,6 +21,7 @@ class Site(Resource):
             return org.json()
         return {"message": f"Site {siteId} not found"}, 404
 
+    @jwt_required()
     def post(self, siteId=None):
         if siteId:
             return {"message": "siteId not allowed in the request"}, 400
@@ -39,6 +40,7 @@ class Site(Resource):
 
         return org.json(), 201
 
+    @jwt_required()
     def delete(self, siteId=None):
         if siteId == None:
             return {"message": "siteId has to be send in the request"}, 400
@@ -50,6 +52,7 @@ class Site(Resource):
 
         return {"message": f"Site {siteId} not found"}, 404
 
+    @jwt_required()
     def put(self, siteId=None):
         data = Site.parser.parse_args()
         org = SiteModel.findById(siteId)       

@@ -1,4 +1,5 @@
 from db.db import db
+from json import loads
 
 class MqttModel(db.Model):
     __tablename__ = 'mqttConfigs'
@@ -60,6 +61,7 @@ class HecForwarderModel(db.Model):
 
     def json(self):
         return {
+            "configId": self.configId,
             "hecServer": self.hecServer,
             "hecPort": self.hecPort,
             "hecUrl": self.hecUrl,
@@ -82,19 +84,20 @@ class HecForwarderModel(db.Model):
 class NetworkTestModel(db.Model):
     __tablename__ = 'networkTestConfigs'
     configId = db.Column(db.Integer, primary_key=True)
-    speedTestInterval = db.Column(db.String(80))
-    pingDestination = db.Column(db.Integer)
-    dnsQuery = db.Column(db.String(80))
-    dnsServer = db.Column(db.String(80))
+    speedTestInterval = db.Column(db.Integer)
+    pingDestination = db.Column(db.Text)
+    dnsQuery = db.Column(db.Text)
+    dnsServer = db.Column(db.Text)
 
     def __init__(self, speedTestInterval, pingDestination, dnsQuery, dnsServer):
         self.speedTestInterval = speedTestInterval
-        self.pingDestination = pingDestination
-        self.dnsQuery = dnsQuery
-        self.dnsServer = dnsServer
+        self.pingDestination = loads(pingDestination)
+        self.dnsQuery = loads(dnsQuery)
+        self.dnsServer = loads(dnsServer)
 
     def json(self):
         return {
+            "configId": self.configId,
             "speedTestInterval": self.speedTestInterval,
             "pingDestination": self.pingDestination,
             "dnsQuery": self.dnsQuery,
