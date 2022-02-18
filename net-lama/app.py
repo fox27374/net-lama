@@ -4,15 +4,14 @@ path.append('../includes/')
 
 from flask import Flask
 from flask_restful import Api
-from flask_jwt import JWT
+from flask_jwt_extended import JWTManager
 #import apiSchema
 #from splib import getCurrentTime, readConfig, writeConfig, writeClientDb, dbHousekeeping
-from security import authenticate, identity
 from resources.client import Client
 from resources.config import ConfigList, Mqtt, HecForwarder, NetworkTest
 from resources.organization import Organization
 from resources.site import Site
-from resources.user import User
+from resources.user import User, UserLogin
 from db.db import db
 from datetime import timedelta
 
@@ -24,8 +23,7 @@ debug = True
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///data.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_AUTH_URL_RULE'] = f"{apiBaseUrl}/login"
-app.config['JWT_EXPIRATION_DELTA'] = timedelta(seconds=1800)
+app.config['PROPAGATE_EXCEPTIONS'] = True
 app.secret_key = 'test'
 api = Api(app)
 
@@ -33,7 +31,7 @@ api = Api(app)
 def create_tables():
     db.create_all()
 
-jwt = JWT(app=app, authentication_handler=authenticate, identity_handler=identity)
+jwt = JWTManager(app)
 
 
 api.add_resource(Organization, f"{apiBaseUrl}/organizations", f"{apiBaseUrl}/organizations/<string:orgId>")
@@ -44,6 +42,7 @@ api.add_resource(Mqtt, f"{apiBaseUrl}/configs/mqtt", f"{apiBaseUrl}/configs/mqtt
 api.add_resource(HecForwarder, f"{apiBaseUrl}/configs/hecForwarder", f"{apiBaseUrl}/configs/hecForwarder/<string:configId>")
 api.add_resource(NetworkTest, f"{apiBaseUrl}/configs/networkTest", f"{apiBaseUrl}/configs/networkTest/<string:configId>")
 api.add_resource(ConfigList, f"{apiBaseUrl}/configs")
+api.add_resource(UserLogin, f"{apiBaseUrl}/login")
 
 if __name__ == '__main__':
     db.init_app(app)

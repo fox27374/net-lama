@@ -1,5 +1,5 @@
 from flask_restful import Resource, reqparse
-from flask_jwt import jwt_required
+from flask_jwt_extended import jwt_required
 from models.client import ClientModel
 
 class Client(Resource):
@@ -32,7 +32,6 @@ class Client(Resource):
             return {"message": "clientId not allowed in the request"}, 400
 
         data = Client.parser.parse_args()
-        print(f"Client data: {data}") 
         client = ClientModel(**data)
 
         try:

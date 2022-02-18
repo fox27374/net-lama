@@ -1,6 +1,6 @@
 Flask
 Flask-RESTful
-Flask-JWT
+Flask-JWT-extended
 Flask-SQLAlchemy
 marshmallow
 requests
