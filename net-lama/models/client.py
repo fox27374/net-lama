@@ -1,4 +1,5 @@
 from db.db import db
+from flask_marshmallow import Marshmallow
 
 class ClientModel(db.Model):
     __tablename__ = 'clients'

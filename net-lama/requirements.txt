@@ -2,6 +2,9 @@ Flask
 Flask-RESTful
 Flask-JWT-extended
 Flask-SQLAlchemy
-marshmallow
+Flask-Marshmallow
+Marshmallow
+Marshmallow-SQLAlchemy
+Webargs
 requests
 paho-mqtt

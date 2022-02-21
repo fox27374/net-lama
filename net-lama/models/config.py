@@ -51,7 +51,7 @@ class MqttModel(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-    
+
 
 class HecForwarderModel(db.Model):
     __tablename__ = 'hecForwarderConfigs'

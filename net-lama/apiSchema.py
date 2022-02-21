@@ -1,52 +1,39 @@
 #!/usr/bin/env python
 
-from marshmallow import Schema, fields
+from flask_marshmallow import Schema, fields
+from models.config import MqttModel, HecForwarderModel, NetworkTestModel
 
 class MQTTSchema(Schema):
-    mqttPort = fields.Str()
+    class Meta:
+        model = MqttModel
+
     mqttServer = fields.Str()
+    mqttPort = fields.Int()
     commandTopic = fields.Str()
     dataTopic = fields.Str()
     logTopic = fields.Str()
 
-class SensorPiSchema(Schema):
-    Interface = fields.Str()
-    Channels = fields.List(fields.String())
-    Scantime = fields.Int()
-    Channeltime = fields.Int()
-    rssiThreshold = fields.Int()
-    wlansFile = fields.Str()
-    frameTypesFile = fields.Str()
-    logFile = fields.Str()
 
-class SplunkSchema(Schema):
-    server = fields.Str()
-    port = fields.Int()
-    url = fields.Str()
-    token = fields.Str()
-    bulk = fields.Int()
+class HecForwarderSchema(Schema):
+    class Meta:
+        model = HecForwarderModel
 
-class WlanSensorSchema(Schema):
-    scantime = fields.Int()
-    interface = fields.String()
-    channels = fields.List(fields.Int())
-    scanTime = fields.Int()
-    wlans = fields.Dict()
+    hecServer = fields.Str()
+    hecPort = fields.Int()
+    hecUrl = fields.Str()
+    hecToken = fields.Str()
 
-class ConfigSchema(Schema):
-    SensorPi = fields.Nested(SensorPiSchema)
-    MQTT = fields.Nested(MQTTSchema)
-    Splunk = fields.Nested(SplunkSchema)
-    WlanSensor = fields.Nested(WlanSensorSchema)
 
-class ClientSchema(Schema):
-    clientType = fields.Str()
-    clientId = fields.Str()
-    lastSeen = fields.Str()
-    clientStatus = fields.Str()
-    appStatus = fields.Str()
-    commands = fields.List(fields.String())
-    capabilities = fields.Dict()
+class NetworkTestSchema(Schema):
+    class Meta:
+        model = NetworkTestModel
 
-class RegisterSchema(Schema):
-    client = fields.Nested(ClientSchema)
+    speedTestInterval = fields.Int()
+    pingDestination = fields.List(fields.String())
+    dnsQuery = fields.List(fields.String())
+    dnsServer = fields.List(fields.String())
+
+
+#class ClientSchema(Schema):
+#    clientType = fields.Str()
+#    clientId = fields.Str()
