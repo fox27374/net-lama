@@ -4,16 +4,19 @@ class ClientModel(db.Model):
     __tablename__ = 'clients'
     _id = db.Column(db.Integer, primary_key=True)
     clientId = db.Column(db.String(8))
+    siteId = db.Column(db.Integer)
     clientType = db.Column(db.String(80))
 
-    def __init__(self, clientId, clientType):
+    def __init__(self, clientId, clientType, siteId=None):
         self.clientId = clientId
         self.clientType = clientType
+        self.siteId = siteId if siteId else 1
 
     def json(self):
         return {
             "clientId": self.clientId,
             "clientType": self.clientType,
+            "siteId": self.siteId
             }
 
     @classmethod

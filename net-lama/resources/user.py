@@ -87,3 +87,29 @@ class UserLogin(Resource):
             }, 200
 
         return {"message": "Invalid Credentials!"}, 401
+
+    
+class UserHello(Resource):
+    def post(self):
+        helloParser = reqparse.RequestParser()
+        helloParser.add_argument(
+            'clientId',
+            type=str,
+            required=True,
+            help="This field cannot be blank."
+        )
+
+        data = helloParser.parse_args()
+        user = UserModel.findByName(data['clientId'])
+
+        # Check if user already exists
+        if user:
+            return {"username": user.username, "password": user.password}, 201
+
+        # Generate new user
+
+
+        user = UserModel(data['clientId'], data['clientId'])
+        user.save()
+
+        return {"username": user.username, "password": user.password}, 201
