@@ -6,15 +6,12 @@ from flask import Flask
 from flask_restful import Api
 from flask_jwt_extended import JWTManager
 from flask_marshmallow import Marshmallow
-#import apiSchema
-#from splib import getCurrentTime, readConfig, writeConfig, writeClientDb, dbHousekeeping
 from resources.client import Client
-from resources.config import Config
+from resources.config import Mqtt, HecForwarder, NetworkTest
 from resources.organization import Organization
 from resources.site import Site
 from resources.user import User, UserLogin, UserHello
 from db.db import db
-#from datetime import timedelta
 
 apiBaseUrl = '/api/v1/'
 hostIp = '10.140.80.1'
@@ -52,10 +49,17 @@ api.add_resource(User,
         f"{apiBaseUrl}/user",
         f"{apiBaseUrl}/user/<string:userName>"
     )
-api.add_resource(Config,
-        f"{apiBaseUrl}/configs",
-        f"{apiBaseUrl}/configs/<string:configType>",
-        f"{apiBaseUrl}/configs/<string:configType>/<int:siteId>"
+api.add_resource(Mqtt,
+        f"{apiBaseUrl}/configs/mqtt",
+        f"{apiBaseUrl}/configs/mqtt/<string:siteId>",
+    )
+api.add_resource(HecForwarder,
+        f"{apiBaseUrl}/configs/hecForwarder",
+        f"{apiBaseUrl}/configs/hecForwarder/<string:siteId>",
+    )
+api.add_resource(NetworkTest,
+        f"{apiBaseUrl}/configs/networkTest",
+        f"{apiBaseUrl}/configs/networkTest/<string:siteId>",
     )
 api.add_resource(UserLogin,
         f"{apiBaseUrl}/login"

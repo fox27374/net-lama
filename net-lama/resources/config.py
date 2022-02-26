@@ -1,197 +1,203 @@
-from flask_restful import Resource, reqparse
+from flask_restful import Resource
 from flask_jwt_extended import jwt_required
 from models.config import MqttModel, HecForwarderModel, NetworkTestModel
 from schemas.config import MqttSchema, HecForwarderSchema, NetworkTestSchema
 from webargs.flaskparser import use_args
-from json import dumps, dump
 
-class Config(Resource):
-    hecForwarderParser = reqparse.RequestParser()
-    hecForwarderParser.add_argument('hecServer', type=str, required=True, help="Cannot be left blank")
-    hecForwarderParser.add_argument('hecPort', type=int, required=True, help="Cannot be left blank")
-    hecForwarderParser.add_argument('hecUrl', type=str, required=True, help="Cannot be left blank")
-    hecForwarderParser.add_argument('hecToken', type=str, required=True, help="Cannot be left blank")
-
-    networkTestParser = reqparse.RequestParser()
-    networkTestParser.add_argument('speedTestInterval', type=int, required=True, help="Cannot be left blank")
-    networkTestParser.add_argument('pingDestination', type=str, required=True, help="Cannot be left blank")
-    networkTestParser.add_argument('dnsQuery', type=str, required=True, help="Cannot be left blank")
-    networkTestParser.add_argument('dnsServer', type=str, required=True, help="Cannot be left blank")
-
+class Mqtt(Resource):
     @jwt_required()
-    def get(self, configType=None, siteId=None):
-        # if no configType and no siteId is supplied, return all configs
-        if not configType and not siteId:
-            return {"configs": {
-                        'mqtt': [config.json() for config in MqttModel.query.all()],
-                        'hecForwarder': [config.json() for config in HecForwarderModel.query.all()],
-                        'networkTest': [config.json() for config in NetworkTestModel.query.all()]
-                        }   
-                    }, 200
+    def get(self, siteId=None):
+        if not siteId:
+            return {"mqtt": [mqtt.json() for mqtt in MqttModel.query.all()]}, 200
 
-        if configType and not siteId:
-            if configType == 'mqtt':
-                return {"mqtt": [config.json() for config in MqttModel.query.all()]}, 200
-            elif configType == 'hecForwarder':
-                return {"hecForwarder": [config.json() for config in HecForwarderModel.query.all()]}, 200
-            elif configType == 'networkTest':
-                return {"networkTest": [config.json() for config in NetworkTestModel.query.all()]}, 200
-            else:
-                return {"message": f"configType {configType} not found"}, 404
+        mqtt = MqttModel.findBySiteId(siteId)
 
-        if configType and siteId:
-            if configType == 'mqtt':
-                config = MqttModel.findBySiteId(siteId)
-            elif configType == 'hecForwarder':
-                config = HecForwarderModel.findBySiteId(siteId)
-            elif configType == 'networkTest':
-                config = NetworkTestModel.findBySiteId(siteId)
-            else:
-                return {"message": f"siteId {siteId} not found"}, 404
+        if mqtt:
+            return mqtt.json()
 
-            mqttSchema = MqttSchema()
-            return mqttSchema.dump(config.json())
+        return {"message": f"siteId {siteId} not found"}, 404
 
     @jwt_required()
     @use_args(MqttSchema())
-    def post(self, args, configType=None, siteId=None):
-        if not configType and not siteId:
-            return {"message": f"configType and siteId required"}, 400
-        if configType and not siteId:
+    def post(self, args, siteId=None):
+        if not siteId:
             return {"message": f"siteId required"}, 400
 
-        if configType and siteId:
-            if configType == 'mqtt':
-                config = MqttModel(**args, siteId=siteId)
+        else:
+            mqtt = MqttModel(**args, siteId=siteId)
+            try:
+                mqtt.save()
+            except:
+                return {"message": "an error occured inserting the config"}, 500 
 
-                try:
-                    config.save()
-                except:
-                    return {"message": "an error occured inserting the config"}, 500 
+            return mqtt.json(), 201
 
-                return config.json(), 201
-
-            if configType == 'hecForwarder':
-                
-                data = self.hecForwarderParser.parse_args()
-                config = HecForwarderModel(**data, siteId=siteId)
-
-                try:
-                    config.save()
-                except:
-                    return {"message": "an error occured inserting the config"}, 500 
-
-                return config.json(), 201
-
-            if configType == 'networkTest':
-                
-                data = self.networkTestParser.parse_args()
-                config = NetworkTestModel(**data, siteId=siteId)
-
-                try:
-                    config.save()
-                except:
-                    return {"message": "an error occured inserting the config"}, 500 
-
-                return config.json(), 201
-
-            else:
-                return {"message": f"configType {configType} not found"}, 404
-
-    def delete(self, configType=None, siteId=None):
-        if not configType and not siteId:
-            return {"message": f"configType and siteId required"}, 400
-        if configType and not siteId:
+    @jwt_required()
+    def delete(self, siteId=None):
+        if not siteId:
             return {"message": f"siteId required"}, 400
 
-        if configType and siteId:
-            if configType == 'mqtt':
-                config = MqttModel.findBySiteId(siteId)
-            elif configType == 'hecForwarder':
-                config = HecForwarderModel.findBySiteId(siteId)
-            elif configType == 'networkTest':
-                config = NetworkTestModel.findBySiteId(siteId)
+        else:
+            mqtt = MqttModel.findBySiteId(siteId)
+            if mqtt:
+                mqtt.delete()
+                return {"message": f"config deleted successfully"}, 200
             else:
                 return {"message": f"siteId {siteId} not found"}, 404
 
-            config.delete()
-            return {"message": "Config deleted"}
-
+    @jwt_required()
     @use_args(MqttSchema())
-    def put(self, args, configType=None, siteId=None):
-        if not configType and not siteId:
-            return {"message": f"configType and siteId required"}, 400
-        if configType and not siteId:
+    def put(self, args, siteId=None):
+        if not siteId:
             return {"message": f"siteId required"}, 400
 
-        if configType and siteId:
-            if configType == 'mqtt':
-                config = MqttModel.findBySiteId(siteId=siteId)
+        else:
+            mqtt = MqttModel.findBySiteId(siteId=siteId)
+            if not mqtt:
+                mqtt = MqttModel(**args, siteId=siteId)
 
-                if config is None:
-                    config = MqttModel(**data, siteId=siteId)
+            else:
+                mqtt.mqttServer = args['mqttServer']
+                mqtt.mqttPort = args['mqttPort']
+                mqtt.commandTopic = args['commandTopic']
+                mqtt.dataTopic = args['dataTopic']
+                mqtt.logTopic = args['logTopic']
+                mqtt.siteId = siteId
 
-                else:
-                    config.mqttServer = args['mqttServer']
-                    config.mqttPort = args['mqttPort']
-                    config.commandTopic = args['commandTopic']
-                    config.dataTopic = args['dataTopic']
-                    config.logTopic = args['logTopic']
-
-                try:
-                    config.save()
-                except:
-                    return {"message": "an error occured inserting the config"}, 500 
-
-                return config.json(), 201
-
-            if configType == 'hecForwarder':
-                data = self.hecForwarderParser.parse_args()
-                config = HecForwarderModel.findBySiteId(siteId=siteId)
-
-                if config is None:
-                    config = HecForwarderModel(**data, siteId=siteId)
-
-                else:
-                    config.hecServer = data['hecServer']
-                    config.hecPort = data['hecPort']
-                    config.hecUrl = data['hecUrl']
-                    config.hecToken = data['hecToken']
-
-                try:
-                    config.save()
-                except:
-                    return {"message": "an error occured inserting the config"}, 500 
-
-                return config.json(), 201
-
-            if configType == 'networkTest':
-                data = self.networkTestParser.parse_args()
-                config = NetworkTestModel.findBySiteId(siteId=siteId)
-
-                if config is None:
-                    config = NetworkTestModel(**data, siteId=siteId)
-
-                else:
-                    config.speedTestInterval = data['speedTestInterval']
-                    config.pingDestination = data['pingDestination']
-                    config.dnsQuery = data['dnsQuery']
-                    config.dnsServer = data['dnsServer']
-
-                try:
-                    config.save()
-                except:
-                    return {"message": "an error occured inserting the config"}, 500 
-
-                return config.json(), 201
+            try:
+                mqtt.save()
+                return mqtt.json(), 201
+            except:
+                return {"message": "an error occured inserting the config"}, 500 
 
 
-class ConfigList(Resource):
+class HecForwarder(Resource):
     @jwt_required()
-    def get(self):
-        configs = {}
-        configs['mqtt'] = [config.json() for config in MqttModel.query.all()]
-        configs['hecForwarder'] = [config.json() for config in HecForwarderModel.query.all()]
-        configs['networkTest'] = [config.json() for config in NetworkTestModel.query.all()]
+    def get(self, siteId=None):
+        if not siteId:
+            return {"hecForwarder": [hecForwarder.json() for hecForwarder in HecForwarderModel.query.all()]}, 200
 
-        return configs
+        hecForwarder = HecForwarderModel.findBySiteId(siteId)
+
+        if hecForwarder:
+            return hecForwarder.json()
+
+        return {"message": f"siteId {siteId} not found"}, 404
+
+    @jwt_required()
+    @use_args(HecForwarderSchema())
+    def post(self, args, siteId=None):
+        if not siteId:
+            return {"message": f"siteId required"}, 400
+
+        else:
+            hecForwarder = HecForwarderModel(**args, siteId=siteId)
+            try:
+                hecForwarder.save()
+            except:
+                return {"message": "an error occured inserting the config"}, 500 
+
+            return hecForwarder.json(), 201
+
+    @jwt_required()
+    def delete(self, siteId=None):
+        if not siteId:
+            return {"message": f"siteId required"}, 400
+
+        else:
+            hecForwarder = HecForwarderModel.findBySiteId(siteId)
+            if hecForwarder:
+                hecForwarder.delete()
+                return {"message": f"config deleted successfully"}, 200
+            else:
+                return {"message": f"siteId {siteId} not found"}, 404
+
+    @jwt_required()
+    @use_args(HecForwarderSchema())
+    def put(self, args, siteId=None):
+        if not siteId:
+            return {"message": f"siteId required"}, 400
+
+        else:
+            hecForwarder = HecForwarderModel.findBySiteId(siteId=siteId)
+            if not hecForwarder:
+                hecForwarder = HecForwarderModel(**args, siteId=siteId)
+
+            else:
+                hecForwarder.hecServer = args['hecServer']
+                hecForwarder.hecPort = args['hecPort']
+                hecForwarder.hecUrl = args['hecUrl']
+                hecForwarder.hecToken = args['hecToken']
+                hecForwarder.siteId = siteId
+
+            try:
+                hecForwarder.save()
+                return hecForwarder.json(), 201
+            except:
+                return {"message": "an error occured inserting the config"}, 500 
+
+
+class NetworkTest(Resource):
+    @jwt_required()
+    def get(self, siteId=None):
+        if not siteId:
+            return {"networkTest": [networkTest.json() for networkTest in NetworkTestModel.query.all()]}, 200
+
+        networkTest = NetworkTestModel.findBySiteId(siteId)
+
+        if networkTest:
+            return networkTest.json()
+
+        return {"message": f"siteId {siteId} not found"}, 404
+
+    @jwt_required()
+    @use_args(NetworkTestSchema())
+    def post(self, args, siteId=None):
+        if not siteId:
+            return {"message": f"siteId required"}, 400
+
+        else:
+            networkTest = NetworkTestModel(**args, siteId=siteId)
+            try:
+                networkTest.save()
+            except:
+                return {"message": "an error occured inserting the config"}, 500 
+
+            return networkTest.json(), 201
+
+    @jwt_required()
+    def delete(self, siteId=None):
+        if not siteId:
+            return {"message": f"siteId required"}, 400
+
+        else:
+            networkTest = NetworkTestModel.findBySiteId(siteId)
+            if networkTest:
+                networkTest.delete()
+                return {"message": f"config deleted successfully"}, 200
+            else:
+                return {"message": f"siteId {siteId} not found"}, 404
+
+    @jwt_required()
+    @use_args(NetworkTestSchema())
+    def put(self, args, siteId=None):
+        if not siteId:
+            return {"message": f"siteId required"}, 400
+
+        else:
+            networkTest = NetworkTestModel.findBySiteId(siteId=siteId)
+            if not networkTest:
+                networkTest = NetworkTestModel(**args, siteId=siteId)
+
+            else:
+                networkTest.speedTestInterval = args['speedTestInterval']
+                networkTest.pingDestination = args['pingDestination']
+                networkTest.dnsQuery = args['dnsQuery']
+                networkTest.dnsServer = args['dnsServer']
+                networkTest.siteId = siteId
+
+            try:
+                networkTest.save()
+                return networkTest.json(), 201
+            except:
+                return {"message": "an error occured inserting the config"}, 500 
