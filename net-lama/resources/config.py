@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required
 from models.config import MqttModel, HecForwarderModel, NetworkTestModel
 from schemas.config import MqttSchema, HecForwarderSchema, NetworkTestSchema
 from webargs.flaskparser import use_args
+from json import dumps
 
 class Mqtt(Resource):
     @jwt_required()
@@ -191,9 +192,9 @@ class NetworkTest(Resource):
 
             else:
                 networkTest.speedTestInterval = args['speedTestInterval']
-                networkTest.pingDestination = args['pingDestination']
-                networkTest.dnsQuery = args['dnsQuery']
-                networkTest.dnsServer = args['dnsServer']
+                networkTest.pingDestination = dumps(args['pingDestination'])
+                networkTest.dnsQuery = dumps(args['dnsQuery'])
+                networkTest.dnsServer = dumps(args['dnsServer'])
                 networkTest.siteId = siteId
 
             try:

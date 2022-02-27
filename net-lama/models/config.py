@@ -1,6 +1,6 @@
 import site
 from db.db import db
-from json import loads
+from json import loads, dumps
 
 class MqttModel(db.Model):
     __tablename__ = 'mqttConfigs'
@@ -107,18 +107,18 @@ class NetworkTestModel(db.Model):
 
     def __init__(self, speedTestInterval, pingDestination, dnsQuery, dnsServer, siteId=None):
         self.speedTestInterval = speedTestInterval
-        self.pingDestination = loads(pingDestination)
-        self.dnsQuery = loads(dnsQuery)
-        self.dnsServer = loads(dnsServer)
+        self.pingDestination = dumps(pingDestination)
+        self.dnsQuery = dumps(dnsQuery)
+        self.dnsServer = dumps(dnsServer)
         self.siteId = siteId if siteId else 1
 
     def json(self):
         return {
             "configId": self.configId,
             "speedTestInterval": self.speedTestInterval,
-            "pingDestination": self.pingDestination,
-            "dnsQuery": self.dnsQuery,
-            "dnsServer": self.dnsServer,
+            "pingDestination": loads(self.pingDestination),
+            "dnsQuery": loads(self.dnsQuery),
+            "dnsServer": loads(self.dnsServer),
             "siteId": self.siteId
             }
 

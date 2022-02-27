@@ -18,6 +18,6 @@ class HecForwarderSchema(Schema):
 
 class NetworkTestSchema(Schema):
     speedTestInterval = fields.Int()
-    pingDestination = fields.List(fields.Str())
-    dnsQuery = fields.List(fields.Str())
-    dnsServer = fields.List(fields.Str())
+    pingDestination = fields.List(fields.Str)
+    dnsQuery = fields.List(fields.Str)
+    dnsServer = fields.List(fields.Str)
