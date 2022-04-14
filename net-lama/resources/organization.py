@@ -14,7 +14,7 @@ class Organization(Resource):
     def get(self, orgId=None):
         # Return a list of all organizations of no orgId is given
         if orgId == None:
-            return {'organizations': [org.json() for org in OrganizationModel.query.all()]}
+            return {'Organizations': [org.json() for org in OrganizationModel.query.all()]}
 
         org = OrganizationModel.findById(orgId)
         if org:

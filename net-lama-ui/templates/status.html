@@ -1,51 +1,16 @@
 {% extends 'base.html' %}
-{% block status %}
-<section id="status">
-  <div class="container">
-    <div class="row">
-      <div class="col-lg-8 mx-auto">
-        <table class="table">
-            <thead>
-              <tr>
-                <th scope="col">Service</th>
-                <th scope="col">Status</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              
-                {% for client in clients %}
-                <tr>
-                <td>{{ client['clientType'] }}</td>
-                <td>{{ client['clientStatus'] }}</td>
-                <td>
-                  <form action="/restart/" method="post">
-                  <button class="btn btn-dark" name="Restart" type="submit">Restart</button>
-                  </form>
-                </td>
-              </tr>
-                {% endfor %}
-            </tbody>
-          </table>
-          <h2>System</h2>
-          <table class="table">
-            <thead>
-              <tr>
-                <th scope="col">Service</th>
-                <th scope="col">Status</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>MQTT</td>
-                <td>Running</td>
-                <td>Restart</td>
-              </tr>
-            </tbody>
-          </table>
-      </div>
-    </div>
-  </div>
-</section>
+{% block content %}
+<h1>Organizations</h1>
+{% for organization in status['organizations'] %}
+    <li>{{ organization['orgName'] }}</li>
+{% endfor %}
+<h1>Sites</h1>
+{% for site in status['Sites'] %}
+    <li>{{ site['siteName'] }}</li>
+{% endfor %}
+
+<h1>Clients</h1>
+{% for client in status['clients'] %}
+    <li>{{ client['clientName'] }}</li>
+{% endfor %}
 {% endblock %}

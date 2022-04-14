@@ -50,7 +50,7 @@ class Site(Resource):
         if siteId == None:
             return {"message": "siteId has to be send in the request"}, 400
 
-        site = SiteModel.findById(siteId)
+        site = SiteModel.findBySiteId(siteId)
         if site:
             site.delete()
             return {"message": f"Site {siteId} deleted"}
@@ -60,7 +60,7 @@ class Site(Resource):
     @jwt_required()
     def put(self, siteId=None):
         data = Site.parser.parse_args()
-        site = SiteModel.findById(siteId)       
+        site = SiteModel.findBySiteId(siteId)       
         
         # Create a new Site
         if site is None and siteId is None:

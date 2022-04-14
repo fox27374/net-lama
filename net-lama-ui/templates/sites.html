@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-6">
+            <h2>Sites</h2>
+        </div>
+        <div class="col-md-auto">
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addModal">Add</button>
+        </div>
+    </div>  
+</div>
+<div class="container">
+    {% for site in sites['Sites'] %}
+    <div class="row">
+        <div class="col d-none">
+        {{ site['siteId'] }}
+        </div>
+        <div class="col">
+        {{ site['siteName'] }}
+        </div>
+        <div class="col">
+          {{ site['orgName'] }}
+          </div>
+        <div class="col-md-auto">
+            <div class="btn-group" role="group" aria-label="Basic mixed styles example">
+                <!--button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#viewModal" data-bs-siteId="{{ site['siteId'] }}">View</button-->
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#editModal" data-bs-siteId="{{ site['siteId'] }}">Edit</button>
+                <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal" data-bs-siteId="{{ site['siteId'] }}" data-bs-siteName="{{ site['siteName'] }}">Delete</button>
+            </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    
+
+  <!-- Modal -->
+  <div class="modal fade" id="addModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addModalLabel">Add site</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form method="POST">
+            {{ add_form.hidden_tag() }}
+            <div class="form-group">
+              {{ add_form.siteName.label() }}
+              {{ add_form.siteName(class="form-control") }}
+              {{ add_form.orgId.label() }}
+              {{ add_form.orgId(class="form-control") }}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              {{ add_form.addSubmit(class="btn btn-primary") }}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editModalLabel">Edit</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form method="POST">
+            {{ edit_form.hidden_tag() }}
+            <div class="form-group">
+              <h3 id="deleteMessage"></h3>
+              {{ edit_form.siteId() }}
+              {{ edit_form.siteName.label }} {{ edit_form.siteName() }}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              {{ edit_form.editSubmit(class="btn btn-primary") }}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="deleteModalLabel">Delete site</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form method="POST">
+            {{ delete_form.hidden_tag() }}
+            <div class="form-group">
+              <h3 id="deleteMessage"></h3>
+              {{ delete_form.siteId() }}
+              {{ delete_form.delete.label }} {{ delete_form.delete() }}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              {{ delete_form.deleteSubmit(class="btn btn-primary") }}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+var deleteModal = document.getElementById('deleteModal')
+var editModal = document.getElementById('editModal')
+
+editModal.addEventListener('show.bs.modal', function (event) {
+  var button = event.relatedTarget
+  var siteId = button.getAttribute('data-bs-siteId')
+  var formSiteId = editModal.querySelector('.modal-body input')
+  formSiteId.value = siteId
+})
+
+deleteModal.addEventListener('show.bs.modal', function (event) {
+  var button = event.relatedTarget
+  var siteId = button.getAttribute('data-bs-siteId')
+  var siteName = button.getAttribute('data-bs-siteName')
+  var modalMessage = deleteModal.querySelector('.modal-body h3')
+  var formSiteId = deleteModal.querySelector('.modal-body input')
+  formSiteId.value = siteId
+  modalMessage.innerText = 'Delete the site ' + siteName + '?'
+})
+  </script>
+  {% endblock %}
+    

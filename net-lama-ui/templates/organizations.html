@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-6">
+            <h2>Organizations</h2>
+        </div>
+        <div class="col-md-auto">
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addModal">Add</button>
+        </div>
+    </div>  
+</div>
+<div class="container">
+    {% for organization in organizations['Organizations'] %}
+    <div class="row">
+        <div class="col d-none">
+        {{ organization['orgId'] }}
+        </div>
+        <div class="col">
+        {{ organization['orgName'] }}
+        </div>
+        <div class="col-md-auto">
+            <div class="btn-group" role="group" aria-label="Basic mixed styles example">
+                <!--button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#viewModal" data-bs-orgId="{{ organization['orgId'] }}">View</button-->
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#editModal" data-bs-orgId="{{ organization['orgId'] }}">Edit</button>
+                <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal" data-bs-orgId="{{ organization['orgId'] }}" data-bs-orgName="{{ organization['orgName'] }}">Delete</button>
+            </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    
+
+  <!-- Modal -->
+  <div class="modal fade" id="addModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addModalLabel">Add organization</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form method="POST">
+            {{ add_form.hidden_tag() }}
+            <div class="form-group">
+              {{ add_form.orgName.label() }}
+              {{ add_form.orgName(class="form-control") }}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              {{ add_form.addSubmit(class="btn btn-primary") }}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editModalLabel">Edit</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form method="POST">
+            {{ edit_form.hidden_tag() }}
+            <div class="form-group">
+              <h3 id="deleteMessage"></h3>
+              {{ edit_form.orgId() }}
+              {{ edit_form.orgName.label }} {{ edit_form.orgName() }}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              {{ edit_form.editSubmit(class="btn btn-primary") }}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="deleteModalLabel">Delete organization</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form method="POST">
+            {{ delete_form.hidden_tag() }}
+            <div class="form-group">
+              <h3 id="deleteMessage"></h3>
+              {{ delete_form.orgId() }}
+              {{ delete_form.delete.label }} {{ delete_form.delete() }}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              {{ delete_form.deleteSubmit(class="btn btn-primary") }}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+var deleteModal = document.getElementById('deleteModal')
+var editModal = document.getElementById('editModal')
+
+editModal.addEventListener('show.bs.modal', function (event) {
+  var button = event.relatedTarget
+  var orgId = button.getAttribute('data-bs-orgId')
+  var orgName = button.getAttribute('data-bs-orgName')
+  var formOrgId = editModal.querySelector('.modal-body input')
+  formOrgId.value = orgId
+})
+
+deleteModal.addEventListener('show.bs.modal', function (event) {
+  var button = event.relatedTarget
+  var orgId = button.getAttribute('data-bs-orgId')
+  var orgName = button.getAttribute('data-bs-orgName')
+  var modalMessage = deleteModal.querySelector('.modal-body h3')
+  var formOrgId = deleteModal.querySelector('.modal-body input')
+  formOrgId.value = orgId
+  modalMessage.innerText = 'Delete the organization ' + orgName + '?'
+})
+  </script>
+  {% endblock %}
+    

@@ -1,6 +1,2 @@
 Flask
 flask_wtf
-flask_mqtt
-flask_socketio
-flask_bootstrap
-eventlet
