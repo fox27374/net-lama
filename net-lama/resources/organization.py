@@ -1,6 +1,6 @@
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import jwt_required
-from models.organization import OrganizationModel
+from models.organization2 import OrganizationModel
 
 class Organization(Resource):
     parser = reqparse.RequestParser()
@@ -10,7 +10,7 @@ class Organization(Resource):
         required=True,
         help="Cannot be left blank")
 
-    @jwt_required()
+    #@jwt_required()
     def get(self, orgId=None):
         # Return a list of all organizations of no orgId is given
         if orgId == None:
@@ -21,7 +21,7 @@ class Organization(Resource):
             return org.json()
         return {"message": f"Organization {orgId} not found"}, 404
 
-    @jwt_required()
+    #@jwt_required()
     def post(self, orgId=None):
         if orgId:
             return {"message": "orgId not allowed in the request"}, 400
@@ -40,7 +40,7 @@ class Organization(Resource):
 
         return org.json(), 201
 
-    @jwt_required()
+    #@jwt_required()
     def delete(self, orgId=None):
         if orgId == None:
             return {"message": "orgId has to be send in the request"}, 400
@@ -52,7 +52,7 @@ class Organization(Resource):
         
         return {"message": f"Organization {orgId} not found"}, 404
 
-    @jwt_required()
+    #@jwt_required()
     def put(self, orgId=None):
         data = Organization.parser.parse_args()
         org = OrganizationModel.findById(orgId)       

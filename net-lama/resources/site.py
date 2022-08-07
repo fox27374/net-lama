@@ -1,6 +1,7 @@
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import jwt_required
-from models.site import SiteModel
+from models.site2 import SiteModel
+from models.organization2 import OrganizationModel
 
 class Site(Resource):
     parser = reqparse.RequestParser()
@@ -15,7 +16,7 @@ class Site(Resource):
         required=False,
         help="Optional orgId")
 
-    @jwt_required()
+    #@jwt_required()
     def get(self, siteId=None):
         # Return a list of all Sites of no siteId is given
         if siteId == None:
@@ -26,7 +27,7 @@ class Site(Resource):
             return site.json()
         return {"message": f"Site {siteId} not found"}, 404
 
-    @jwt_required()
+    #@jwt_required()
     def post(self, siteId=None):
         if siteId:
             return {"message": "siteId not allowed in the request"}, 400
@@ -34,7 +35,10 @@ class Site(Resource):
         data = Site.parser.parse_args()
 
         if SiteModel.findByName(data['siteName']):
-            return {"message": f"An Site with the name {data['siteName']} already exists"}, 400
+            return {"message": f"A Site with the name {data['siteName']} already exists"}, 400
+
+        if not OrganizationModel.findById(data['orgId']):
+            return {"message": f"An organization with the orgId {data['orgId']} does not exist"}, 400
        
         site = SiteModel(**data)
 
@@ -45,7 +49,7 @@ class Site(Resource):
 
         return site.json(), 201
 
-    @jwt_required()
+    #@jwt_required()
     def delete(self, siteId=None):
         if siteId == None:
             return {"message": "siteId has to be send in the request"}, 400
@@ -57,7 +61,7 @@ class Site(Resource):
 
         return {"message": f"Site {siteId} not found"}, 404
 
-    @jwt_required()
+    #@jwt_required()
     def put(self, siteId=None):
         data = Site.parser.parse_args()
         site = SiteModel.findBySiteId(siteId)       

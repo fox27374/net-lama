@@ -1,5 +1,6 @@
 from models.user import UserModel
-from werkzeug.security import safe_str_cmp
+from hmac import compare_digest
+#from werkzeug.security import safe_str_cmp
 from flask_jwt_extended import jwt_required, create_access_token, create_refresh_token
 from flask_restful import Resource, reqparse
 
@@ -77,7 +78,8 @@ class UserLogin(Resource):
         user = UserModel.findByName(data['username'])
 
         # this is what the `authenticate()` function did in security.py
-        if user and safe_str_cmp(user.password, data['password']):
+        #if user and safe_str_cmp(user.password, data['password']):
+        if user and compare_digest(user.password, data['password']):
             # identity= is what the identity() function did in security.py—now stored in the JWT
             accessToken = create_access_token(identity=user.id, fresh=True) 
             refreshToken = create_refresh_token(user.id)
