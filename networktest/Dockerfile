@@ -23,7 +23,7 @@ USER $USER
 WORKDIR $HOME
 
 # Copy source files
-COPY --chown=$USER:$GROUP clientId.json .
+COPY --chown=$USER:$GROUP clientInfo.json .
 COPY --chown=$USER:$GROUP requirements.txt .
 COPY --chown=$USER:$GROUP globalVars.py .
 COPY --chown=$USER:$GROUP networkTest.py .
