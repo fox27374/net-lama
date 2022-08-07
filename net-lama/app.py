@@ -14,7 +14,7 @@ from resources.user import User, UserLogin, UserHello
 from db.db import db
 
 apiBaseUrl = '/api/v1/'
-hostIp = '10.140.80.1'
+hostIp = '0.0.0.0'
 port = 5000
 debug = True
 
