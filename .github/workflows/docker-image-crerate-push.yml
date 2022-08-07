@@ -25,5 +25,8 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
         
+    - name: List images
+      run: docker image ls
+      
     - name: Push the latest Docker image
       run: docker push fox27374/net-lama:latest
