@@ -17,7 +17,7 @@ jobs:
       name: Checkout code
       
     - name: Build the Docker image
-      run: docker build . --file net-lama/Dockerfile --tag fox27374/net-lama:$(date +%s)
+      run: docker build --file net-lama/Dockerfile --tag fox27374/net-lama:$(date +%s) ./net-lama
       
     - name: Login to DockerHub
       uses: docker/login-action@v1
