@@ -8,3 +8,4 @@ Marshmallow-SQLAlchemy
 Webargs
 requests
 paho-mqtt
+hmac
