@@ -16,6 +16,13 @@ jobs:
     - uses: actions/checkout@v3
       name: Checkout code
       
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-west-1
+      
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
@@ -26,13 +33,6 @@ jobs:
         ECR_REPOSITORY: ${{ secrets.AWS_ECR_REPO_NAME }}
         IMAGE_TAG: 1.0
       run: docker build --file net-lama/Dockerfile --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./net-lama
-        
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: eu-west-1
 
     - name: Push the image to Amazon ECR
       id: build-image
