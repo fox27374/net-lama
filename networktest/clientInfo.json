@@ -8,5 +8,4 @@
         "update": {"command": "update", "description": "Get configuration changes" }
     },
     "commands": ["start", "stop", "status", "update"]
-    
 }
