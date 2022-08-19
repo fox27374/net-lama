@@ -44,7 +44,7 @@ jobs:
         ECR_REGISTRY: public.ecr.aws/u9v8s8j7
         IMAGE_TAG: latest
       run: |
-        docker build --file net-lama/Dockerfile --tag $ECR_REGISTRY/net-lama:$IMAGE_TAG --platform linux/arm/v7 ./net-lama
+        docker buildx build --file net-lama/Dockerfile --tag $ECR_REGISTRY/net-lama:$IMAGE_TAG --platform linux/arm/v7 ./net-lama
         #docker build --file networktest/Dockerfile --tag $ECR_REGISTRY/networktest:$IMAGE_TAG ./networktest
 
     - name: Push images to AWS ECR
