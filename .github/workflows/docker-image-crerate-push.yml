@@ -35,7 +35,7 @@ jobs:
         IMAGE_TAG: latest
       run: |
         docker build --file net-lama/Dockerfile --tag $ECR_REGISTRY/net-lama:$IMAGE_TAG ./net-lama
-        #docker build --file networktest/Dockerfile --tag $ECR_REGISTRY/networktest:$IMAGE_TAG ./networktest
+        docker build --file networktest/Dockerfile --tag $ECR_REGISTRY/networktest:$IMAGE_TAG ./networktest
 
     - name: Push images to AWS ECR
       id: build-image
@@ -44,5 +44,5 @@ jobs:
         IMAGE_TAG: latest
       run: |
         docker push $ECR_REGISTRY/net-lama:$IMAGE_TAG
-        #docker push $ECR_REGISTRY/networktest:$IMAGE_TAG
+        docker push $ECR_REGISTRY/networktest:$IMAGE_TAG
 
