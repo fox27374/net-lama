@@ -25,9 +25,9 @@ WORKDIR $HOME
 # Copy source files
 COPY --chown=$USER:$GROUP clientInfo.json .
 COPY --chown=$USER:$GROUP requirements.txt .
-COPY --chown=$USER:$GROUP globalVars.py .
+#COPY --chown=$USER:$GROUP globalVars.py .
 COPY --chown=$USER:$GROUP networkTest.py .
-COPY --chown=$USER:$GROUP splib.py .
+#COPY --chown=$USER:$GROUP splib.py .
 
 # Set environment to the net-lama directory
 ENV VIRTUAL_ENV=$HOME/venv
