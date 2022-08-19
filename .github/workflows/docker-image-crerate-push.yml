@@ -20,9 +20,9 @@ jobs:
       #run: docker build --file net-lama/Dockerfile --tag fox27374/net-lama:latest ./net-lama
       run: docker build --file net-lama/Dockerfile --tag net-lama:latest ./net-lama
       
-    - name: Build the Docker image for networktest
-      #run: docker build --file networktest/Dockerfile --tag fox27374/networktest:latest ./networktest
-      run: docker build --file networktest/Dockerfile --tag networktest:latest ./networktest
+#    - name: Build the Docker image for networktest
+#      #run: docker build --file networktest/Dockerfile --tag fox27374/networktest:latest ./networktest
+#      run: docker build --file networktest/Dockerfile --tag networktest:latest ./networktest
       
 #    - name: Login to DockerHub
 #      uses: docker/login-action@v1
@@ -37,13 +37,14 @@ jobs:
         access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         region: eu-west-1
-        image: net-lama:latest, networktest:latest
+        local-image: net-lama:latest
+        image: net-lama:latest
         
     - name: List images
       run: docker image ls
       
-    - name: Push net-lama image
-      run: docker push fox27374/net-lama:latest
+#    - name: Push net-lama image
+#      run: docker push fox27374/net-lama:latest
       
-    - name: Push networktest image
-      run: docker push fox27374/networktest:latest
+#    - name: Push networktest image
+#      run: docker push fox27374/networktest:latest
