@@ -7,5 +7,6 @@
         "status": {"command": "status", "description": "Send the current status to the api endpoint"},
         "update": {"command": "update", "description": "Get configuration changes" }
     },
-    "commands": ["start", "stop", "status", "update"] 
+    "commands": ["start", "stop", "status", "update"]
+    
 }
