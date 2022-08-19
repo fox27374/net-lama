@@ -27,23 +27,20 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
       
-    - name: Build the Docker image for net-lama
+    - name: Build the Docker images
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: ${{ secrets.AWS_ECR_REPO_NAME }}
-        IMAGE_TAG: 1.0
-      run: docker build --file net-lama/Dockerfile --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./net-lama
+        IMAGE_TAG: latest
+      run: |
+        docker build --file net-lama/Dockerfile --tag $ECR_REGISTRY/net-lama:$IMAGE_TAG ./net-lama
+        docker build --file net-lama/Dockerfile --tag $ECR_REGISTRY/networktest:$IMAGE_TAG ./networktest
 
     - name: Push the image to Amazon ECR
       id: build-image
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: ${{ secrets.AWS_ECR_REPO_NAME }}
-        IMAGE_TAG: 1.0
+        IMAGE_TAG: latest
       run: |
-        echo "Pushing image to ECR..."
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"    
-    - name: List images
-      run: docker image ls
+        docker push $ECR_REGISTRY/net-lama:$IMAGE_TAG
+        docker push $ECR_REGISTRY/networktest:$IMAGE_TAG
 
