@@ -45,14 +45,6 @@ jobs:
         IMAGE_TAG: latest
       run: |
         docker buildx build --file net-lama/Dockerfile --push --tag $ECR_REGISTRY/net-lama:$IMAGE_TAG --platform=linux/amd64,linux/arm/v7 ./net-lama
-        #docker build --file networktest/Dockerfile --tag $ECR_REGISTRY/networktest:$IMAGE_TAG ./networktest
+        docker buildx build --file networktest/Dockerfile --push --tag $ECR_REGISTRY/networktest:$IMAGE_TAG --platform=linux/amd64,linux/arm/v7 ./networktest
 
-#    - name: Push images to AWS ECR
-#      id: build-image
-#      env:
-#        ECR_REGISTRY: public.ecr.aws/u9v8s8j7
-#        IMAGE_TAG: latest
-#      run: |
-#        docker push $ECR_REGISTRY/net-lama:$IMAGE_TAG
-#        #docker push $ECR_REGISTRY/networktest:$IMAGE_TAG
 
