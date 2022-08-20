@@ -20,7 +20,13 @@ WORKDIR $HOME
 USER $USER
 
 # Copy source files
-COPY --chown=$USER:$GROUP . .
+COPY --chown=$USER:$GROUP net-lama/configs configs
+COPY --chown=$USER:$GROUP net-lama/db db
+COPY --chown=$USER:$GROUP net-lama/models models
+COPY --chown=$USER:$GROUP net-lama/resources resources
+COPY --chown=$USER:$GROUP net-lama/schemas schemas
+COPY --chown=$USER:$GROUP net-lama/requirements.txt .
+COPY --chown=$USER:$GROUP net-lama/app.py .
 
 # Set environment to the net-lama directory
 ENV VIRTUAL_ENV=$HOME/venv
