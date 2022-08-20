@@ -46,5 +46,3 @@ jobs:
       run: |
         docker buildx build --file net-lama/Dockerfile --push --tag $ECR_REGISTRY/net-lama:$IMAGE_TAG --platform=linux/amd64,linux/arm/v7 ./net-lama
         docker buildx build --file networktest/Dockerfile --push --tag $ECR_REGISTRY/networktest:$IMAGE_TAG --platform=linux/amd64,linux/arm/v7 ./networktest
-
-
