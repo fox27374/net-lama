@@ -108,7 +108,7 @@ def checkApiEndpoint():
     """Check if the API endpoint is reachable"""
     reachable = False
     while not reachable:
-        response = processRequest('get', 'configs/all', '')
+        response = processRequest('get', 'hello', '')
         if response['status'] == 'ok': reachable = True
         else:
             print(f"An error occured: {response['data']}")

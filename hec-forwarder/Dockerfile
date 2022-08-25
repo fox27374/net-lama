@@ -20,11 +20,11 @@ USER $USER
 WORKDIR $HOME
 
 # Copy source files
-COPY --chown=$USER:$GROUP hecForwarder.py .
-COPY --chown=$USER:$GROUP clientId.json .
-COPY --chown=$USER:$GROUP requirements.txt .
-COPY --chown=$USER:$GROUP globalVars.py .
-COPY --chown=$USER:$GROUP splib.py .
+COPY --chown=$USER:$GROUP hec-forwarder/clientInfo.json .
+COPY --chown=$USER:$GROUP hec-forwarder/hecForwarder.py .
+COPY --chown=$USER:$GROUP hec-forwarder/requirements.txt .
+COPY --chown=$USER:$GROUP includes/globalVars.py .
+COPY --chown=$USER:$GROUP includes/splib.py .
 
 
 # Set environment to the net-lama directory
@@ -33,6 +33,7 @@ RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install dependencies:
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Run the application:

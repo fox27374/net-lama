@@ -90,6 +90,9 @@ class UserLogin(Resource):
 
     
 class UserHello(Resource):
+    def get(self):
+        return {"message": f"hello"}, 200
+        
     def post(self):
         helloParser = reqparse.RequestParser()
         helloParser.add_argument(
