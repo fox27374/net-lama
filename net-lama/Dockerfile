@@ -1,10 +1,13 @@
 # ./Dockerfile
 
-FROM python:3.8-alpine
+FROM python:3.9-alpine
 
 # Labeling
 LABEL "org.lnxnet.project"="net-lama"
 LABEL "org.lnxnet.application"="net-lama"
+
+# Install additional packages
+RUN apk add gcc g++ libc-dev
 
 # Set variables
 ENV USER=net-lama
