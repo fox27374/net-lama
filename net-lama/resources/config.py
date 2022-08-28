@@ -6,7 +6,7 @@ from webargs.flaskparser import use_args
 from json import dumps
 
 class Mqtt(Resource):
-    @jwt_required()
+    #@jwt_required()
     def get(self, siteId=None):
         if not siteId:
             return {"mqtt": [mqtt.json() for mqtt in MqttModel.query.all()]}, 200
