@@ -1,0 +1,9 @@
+Flask
+Flask-RESTful
+Flask-JWT-extended
+Flask-SQLAlchemy
+Flask-Marshmallow
+Marshmallow
+Marshmallow-SQLAlchemy
+Webargs
+requests

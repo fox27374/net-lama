@@ -7,6 +7,33 @@ import paho.mqtt.client as mqtt
 from datetime import datetime, timedelta
 
 # MQTT
+class MQTTClient:
+    def __init__(self, **mqttInfo):
+        self.clientId = mqttInfo['clientId']
+        self.clientType = mqttInfo['clientType']
+        self.dataTopic = mqttInfo['dataTopic']
+        self.logTopic = mqttInfo['logTopic']
+        self.mqttServer = mqttInfo['mqttServer']
+        self.mqttPort = mqttInfo['mqttPort']
+
+    def create(self):
+        self.mqttClient = mqtt.Client()
+        self.mqttClient.connect(self.mqttServer, int(self.mqttPort), 60)
+        self.send_log(f"Client registered with clientId {self.clientId}")
+
+    def send_log(self, data):
+        now = getCurrentTime()
+        clientInfo = {'clientId': self.clientId, 'clientType': self.clientType}
+        logInfo = {'Time': now, 'Log': data}
+        self.mqttClient.publish(self.logTopic, dumps({**clientInfo, **logInfo}))
+
+    def send_data(self, data):
+        now = getCurrentTime()
+        clientInfo = {'clientId': self.clientId, 'clientType': self.clientType}
+        logInfo = {'Time': now, 'Data': data}
+        self.mqttClient.publish(self.dataTopic, dumps({**clientInfo, **logInfo}))
+
+
 class Client:
     def __init__(self, **mqttInfo):
         self.clientId = mqttInfo['clientId']

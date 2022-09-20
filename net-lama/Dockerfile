@@ -22,14 +22,8 @@ RUN adduser -G $GROUP -h $HOME -D $USER
 WORKDIR $HOME
 USER $USER
 
-# Copy source files
-COPY --chown=$USER:$GROUP net-lama/configs configs
-COPY --chown=$USER:$GROUP net-lama/db db
-COPY --chown=$USER:$GROUP net-lama/models models
-COPY --chown=$USER:$GROUP net-lama/resources resources
-COPY --chown=$USER:$GROUP net-lama/schemas schemas
+# Copy requirements
 COPY --chown=$USER:$GROUP net-lama/requirements.txt .
-COPY --chown=$USER:$GROUP net-lama/app.py .
 
 # Set environment to the net-lama directory
 ENV VIRTUAL_ENV=$HOME/venv
@@ -40,6 +34,14 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir wheel
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY --chown=$USER:$GROUP net-lama/configs configs
+COPY --chown=$USER:$GROUP net-lama/db db
+COPY --chown=$USER:$GROUP net-lama/models models
+COPY --chown=$USER:$GROUP net-lama/resources resources
+COPY --chown=$USER:$GROUP net-lama/schemas schemas
+COPY --chown=$USER:$GROUP net-lama/app.py .
 
 # Run the application:
 CMD ["python", "app.py"]

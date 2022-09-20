@@ -139,7 +139,7 @@ class HecForwarder(Resource):
 
 
 class NetworkTest(Resource):
-    @jwt_required()
+    #@jwt_required()
     def get(self, siteId=None):
         if not siteId:
             return {"networkTest": [networkTest.json() for networkTest in NetworkTestModel.query.all()]}, 200
