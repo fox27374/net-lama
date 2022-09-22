@@ -145,15 +145,15 @@ def registerClient(clientType, clientId):
     """Register client at central server"""
     registered = False
     requestType = 'post'
-    apiUrl = 'clients/register'
-    clientData = {'client': {'clientType': clientType, 'clientId': clientId}}
+    apiUrl = 'hello'
+    clientData = {'clientType': clientType, 'clientId': clientId}
     while not registered:
         response = processRequest(requestType, apiUrl, clientData)
         if response['status'] == 'ok': registered = True
         else:
             print(f"An error occured: {response['data']}")
             sleep(1)
-    return response    
+    return response
 
 def updateClient(clientId, clientType, appStatus, capabilities):
     """Update client information and status"""
@@ -175,6 +175,11 @@ def getConfig(apiUrl):
 def getClientInfo():
     with open('clientInfo.json') as inFile:
         return load(inFile)
+
+def writeClientInfo(clientData):
+    cf = open('clientInfo.json', 'w')
+    cf.write(dumps(clientData, indent=4))
+    cf.close()
 
 def getCurrentTime():
     now = datetime.now()

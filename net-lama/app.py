@@ -6,11 +6,11 @@ from flask import Flask
 from flask_restful import Api
 from flask_jwt_extended import JWTManager
 from flask_marshmallow import Marshmallow
-from resources.client import Client
+from resources.client import Client, ClientHello
 from resources.config import Mqtt, HecForwarder, NetworkTest
 from resources.organization import Organization
 from resources.site import Site
-from resources.user import User, UserLogin, UserHello
+from resources.user import User, UserLogin
 from db.db import db
 
 apiBaseUrl = '/api/v1/'
@@ -64,7 +64,7 @@ api.add_resource(NetworkTest,
 api.add_resource(UserLogin,
         f"{apiBaseUrl}/login"
     )
-api.add_resource(UserHello,
+api.add_resource(ClientHello,
         f"{apiBaseUrl}/hello"
     )
 

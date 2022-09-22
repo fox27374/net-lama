@@ -17,4 +17,3 @@ class Start(Resource):
         # Return the current status
         pid = start_scheduler()
         return {"message": f"Service running with PID {pid}"}, 200
-

@@ -71,4 +71,44 @@ class Client(Resource):
         client.save()
          
         return client.json()
+
+    
+class ClientHello(Resource):
+    def get(self):
+        return {"message": f"hello"}, 200
         
+    def post(self):
+        helloParser = reqparse.RequestParser()
+        helloParser.add_argument(
+            'clientId',
+            type=str,
+            required=True,
+            help="This field cannot be blank."
+        )
+        helloParser.add_argument(
+            'clientType', 
+            type=str,
+            required=True,
+            help="This field cannot be blank."
+        )
+
+        data = helloParser.parse_args()
+        client = ClientModel.findById(data['clientId'])
+
+        # Check if client already exists
+        if client:
+            return {
+                "clientId": client.clientId,
+                "clientType": client.clientType,
+                "siteId": client.siteId
+                }, 201
+
+        # Generate new client
+        client = ClientModel(data['clientId'], data['clientType'])
+        client.save()
+
+        return {
+                "clientId": client.clientId,
+                "clientType": client.clientType,
+                "siteId": client.siteId
+                }, 201
