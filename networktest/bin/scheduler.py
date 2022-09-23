@@ -1,34 +1,28 @@
 #!/usr/bin/env python
 
-from sys import path, exit
-path.append('../includes/')
+from sys import path
+path.append('/home/net-lama/')
 
-from splib import MQTTClient, checkApiEndpoint, getClientInfo, getConfig, registerClient, updateClient
+from modules.splib import MQTTClient, getClientInfo, getConfig
 from time import sleep
 from subprocess import Popen
 from time import time
 
 # Read local client config
-localConfig = getClientInfo()
-
-clientInfo = {}
-clientInfo['clientId'] = localConfig['clientId']
-clientInfo['clientType'] = localConfig['clientType']
-clientInfo['commands'] = localConfig['commands']
-clientInfo['capabilities'] = localConfig['capabilities']
+clientInfo = getClientInfo()
 
 # Wait until the API endpoint is available
-checkApiEndpoint()
+#checkApiEndpoint()
 
 # Get MQTT config
-mqttConfig = getConfig('configs/mqtt/1')
+mqttConfig = getConfig(f"configs/mqtt/{clientInfo['siteId']}")
 clientInfo['mqttServer'] = mqttConfig['mqttServer']
 clientInfo['mqttPort'] = mqttConfig['mqttPort']
 clientInfo['dataTopic'] = mqttConfig['dataTopic']
 clientInfo['logTopic'] = mqttConfig['logTopic']
 
 # Get Application specific config
-networkTestConfig = getConfig('configs/networkTest/1')
+networkTestConfig = getConfig(f"configs/networkTest/{clientInfo['siteId']}")
 speedTestInterval = networkTestConfig['speedTestInterval']
 pingDestination = networkTestConfig['pingDestination']
 dnsQuery = networkTestConfig['dnsQuery']
@@ -40,26 +34,12 @@ client = MQTTClient(**clientInfo)
 # Initialise MQTT
 client.create()
 
-# Register client and get ID used for further communication
-# Exit if registration fails
-#register = registerClient(client.clientType, client.clientId)
-#if register['status'] == 'ok': clientId = register['data']['client']['clientId']
-#else:
-#    print(f"An error occured: {register['data']}")
-#    exit()
-
-# Update client information at api endpoint
-#if client.cmdQueue[-1] == 'start': appStatus = 'running'
-#elif client.cmdQueue[-1] == 'stop': appStatus = 'stopped'
-#else: appStatus = 'undefined'
-#updateClient(client.clientId, client.clientType, appStatus, client.capabilities)
-
 def execSpeedtest():
     command = [
         "python", 
-        "exec_speedtest.py", 
-        f"--clientId={localConfig['clientId']}",
-        f"--clientType={localConfig['clientType']}",
+        "bin/exec_speedtest.py", 
+        f"--clientId={clientInfo['clientId']}",
+        f"--clientType={clientInfo['clientType']}",
         f"--mqttServer={mqttConfig['mqttServer']}",
         f"--mqttPort={mqttConfig['mqttPort']}",
         f"--dataTopic={mqttConfig['dataTopic']}",
@@ -70,9 +50,9 @@ def execSpeedtest():
 def execPing(host):
     command = [
         "python", 
-        "exec_ping.py", 
-        f"--clientId={localConfig['clientId']}",
-        f"--clientType={localConfig['clientType']}",
+        "bin/exec_ping.py", 
+        f"--clientId={clientInfo['clientId']}",
+        f"--clientType={clientInfo['clientType']}",
         f"--mqttServer={mqttConfig['mqttServer']}",
         f"--mqttPort={mqttConfig['mqttPort']}",
         f"--dataTopic={mqttConfig['dataTopic']}",
@@ -84,9 +64,9 @@ def execPing(host):
 def execDns(query, server):
     command = [
         "python", 
-        "exec_dns.py", 
-        f"--clientId={localConfig['clientId']}",
-        f"--clientType={localConfig['clientType']}",
+        "bin/exec_dns.py", 
+        f"--clientId={clientInfo['clientId']}",
+        f"--clientType={clientInfo['clientType']}",
         f"--mqttServer={mqttConfig['mqttServer']}",
         f"--mqttPort={mqttConfig['mqttPort']}",
         f"--dataTopic={mqttConfig['dataTopic']}",
@@ -96,7 +76,6 @@ def execDns(query, server):
         ]
     p = Popen(command)
 
-# Main task, controlled by the cmdQueue switch
 while True:
     try:
         counter = int(time())

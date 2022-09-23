@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 from sys import path, argv
-path.append('../includes/')
+path.append('/home/net-lama/')
 
-from splib import MQTTClient
+from modules.splib import MQTTClient
 from speedtest import Speedtest
 from getopt import getopt
 
@@ -75,7 +75,7 @@ def getSpeedTest():
         data = {'data': {'Error': e}}
         client.send_log(f"An error occured during application execution: {e}")
 
-        return 'Error: ' + e
+        return 'Error: ' + str(e)
 
 
 speedTest = getSpeedTest()

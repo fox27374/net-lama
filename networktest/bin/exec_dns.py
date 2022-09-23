@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 from sys import path, argv
-path.append('../includes/')
+path.append('/home/net-lama/')
 
-from subprocess import Popen, PIPE
-from splib import MQTTClient
+from modules.splib import MQTTClient
 from getopt import getopt
+from subprocess import Popen, PIPE
 from re import findall
 
 argv = argv[1:]
@@ -18,10 +18,11 @@ try:
         "mqttPort=", 
         "dataTopic=", 
         "logTopic=",
-        "host="
+        "host=", 
+        "server="
         ])
-except Exception as e:
-    print("Error: " + e)
+except:
+    print("Error")
 
 for opt, arg in opts:
     if opt in ['--clientId']:
@@ -38,6 +39,8 @@ for opt, arg in opts:
         logTopic = arg
     elif opt in ['--host']:
         host = arg
+    elif opt in ['--server']:
+        server = arg
 
 clientInfo = {}
 clientInfo['clientId'] = clientId
@@ -54,38 +57,31 @@ client = MQTTClient(**clientInfo)
 client.create()
 
 # Application specific functions
-def getPingTime(host):
-    """Ping a host and return the average round-trip-time"""
-    command = ['ping', '-4', '-n', '-i', '0.2', '-c', '5', host]
+def getDnsTime(host, server):
+    """Do a DNS lookup and retuen the query time"""
+
+    command = ['dig', '-4', '-u', '+timeout=1', '@' + server, host]
 
     p = Popen(command, stdout=PIPE, stderr=PIPE)
     output, errors = p.communicate()
     output = output.decode("utf-8").splitlines()
 
-    avgTimeMs = 'NA'
-    timeMs = []
-
     for line in output:
-        if 'time=' in line:
-            ms = findall('time=(\d+\.\d+)', line)
-            
-            if ms:
-                timeMs.append(float(ms[0]))
-            else:
-                ms = 3000
-                timeMs.append(float(ms))
+        if 'Query time' in line:
+            ms = findall('Query\stime:\s(\d+)', line)
+            ms = round(float(ms[0])/1024, 2)
 
-            avgTimeMs = round((sum(timeMs)/len(timeMs)), 2)
+        if 'timed out' in line:
+            ms = 3000
 
-    data = {"Test": "Ping", "Host": host, "Time": avgTimeMs}
+    data = {"Test": "DNS", "Host": host, "Server": server, "Time": ms}
 
     return data
-        
 
 
-pingTime = getPingTime(host)
-if 'error' in pingTime:
-    client.send_log(f"Ping failed: {pingTime}")
+dnsTime = getDnsTime(host, server)
+if 'error' in dnsTime:
+    client.send_log(f"DNS failed: {dnsTime}")
 else:
-    client.send_data(pingTime)
-    client.send_log("Ping finished, sending data to data topic")
+    client.send_data(dnsTime)
+    client.send_log("DNS finished, sending data to data topic")

@@ -11,8 +11,8 @@ ENV USER=net-lama
 ENV GROUP=net-lama
 ENV HOME /home/$USER
 
-# Install software
-RUN apk add --no-cache bind-tools iputils
+# Install additional packages
+RUN apk add --no-cache bind-tools iputils gcc g++ libc-dev
 
 # Create user and group
 RUN addgroup $GROUP
@@ -22,12 +22,8 @@ RUN adduser -G $GROUP -h $HOME -D $USER
 USER $USER
 WORKDIR $HOME
 
-# Copy source files
-COPY --chown=$USER:$GROUP networktest/clientInfo.json .
+# Copy requirements file
 COPY --chown=$USER:$GROUP networktest/requirements.txt .
-COPY --chown=$USER:$GROUP networktest/networkTest.py .
-COPY --chown=$USER:$GROUP includes/globalVars.py .
-COPY --chown=$USER:$GROUP includes/splib.py .
 
 # Set environment to the net-lama directory
 ENV VIRTUAL_ENV=$HOME/venv
@@ -36,7 +32,15 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install dependencies:
 RUN pip install --upgrade pip
+RUN pip install --no-cache-dir wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy source files
+COPY --chown=$USER:$GROUP networktest/clientInfo.json .
+COPY --chown=$USER:$GROUP includes ./modules
+COPY --chown=$USER:$GROUP api ./api
+COPY --chown=$USER:$GROUP networktest/bin ./bin
+COPY --chown=$USER:$GROUP networktest/app.py .
+
 # Run the application:
-CMD ["python", "networkTest.py"]
+CMD ["python", "app.py"]

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 from sys import path, argv
-path.append('../includes/')
+path.append('/home/net-lama/')
 
 from subprocess import Popen, PIPE
-from splib import MQTTClient
+from modules.splib import MQTTClient
 from getopt import getopt
 from re import findall
 

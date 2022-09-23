@@ -2,7 +2,7 @@ from requests import get, post, exceptions
 from datetime import datetime
 from time import sleep
 from json import load, loads, dumps
-import globalVars as gv
+from modules.globalVars import apiBaseUrl
 import paho.mqtt.client as mqtt
 from datetime import datetime, timedelta
 
@@ -109,10 +109,10 @@ def processRequest(requestType, apiUrl, clientData):
     status = 'ok'
     try:
         if requestType == 'post':
-            data = post(url=gv.apiBaseUrl + apiUrl, json=clientData, headers=headers)
+            data = post(url=apiBaseUrl + apiUrl, json=clientData, headers=headers)
             data.raise_for_status()
         else:
-            data = get(gv.apiBaseUrl + apiUrl)
+            data = get(apiBaseUrl + apiUrl)
             data.raise_for_status()
 
     except exceptions.HTTPError as errh:
@@ -158,22 +158,31 @@ def registerClient(clientType, clientId):
 def updateClient(clientId, clientType, appStatus, capabilities):
     """Update client information and status"""
     clientDict = {'client': {'clientId': clientId, 'clientType': clientType, 'appStatus': appStatus, 'capabilities': capabilities}}
-    response = post(url=gv.apiBaseUrl + 'clients/update', json=clientDict, headers={'Content-Type': 'application/json'})
+    response = post(url=apiBaseUrl + 'clients/update', json=clientDict, headers={'Content-Type': 'application/json'})
     return response.json()
 
 def updateConfig(clientType, configData):
     """Update application specific config"""
     configDict = {clientType: configData}
-    response = post(url=gv.apiBaseUrl + 'configs/update', json=configDict, headers={'Content-Type': 'application/json'})
+    response = post(url=apiBaseUrl + 'configs/update', json=configDict, headers={'Content-Type': 'application/json'})
     return response.json()
 
 def getConfig(apiUrl):
-    response = get(gv.apiBaseUrl + apiUrl)
+    response = get(apiBaseUrl + apiUrl)
     return response.json()
 
 # Support functions
 def getClientInfo():
     with open('clientInfo.json') as inFile:
+        return load(inFile)
+
+def writePid(pid):
+    p = open('pid', 'w')
+    p.write(str(pid))
+    p.close()
+
+def getPid():
+    with open('pid') as inFile:
         return load(inFile)
 
 def writeClientInfo(clientData):

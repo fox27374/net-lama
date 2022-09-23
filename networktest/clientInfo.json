@@ -1,11 +1,5 @@
 {
     "clientId": "76128ff6",
     "clientType": "NetworkTest",
-    "capabilities": {
-        "start": {"command": "start", "description": "Start network test"},
-        "stop": {"command": "stop", "description": "Stop network test"},
-        "status": {"command": "status", "description": "Send the current status to the api endpoint"},
-        "update": {"command": "update", "description": "Get configuration changes" }
-    },
-    "commands": ["start", "stop", "status", "update"]
+    "siteId": 1
 }

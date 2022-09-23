@@ -1,12 +1,10 @@
 #!/usr/bin/env python
-from sys import path
-path.append('../includes/')
 
 from flask import Flask
 from flask_restful import Api
-from splib import checkApiEndpoint, getClientInfo, registerClient, writeClientInfo
 #from flask_jwt_extended import JWTManager
 #from flask_marshmallow import Marshmallow
+from modules.splib import checkApiEndpoint, getClientInfo, registerClient, writeClientInfo
 from api.resources.status import Status
 from api.resources.start import Start
 from api.resources.stop import Stop
