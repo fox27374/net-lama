@@ -19,13 +19,8 @@ RUN adduser -G $GROUP -h $HOME -D $USER
 USER $USER
 WORKDIR $HOME
 
-# Copy source files
-COPY --chown=$USER:$GROUP hec-forwarder/clientInfo.json .
-COPY --chown=$USER:$GROUP hec-forwarder/hecForwarder.py .
+# Copy requirements file
 COPY --chown=$USER:$GROUP hec-forwarder/requirements.txt .
-COPY --chown=$USER:$GROUP includes/globalVars.py .
-COPY --chown=$USER:$GROUP includes/splib.py .
-
 
 # Set environment to the net-lama directory
 ENV VIRTUAL_ENV=$HOME/venv
@@ -35,6 +30,12 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 # Install dependencies:
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source files
+COPY --chown=$USER:$GROUP api api
+COPY --chown=$USER:$GROUP modules modules
+COPY --chown=$USER:$GROUP hec-forwarder/clientInfo.json .
+COPY --chown=$USER:$GROUP hec-forwarder/hecForwarder.py .
 
 # Run the application:
 CMD ["python", "hecForwarder.py"]

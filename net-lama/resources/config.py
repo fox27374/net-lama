@@ -73,7 +73,7 @@ class Mqtt(Resource):
 
 
 class HecForwarder(Resource):
-    @jwt_required()
+    #@jwt_required()
     def get(self, siteId=None):
         if not siteId:
             return {"hecForwarder": [hecForwarder.json() for hecForwarder in HecForwarderModel.query.all()]}, 200

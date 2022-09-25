@@ -36,10 +36,10 @@ RUN pip install --no-cache-dir wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source files
+COPY --chown=$USER:$GROUP api api
+COPY --chown=$USER:$GROUP modules modules
+COPY --chown=$USER:$GROUP networktest/bin bin
 COPY --chown=$USER:$GROUP networktest/clientInfo.json .
-COPY --chown=$USER:$GROUP includes ./modules
-COPY --chown=$USER:$GROUP api ./api
-COPY --chown=$USER:$GROUP networktest/bin ./bin
 COPY --chown=$USER:$GROUP networktest/app.py .
 
 # Run the application:
