@@ -21,6 +21,10 @@ class MQTTClient:
         self.mqttClient.connect(self.mqttServer, int(self.mqttPort), 60)
         self.send_log(f"Client registered with clientId {self.clientId}")
 
+    def subscribe(self, topic):
+        self.mqttClient.subscribe([(topic, 0)])
+        self.send_log(f"Client {self.clientId} subscribed to {topic}")
+
     def send_log(self, data):
         now = getCurrentTime()
         clientInfo = {'clientId': self.clientId, 'clientType': self.clientType}
