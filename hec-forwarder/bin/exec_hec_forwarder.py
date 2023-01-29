@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 from sys import path, argv
-#path.append('/home/net-lama/')
-path.append('/home/dkofler/git/net-lama/')
+path.append('/home/net-lama/')
 
 from modules.splib import MQTTClient
 from getopt import getopt
