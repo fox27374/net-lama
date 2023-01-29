@@ -34,8 +34,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source files
 COPY --chown=$USER:$GROUP api api
 COPY --chown=$USER:$GROUP modules modules
+COPY --chown=$USER:$GROUP hec-forwarder/bin bin
 COPY --chown=$USER:$GROUP hec-forwarder/clientInfo.json .
-COPY --chown=$USER:$GROUP hec-forwarder/hecForwarder.py .
+COPY --chown=$USER:$GROUP hec-forwarder/app.py .
 
 # Run the application:
 CMD ["python", "app.py"]
