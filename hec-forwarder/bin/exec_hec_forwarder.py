@@ -68,7 +68,7 @@ client.create()
 # Application specific functions
 def sendData(dataQueue):
     splunkUrl = \
-    'http://' + clientInfo['hecServer'] + ':' + \
+    'https://' + clientInfo['hecServer'] + ':' + \
     clientInfo['hecPort'] + clientInfo['hecUrl']
     authHeader = {"Authorization": f"Splunk {clientInfo['hecToken']}"}
     
