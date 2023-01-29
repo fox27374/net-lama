@@ -38,4 +38,4 @@ COPY --chown=$USER:$GROUP hec-forwarder/clientInfo.json .
 COPY --chown=$USER:$GROUP hec-forwarder/hecForwarder.py .
 
 # Run the application:
-CMD ["python", "hecForwarder.py"]
+CMD ["python", "app.py"]
