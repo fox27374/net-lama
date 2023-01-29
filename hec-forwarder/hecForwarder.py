@@ -3,7 +3,7 @@
 from sys import path, exit
 path.append('../includes/')
 
-from splib import Client, checkApiEndpoint, getClientInfo, getConfig, registerClient, updateClient, getCurrentTime
+from modules.splib import Client, checkApiEndpoint, getClientInfo, getConfig, registerClient, updateClient, getCurrentTime
 from requests import post
 
 # Read local client config
