@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 
 from sys import path
-from time import sleep
-#path.append('/home/net-lama/')
-path.append('/home/dkofler/git/net-lama/')
-
+path.append('/home/net-lama/')
 
 from modules.splib import MQTTClient, getClientInfo, getConfig
 from time import sleep
