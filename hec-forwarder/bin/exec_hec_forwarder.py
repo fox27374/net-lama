@@ -64,6 +64,8 @@ client = MQTTClient(**clientInfo)
 
 # Initialise MQTT
 client.create()
+client.subscribe(clientInfo['logTopic'])
+cb = client.get_client()
 
 # Application specific functions
 def sendData(dataQueue):
@@ -77,3 +79,4 @@ def sendData(dataQueue):
         print(event)
         req = post(splunkUrl, headers=authHeader, json=event, verify=False)
         client.send_log(f"Sending data to Splunk server: {req}")
+
