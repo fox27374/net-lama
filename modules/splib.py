@@ -4,9 +4,9 @@ from time import sleep
 from json import load, loads, dumps
 from modules.globalVars import apiBaseUrl
 import paho.mqtt.client as mqtt
+from queue import Queue
 from datetime import datetime, timedelta
 
-# MQTT
 class MQTTClient:
     def __init__(self, **mqttInfo):
         self.clientId = mqttInfo['clientId']
@@ -15,6 +15,7 @@ class MQTTClient:
         self.logTopic = mqttInfo['logTopic']
         self.mqttServer = mqttInfo['mqttServer']
         self.mqttPort = mqttInfo['mqttPort']
+        mqttQueue = Queue()
 
     def create(self):
         self.mqttClient = mqtt.Client()
@@ -23,7 +24,7 @@ class MQTTClient:
 
     def subscribe(self, topic):
         self.mqttClient.subscribe([(topic, 0)])
-        self.send_log(f"Client {self.clientId} subscribed to {topic}")
+        self.send_log(f"Client {self.clientId} subscribed to topic {topic}")
 
     def send_log(self, data):
         now = getCurrentTime()
@@ -36,6 +37,22 @@ class MQTTClient:
         clientInfo = {'clientId': self.clientId, 'clientType': self.clientType}
         logInfo = {'Time': now, 'Data': data}
         self.mqttClient.publish(self.dataTopic, dumps({**clientInfo, **logInfo}))
+
+    def loop_start(self):
+        self.mqttClient.loop_start()
+
+    def loop_stop(self):
+        self.mqttClient.loop_stop()
+
+    def message(self):
+        self.mqttClient.on_message = self.on_message()
+
+    def on_message(self, client, userdata, message):
+        print("message received " ,str(message.payload.decode("utf-8")))
+        print("message topic=",message.topic)
+        print("message qos=",message.qos)
+        print("message retain flag=",message.retain)
+
 
 
 class Client:
