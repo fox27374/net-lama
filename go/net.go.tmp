@@ -1,0 +1,69 @@
+package main
+
+import (
+	//"time"
+
+	//probing "github.com/prometheus-community/pro-bing"
+	speedtest "github.com/showwin/speedtest-go/speedtest"
+)
+
+func getNetInfo(dataChan chan<- NetData, errChan chan<- error) {
+	n := NetData{}
+	var speedtestClient = speedtest.New()
+
+	serverList, _ := speedtestClient.FetchServers()
+	targets, _ := serverList.FindServer([]int{})
+	user, _ := speedtestClient.FetchUserInfo()
+
+	for _, s := range targets {
+		// Please make sure your host can access this test server,
+		// otherwise you will get an error.
+		// It is recommended to replace a server at this time
+		s.PingTest(nil)
+		s.DownloadTest()
+		s.UploadTest()
+		// Note: The unit of s.DLSpeed, s.ULSpeed is bytes per second, this is a float64.
+		//fmt.Printf("Latency: %s, Download: %s, Upload: %s\n", s.Latency, s.DLSpeed, s.ULSpeed)
+		//fmt.Println("User Details:", user)
+
+		n.Name = s.Name
+		n.Country = s.Country
+		n.Distance = s.Distance
+		n.Latency = s.Latency
+		n.Jitter = s.Jitter
+		n.DLSpeed = ByteRate(s.DLSpeed.Mbps())
+		n.ULSpeed = ByteRate(s.ULSpeed.Mbps())
+		// n.PacketLoss = PLoss(s.PacketLoss.LossPercent())
+		n.UserIP = user.IP
+		n.UserISP = user.Isp
+
+		s.Context.Reset() // reset counter
+
+		dataChan <- n
+		errChan <- nil
+	}
+}
+
+// func pingHost(ip string) (bool, time.Duration) {
+// 	isup := false
+// 	pinger, err := probing.NewPinger(ip)
+// 	if err != nil {
+// 		return false, 0
+// 	}
+
+// 	pinger.Count = pingCount
+// 	pinger.Timeout = 2 * time.Second
+// 	pinger.SetPrivileged(false) // Set to unprivileged, otherwise root/admin rights are needed
+
+// 	err = pinger.Run() // Blocks until done
+// 	if err != nil {
+// 		return false, 0
+// 	}
+
+// 	stats := pinger.Statistics()
+// 	if stats.PacketsRecv > 0 {
+// 		isup = true
+// 	}
+
+// 	return isup, time.Duration(stats.AvgRtt.Milliseconds())
+// }

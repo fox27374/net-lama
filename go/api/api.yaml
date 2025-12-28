@@ -1,0 +1,42 @@
+openapi: "3.0.0"
+info:
+  version: 1.0.0
+  title: Minimal ping API server
+paths:
+  /netdata:
+    get:
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/netData'
+components:
+  schemas:
+    netData:
+      type: object
+      properties:
+        name:
+          type: string
+        country:
+          type: string
+        distance:
+          type: number
+          format: float
+        latency:
+          type: number
+          format: float
+        jitter:
+          type: number
+          format: float
+        dlspeed:
+          type: number
+          format: float
+        ulspeed:
+          type: number
+          format: float
+        userip:
+          type: string
+        userisp:
+          type: string
