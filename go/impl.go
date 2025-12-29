@@ -1,4 +1,4 @@
-package api
+package main
 
 import (
 	"encoding/json"
@@ -20,16 +20,7 @@ func Ptr[T any](v T) *T {
 
 // (GET /ping)
 func (Server) GetNetdata(w http.ResponseWriter, r *http.Request) {
-	resp := NetData{
-		Name:     Ptr("test"),
-		Country:  Ptr("AT"),
-		Distance: Ptr(float32(32)),
-		Dlspeed:  Ptr(float32(300.02)),
-		Jitter:   Ptr(float32(0.03)),
-		Latency:  Ptr(float32(12)),
-		Userip:   Ptr("1.2.3.4"),
-		Userisp:  Ptr("Stadtwerke Schwaz"),
-	}
+	resp := netData
 
 	w.Header().Set("Content-Type", "application/json") // Good practice to set the header
 	w.WriteHeader(http.StatusOK)

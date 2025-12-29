@@ -21,21 +21,15 @@ components:
           type: string
         country:
           type: string
-        distance:
-          type: number
-          format: float
         latency:
           type: number
-          format: float
-        jitter:
-          type: number
-          format: float
+          format: double
         dlspeed:
           type: number
-          format: float
+          format: double
         ulspeed:
           type: number
-          format: float
+          format: double
         userip:
           type: string
         userisp:

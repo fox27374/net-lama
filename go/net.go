@@ -4,11 +4,11 @@ import (
 	//"time"
 
 	//probing "github.com/prometheus-community/pro-bing"
+
 	speedtest "github.com/showwin/speedtest-go/speedtest"
 )
 
 func getNetInfo(dataChan chan<- NetData, errChan chan<- error) {
-	n := NetData{}
 	var speedtestClient = speedtest.New()
 
 	serverList, _ := speedtestClient.FetchServers()
@@ -25,22 +25,18 @@ func getNetInfo(dataChan chan<- NetData, errChan chan<- error) {
 		// Note: The unit of s.DLSpeed, s.ULSpeed is bytes per second, this is a float64.
 		//fmt.Printf("Latency: %s, Download: %s, Upload: %s\n", s.Latency, s.DLSpeed, s.ULSpeed)
 		//fmt.Println("User Details:", user)
+		n := NetData{
+			Name:    Ptr(s.Name),
+			Country: Ptr(s.Country),
+			Latency: Ptr(float64(s.Latency.Milliseconds())),
+			Dlspeed: Ptr(float64(s.DLSpeed.Mbps())),
+			Ulspeed: Ptr(float64(s.ULSpeed.Mbps())),
+			Userip:  Ptr(user.IP),
+			Userisp: Ptr(user.Isp),
+		}
 
-		n.Name = s.Name
-		n.Country = s.Country
-		n.Distance = s.Distance
-		n.Latency = s.Latency
-		n.Jitter = s.Jitter
-		n.DLSpeed = ByteRate(s.DLSpeed.Mbps())
-		n.ULSpeed = ByteRate(s.ULSpeed.Mbps())
-		// n.PacketLoss = PLoss(s.PacketLoss.LossPercent())
-		n.UserIP = user.IP
-		n.UserISP = user.Isp
-
-		s.Context.Reset() // reset counter
-
+		s.Context.Reset()
 		dataChan <- n
-		errChan <- nil
 	}
 }
 
