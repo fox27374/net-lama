@@ -5,10 +5,19 @@ import (
 
 	//probing "github.com/prometheus-community/pro-bing"
 
+	"context"
+	"log/slog"
+
 	speedtest "github.com/showwin/speedtest-go/speedtest"
 )
 
-func getNetInfo(dataChan chan<- NetData, errChan chan<- error) {
+func getNetInfo(ctx context.Context, d chan<- NetData) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
 	var speedtestClient = speedtest.New()
 
 	serverList, _ := speedtestClient.FetchServers()
@@ -26,17 +35,25 @@ func getNetInfo(dataChan chan<- NetData, errChan chan<- error) {
 		//fmt.Printf("Latency: %s, Download: %s, Upload: %s\n", s.Latency, s.DLSpeed, s.ULSpeed)
 		//fmt.Println("User Details:", user)
 		n := NetData{
-			Name:    Ptr(s.Name),
-			Country: Ptr(s.Country),
-			Latency: Ptr(float64(s.Latency.Milliseconds())),
-			Dlspeed: Ptr(float64(s.DLSpeed.Mbps())),
-			Ulspeed: Ptr(float64(s.ULSpeed.Mbps())),
-			Userip:  Ptr(user.IP),
-			Userisp: Ptr(user.Isp),
+			Name:     Ptr(s.Name),
+			Country:  Ptr(s.Country),
+			Latency:  Ptr(float64(s.Latency.Milliseconds())),
+			Dlspeed:  Ptr(float64(s.DLSpeed.Mbps())),
+			Ulspeed:  Ptr(float64(s.ULSpeed.Mbps())),
+			Userip:   Ptr(user.IP),
+			Userisp:  Ptr(user.Isp),
+			Error:    nil,
+			Errormsg: nil,
 		}
 
-		s.Context.Reset()
-		dataChan <- n
+		slog.Info("Speedtest done, sending data")
+
+		select {
+		case d <- n:
+		case <-ctx.Done():
+			logger.Info("Speedtest routine stopping...")
+			return
+		}
 	}
 }
 

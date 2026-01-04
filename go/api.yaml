@@ -34,3 +34,7 @@ components:
           type: string
         userisp:
           type: string
+        error:
+          type: boolean
+        errormsg:
+          type: string

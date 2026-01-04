@@ -12,13 +12,15 @@ import (
 
 // NetData defines model for netData.
 type NetData struct {
-	Country *string  `json:"country,omitempty"`
-	Dlspeed *float64 `json:"dlspeed,omitempty"`
-	Latency *float64 `json:"latency,omitempty"`
-	Name    *string  `json:"name,omitempty"`
-	Ulspeed *float64 `json:"ulspeed,omitempty"`
-	Userip  *string  `json:"userip,omitempty"`
-	Userisp *string  `json:"userisp,omitempty"`
+	Country  *string  `json:"country,omitempty"`
+	Dlspeed  *float64 `json:"dlspeed,omitempty"`
+	Error    *bool    `json:"error,omitempty"`
+	Errormsg *string  `json:"errormsg,omitempty"`
+	Latency  *float64 `json:"latency,omitempty"`
+	Name     *string  `json:"name,omitempty"`
+	Ulspeed  *float64 `json:"ulspeed,omitempty"`
+	Userip   *string  `json:"userip,omitempty"`
+	Userisp  *string  `json:"userisp,omitempty"`
 }
 
 // ServerInterface represents all server handlers.
