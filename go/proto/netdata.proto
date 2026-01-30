@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package netdata;
+
+option go_package = "net-lama/proto;proto";
+
+service ControlService {
+  rpc ControlStream(stream ControlMessage) returns (stream ControlMessage);
+}
+
+message ControlMessage {
+  oneof payload {
+    Command command = 1;
+    Metrics metrics = 2;
+  }
+}
+
+message Command {
+  string type = 1; // e.g. "get_netdata"
+}
+
+message Metrics {
+  double upload_mbps = 1;
+  double download_mbps = 2;
+  double latency_ms = 3;
+}

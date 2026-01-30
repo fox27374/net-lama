@@ -96,6 +96,7 @@ func channelListener(ctx context.Context, d <-chan NetData) {
 				netData = data
 				mDlSpeed.Set(float64(*data.Dlspeed))
 				mUlSpeed.Set(float64(*data.Ulspeed))
+				mLatency.Set(float64(*data.Latency))
 				logger.Info("SpeedTest Result received")
 			}
 		case <-ctx.Done():
