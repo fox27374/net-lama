@@ -86,32 +86,36 @@ Everything the UI does goes through the JSON API under `/api/v1`
 `sites/{id}/tests`, `tests`, `agents`, `results?siteId=&agentId=&testId=&limit=`.
 Admins pass `?tenantId=` to scope requests; tenant users are scoped automatically.
 
-## Running in containers (podman)
+## Running in containers
 
-Both components ship as distroless images built from the [Containerfile](Containerfile):
+Multi-arch images (amd64 + arm64, so they run on a Raspberry Pi) are published to
+GHCR by [CI](.github/workflows/containers.yml) on every push to `main`:
+`ghcr.io/fox27374/netlama-server` and `ghcr.io/fox27374/netlama-agent`
+(`:latest`, `:vX.Y.Z` on tags, `:sha-...`).
+
+The easiest way to run them is the [compose.yaml](compose.yaml)
+(docker compose or podman-compose):
 
 ```sh
-podman build --target server -t netlama-server .
-podman build --target agent  -t netlama-agent .
+# 1. Start the server; UI at :9090
+NETLAMA_ADMIN_PASSWORD=changeme docker compose up -d server
 
-podman network create netlama
+# 2. In the UI: create a tenant, site, tests and an agent -> copy the token
+echo "NETLAMA_TOKEN=<agent-token>" >> .env
 
-podman run -d --name netlama-server --network netlama \
-  -p 9090:9090 -p 50051:50051 \
-  -v netlama-data:/data:U \
-  -e NETLAMA_ADMIN_PASSWORD=changeme \
-  netlama-server
-
-# Create the agent in the UI first to get its token, then:
-podman run -d --name netlama-agent --network netlama \
-  --sysctl net.ipv4.ping_group_range="0 65535" \
-  -e NETLAMA_SERVER=netlama-server:50051 \
-  -e NETLAMA_TOKEN=<agent-token> \
-  netlama-agent
+# 3. Start the agent
+docker compose up -d
 ```
 
-The sysctl allows unprivileged ICMP ping inside the container. For rootless podman,
-enable lingering once (`loginctl enable-linger`) so containers survive logout.
+To build locally instead, use the [Containerfile](Containerfile):
+`podman build --target server -t netlama-server .` (same for `agent`), and point
+compose at them via `NETLAMA_SERVER_IMAGE`/`NETLAMA_AGENT_IMAGE` in `.env`.
+
+The agent's sysctl in the compose file allows unprivileged ICMP ping inside the
+container; the *host* must also allow it (`sysctl net.ipv4.ping_group_range` — wide
+open on Debian/RPi OS, needs `0 2147483647` in `/etc/sysctl.d/` on Ubuntu). For
+rootless podman, enable lingering once (`loginctl enable-linger`) so containers
+survive logout.
 
 ## Metrics
 
@@ -136,10 +140,6 @@ make vet     # go vet
 
 ## Roadmap
 
-* WLAN sensor: measure WLAN KPIs (scan results, RSSI per SSID/BSSID) — port of `legacy/wlan-sensor`
-* Traceroute / path test (per-hop RTT and loss)
-* TLS for the control stream and HTTPS/secure cookies for the UI
-* Password change / user self-service in the UI
-* On-demand commands (`RUN_SPEEDTEST`, ...) from the UI (contract already in the proto)
-* Charts in the UI (currently tables; use Grafana on the Prometheus metrics for graphs)
-* Optional result forwarding (e.g. Splunk HEC, port of `legacy/hec-forwarder`)
+See [ROADMAP.md](ROADMAP.md) for the full backlog (Kubernetes/Helm, zero-touch agent
+enrollment via DNS + WireGuard, TLS/mTLS, agent-to-agent perfmon, alerting, OTEL
+export, native packages, WLAN sensing, and more).
