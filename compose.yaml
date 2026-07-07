@@ -1,0 +1,44 @@
+# Net-Lama server + agent.
+#
+# Server only:            docker compose up -d server
+# Server + local agent:   1. open the UI (:9090), create a site + agent,
+#                            copy the one-time token
+#                         2. echo "NETLAMA_TOKEN=<token>" >> .env
+#                         3. docker compose up -d
+#
+# Works the same with podman-compose. Image tags can be overridden via
+# NETLAMA_IMAGE_TAG (default: latest).
+
+services:
+  server:
+    image: ${NETLAMA_SERVER_IMAGE:-ghcr.io/fox27374/netlama-server}:${NETLAMA_IMAGE_TAG:-latest}
+    ports:
+      - "9090:9090"    # web UI, JSON API, Prometheus /metrics
+      - "50051:50051"  # gRPC control stream for agents
+    volumes:
+      - netlama-data:/data
+    environment:
+      # Password for the initial admin user (only used on first start
+      # with an empty database; otherwise ignored).
+      NETLAMA_ADMIN_PASSWORD: ${NETLAMA_ADMIN_PASSWORD:-}
+    restart: unless-stopped
+
+  # The agent needs a token that only exists after it was created in
+  # the UI — start the server alone first (see header).
+  agent:
+    image: ${NETLAMA_AGENT_IMAGE:-ghcr.io/fox27374/netlama-agent}:${NETLAMA_IMAGE_TAG:-latest}
+    environment:
+      NETLAMA_SERVER: ${NETLAMA_SERVER:-server:50051}
+      NETLAMA_TOKEN: ${NETLAMA_TOKEN:?create the agent in the UI and put its token into .env}
+    sysctls:
+      # Allow unprivileged ICMP ping inside the container
+      # (list form: the mapping form breaks podman-compose 1.0.x)
+      - net.ipv4.ping_group_range=0 65535
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  netlama-data:
+    # Fixed name (no project prefix) so the volume survives project renames
+    name: netlama-data
