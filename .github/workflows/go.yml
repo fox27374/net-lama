@@ -1,0 +1,34 @@
+name: Go build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: Build
+      run: go build ./...
+
+    - name: Vet
+      run: go vet ./...
+
+    - name: Test
+      run: go test ./...
+
+    - name: Cross-compile agent for Raspberry Pi
+      run: |
+        GOOS=linux GOARCH=arm64 go build -o /dev/null ./cmd/agent
+        GOOS=linux GOARCH=arm GOARM=7 go build -o /dev/null ./cmd/agent

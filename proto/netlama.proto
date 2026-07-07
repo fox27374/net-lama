@@ -1,0 +1,164 @@
+syntax = "proto3";
+
+package netlama.v1;
+
+option go_package = "github.com/fox27374/net-lama/proto;netlamapb";
+
+import "google/protobuf/timestamp.proto";
+
+// ControlService is the single connection between an agent and the server.
+// The agent dials out, registers and keeps the stream open: the server
+// pushes configuration and commands down, the agent streams results up.
+service ControlService {
+  rpc ControlStream(stream AgentMessage) returns (stream ServerMessage);
+}
+
+message AgentMessage {
+  oneof payload {
+    Register register = 1;
+    TestResult result = 2;
+    LogEntry log = 3;
+  }
+}
+
+message ServerMessage {
+  oneof payload {
+    Config config = 1;
+    Command command = 2;
+  }
+}
+
+// Register must be the first message an agent sends on the stream.
+message Register {
+  string client_id = 1;
+  string client_type = 2;
+  string version = 3;
+  repeated string capabilities = 4;
+  // token authenticates the agent and maps it to a tenant/site. Issued
+  // when the agent is created on the server.
+  string token = 5;
+}
+
+// Config carries the full set of tests the agent has to run. It is
+// derived from the tests assigned to the agent's site and fully
+// replaces the previous configuration.
+message Config {
+  repeated TestSpec tests = 1;
+}
+
+// TestSpec is one named test definition to be executed periodically.
+message TestSpec {
+  string id = 1;
+  string name = 2;
+  uint32 interval_seconds = 3;
+  oneof params {
+    SpeedtestParams speedtest = 4;
+    PingParams ping = 5;
+    DnsParams dns = 6;
+    HttpParams http = 7;
+    TcpParams tcp = 8;
+  }
+}
+
+message SpeedtestParams {}
+
+message PingParams {
+  repeated string targets = 1;
+  uint32 count = 2;
+}
+
+message DnsParams {
+  repeated string queries = 1;
+  repeated string servers = 2;
+}
+
+message HttpParams {
+  string url = 1;
+  uint32 timeout_seconds = 2;
+  bool skip_tls_verify = 3;
+}
+
+message TcpParams {
+  repeated string targets = 1; // host:port
+  uint32 timeout_seconds = 2;
+}
+
+message Command {
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    RUN_TEST = 1; // run the test named in test_id immediately
+  }
+  Type type = 1;
+  string test_id = 2;
+}
+
+message TestResult {
+  google.protobuf.Timestamp time = 1;
+  // error is set when the test could not be executed; the oneof below
+  // then only carries identifying fields (e.g. ping target).
+  string error = 2;
+  // test_id and test_name identify the TestSpec that produced this result.
+  string test_id = 3;
+  string test_name = 4;
+  oneof result {
+    SpeedtestResult speedtest = 5;
+    PingResult ping = 6;
+    DnsResult dns = 7;
+    HttpResult http = 8;
+    TcpResult tcp = 9;
+  }
+}
+
+message SpeedtestResult {
+  string server_name = 1;
+  string server_country = 2;
+  double latency_ms = 3;
+  double download_mbps = 4;
+  double upload_mbps = 5;
+  string user_ip = 6;
+  string user_isp = 7;
+}
+
+message PingResult {
+  string target = 1;
+  uint32 packets_sent = 2;
+  uint32 packets_received = 3;
+  double loss_percent = 4;
+  double min_rtt_ms = 5;
+  double avg_rtt_ms = 6;
+  double max_rtt_ms = 7;
+}
+
+message DnsResult {
+  string query = 1;
+  string server = 2;
+  bool success = 3;
+  double resolve_time_ms = 4;
+  repeated string addresses = 5;
+}
+
+message HttpResult {
+  string url = 1;
+  uint32 status_code = 2;
+  double dns_ms = 3;
+  double connect_ms = 4;
+  double tls_ms = 5;
+  double ttfb_ms = 6;
+  double total_ms = 7;
+  // cert_expiry_days is the days until the TLS certificate expires,
+  // or -1 for plain HTTP / unknown.
+  double cert_expiry_days = 8;
+  string server_ip = 9;
+}
+
+message TcpResult {
+  string target = 1;
+  bool connected = 2;
+  double connect_ms = 3;
+}
+
+message LogEntry {
+  google.protobuf.Timestamp time = 1;
+  string level = 2;
+  string message = 3;
+}

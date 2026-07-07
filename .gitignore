@@ -1,6 +1,9 @@
 # App specific
 data.db
 
+# Go build output
+/bin/
+
 # VScode
 .vscode/
 *.code-workspace

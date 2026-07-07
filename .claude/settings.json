@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dig *)",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(go doc *)",
+      "Bash(gofmt -l *)",
+      "Bash(go test *)",
+      "Bash(go mod tidy)",
+      "Bash(make build)",
+      "Bash(make proto)",
+      "Bash(protoc *)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(curl *)",
+      "Bash(tar *)",
+      "Bash(openssl rand *)",
+      "Bash(python3 -c *)"
+    ]
+  }
+}

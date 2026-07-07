@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Net-Lama</title>
+  <script>
+    // Set the theme before first paint to avoid flashing
+    (function () {
+      const saved = localStorage.getItem("netlama-theme");
+      const theme = saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="login-view" class="hidden">
+  <div class="login-box">
+    <div class="brand big"><span class="brand-dot"></span>Net-Lama</div>
+    <p class="muted">Network measurement platform</p>
+    <form id="login-form">
+      <label>Username <input type="text" id="login-username" autocomplete="username" required></label>
+      <label>Password <input type="password" id="login-password" autocomplete="current-password" required></label>
+      <button type="submit" class="primary wide">Sign in</button>
+      <p id="login-error" class="error hidden"></p>
+    </form>
+  </div>
+</div>
+
+<div id="app-view" class="hidden">
+  <header>
+    <span class="brand"><span class="brand-dot"></span>Net-Lama</span>
+    <nav>
+      <button data-nav="overview" class="active">Overview</button>
+      <button data-nav="agents">Agents</button>
+      <button data-nav="tests">Tests</button>
+      <button data-nav="sites">Sites</button>
+      <button data-nav="results">Results</button>
+      <button data-nav="admin" id="nav-admin" class="hidden">Tenants &amp; Users</button>
+    </nav>
+    <span class="spacer"></span>
+    <select id="tenant-context" class="compact hidden" title="Tenant"></select>
+    <span id="whoami" class="muted"></span>
+    <button id="theme-toggle" class="icon" title="Toggle dark mode" aria-label="Toggle dark mode"></button>
+    <button id="logout" class="ghost">Sign out</button>
+  </header>
+
+  <main>
+    <!-- Overview -->
+    <section id="section-overview">
+      <div class="section-head"><h2>Overview</h2></div>
+      <div class="stat-row">
+        <div class="stat-tile">
+          <div class="stat-label">Sites</div>
+          <div class="stat-value" id="ov-sites">–</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Agents</div>
+          <div class="stat-value" id="ov-agents">–</div>
+          <div class="stat-sub" id="ov-agents-sub"></div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Tests</div>
+          <div class="stat-value" id="ov-tests">–</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Test health</div>
+          <div class="stat-value health-summary" id="ov-health">–</div>
+        </div>
+      </div>
+      <div class="card table-card">
+        <table id="ov-health-table">
+          <thead><tr><th>Status</th><th>Test</th><th>Type</th><th>Recent checks</th><th>Last result</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="ov-empty" class="empty hidden">No tests defined yet. Create tests and assign them to sites.</p>
+      </div>
+    </section>
+
+    <!-- Agents -->
+    <section id="section-agents" class="hidden">
+      <div class="section-head">
+        <h2>Agents</h2>
+        <button id="btn-new-agent" class="primary">New agent</button>
+      </div>
+      <div class="card table-card">
+        <table id="agents-table">
+          <thead><tr><th>Status</th><th>Name</th><th>Site</th><th>Created</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="agents-empty" class="empty hidden">No agents yet. Create a site first, then add an agent to it.</p>
+      </div>
+    </section>
+
+    <!-- Tests -->
+    <section id="section-tests" class="hidden">
+      <div class="section-head">
+        <h2>Tests</h2>
+        <button id="btn-new-test" class="primary">New test</button>
+      </div>
+      <div class="card table-card">
+        <table id="tests-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Interval</th><th>Parameters</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="tests-empty" class="empty hidden">No tests defined yet. Create tests here, then assign them to sites.</p>
+      </div>
+    </section>
+
+    <!-- Sites -->
+    <section id="section-sites" class="hidden">
+      <div class="section-head">
+        <h2>Sites</h2>
+        <button id="btn-new-site" class="primary">New site</button>
+      </div>
+      <div class="card table-card">
+        <table id="sites-table">
+          <thead><tr><th>Name</th><th>Agents</th><th>Assigned tests</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="sites-empty" class="empty hidden">No sites yet. A site groups agents and defines which tests they run.</p>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section id="section-results" class="hidden">
+      <div class="section-head">
+        <h2>Results</h2>
+      </div>
+      <div class="card">
+        <div class="filters">
+          <label>Time window
+            <select id="flt-window">
+              <option value="3600">Last hour</option>
+              <option value="21600">Last 6 hours</option>
+              <option value="86400" selected>Last 24 hours</option>
+              <option value="604800">Last 7 days</option>
+              <option value="2592000">Last 30 days</option>
+            </select>
+          </label>
+          <label>Site <select id="flt-site"><option value="">All sites</option></select></label>
+          <label>Agent <select id="flt-agent"><option value="">All agents</option></select></label>
+          <label>Test <select id="flt-test"><option value="">All tests</option></select></label>
+          <span class="spacer"></span>
+          <button id="btn-results-refresh" class="ghost" title="Refresh">&#8635; Refresh</button>
+        </div>
+        <div id="chart-area"></div>
+        <div id="results-container" class="table-scroll"></div>
+      </div>
+    </section>
+
+    <!-- Admin -->
+    <section id="section-admin" class="hidden">
+      <div class="columns">
+        <div class="card grow">
+          <div class="section-head">
+            <h3>Tenants</h3>
+            <button id="btn-new-tenant" class="primary">New tenant</button>
+          </div>
+          <table id="tenants-table">
+            <thead><tr><th>Name</th><th>ID</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="card grow">
+          <div class="section-head">
+            <h3>Users</h3>
+            <button id="btn-new-user" class="primary">New user</button>
+          </div>
+          <table id="users-table">
+            <thead><tr><th>Username</th><th>Tenant</th><th>Role</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="dlg-new-agent">
+  <form id="form-new-agent">
+    <h3>New agent</h3>
+    <label>Name <input type="text" id="na-name" placeholder="pi-office" required></label>
+    <label>Site <select id="na-site"></select></label>
+    <p class="error hidden" id="na-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-edit-agent">
+  <form id="form-edit-agent">
+    <h3 id="ea-title">Edit agent</h3>
+    <label>Name <input type="text" id="ea-name" required></label>
+    <label>Site <select id="ea-site"></select></label>
+    <p class="muted">Moving the agent to another site pushes the new site's tests immediately.</p>
+    <p class="error hidden" id="ea-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-token">
+  <h3>Agent created</h3>
+  <p>Start the agent with this token. It is shown <strong>only once</strong>:</p>
+  <pre id="token-value" class="token"></pre>
+  <pre id="token-cmd"></pre>
+  <div class="row end">
+    <button class="ghost" id="btn-copy-token">Copy token</button>
+    <button class="primary" onclick="this.closest('dialog').close()">Done</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-test">
+  <form id="form-test">
+    <h3 id="test-dlg-title">New test</h3>
+    <div class="grid2">
+      <label>Name <input type="text" id="t-name" placeholder="Ping HQ gateway" required></label>
+      <label>Type
+        <select id="t-type">
+          <option value="ping">Ping</option>
+          <option value="dns">DNS</option>
+          <option value="http">HTTP(S)</option>
+          <option value="tcp">TCP connect</option>
+          <option value="speedtest">Speedtest</option>
+        </select>
+      </label>
+    </div>
+    <label>Interval (seconds) <input type="number" id="t-interval" min="5" value="60" required></label>
+    <div id="t-params-ping">
+      <div class="grid2">
+        <label>Count <input type="number" id="t-ping-count" min="1" max="20" value="5"></label>
+      </div>
+      <label>Targets <textarea id="t-ping-targets" rows="2" placeholder="one per line"></textarea></label>
+    </div>
+    <div id="t-params-dns" class="hidden">
+      <label>Queries <textarea id="t-dns-queries" rows="2" placeholder="one per line"></textarea></label>
+      <label>Servers <textarea id="t-dns-servers" rows="2" placeholder="one per line"></textarea></label>
+    </div>
+    <div id="t-params-http" class="hidden">
+      <label>URL <input type="text" id="t-http-url" placeholder="https://example.com"></label>
+      <div class="grid2">
+        <label>Timeout (s) <input type="number" id="t-http-timeout" min="1" value="10"></label>
+        <label class="check"><input type="checkbox" id="t-http-skiptls"> Skip TLS verify</label>
+      </div>
+    </div>
+    <div id="t-params-tcp" class="hidden">
+      <div class="grid2">
+        <label>Timeout (s) <input type="number" id="t-tcp-timeout" min="1" value="5"></label>
+      </div>
+      <label>Targets (host:port) <textarea id="t-tcp-targets" rows="2" placeholder="one per line, e.g. 10.0.0.1:443"></textarea></label>
+    </div>
+    <p class="error hidden" id="t-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary" id="t-submit">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-new-site">
+  <form id="form-new-site">
+    <h3>New site</h3>
+    <label>Name <input type="text" id="ns-name" placeholder="Office Vienna" required></label>
+    <p class="error hidden" id="ns-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-site-tests">
+  <form id="form-site-tests">
+    <h3 id="st-dlg-title">Assign tests</h3>
+    <div id="st-checkboxes" class="check-list"></div>
+    <p class="muted" id="st-hint"></p>
+    <p class="error hidden" id="st-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Save &amp; push</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-new-tenant">
+  <form id="form-new-tenant">
+    <h3>New tenant</h3>
+    <label>Name <input type="text" id="nt-name" required></label>
+    <p class="error hidden" id="nt-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-new-user">
+  <form id="form-new-user">
+    <h3>New user</h3>
+    <label>Username <input type="text" id="nu-name" required></label>
+    <label>Password <input type="password" id="nu-password" minlength="8" required></label>
+    <label class="check"><input type="checkbox" id="nu-admin"> Global admin</label>
+    <label id="nu-tenant-wrap">Tenant <select id="nu-tenant"></select></label>
+    <p class="error hidden" id="nu-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
