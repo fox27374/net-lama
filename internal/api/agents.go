@@ -94,8 +94,9 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 	}
 
 	var req struct {
-		Name   string `json:"name"`
-		SiteID string `json:"siteId"`
+		Name          string `json:"name"`
+		SiteID        string `json:"siteId"`
+		WlanInterface string `json:"wlanInterface"`
 	}
 	if !decodeBody(w, r, &req) {
 		return
@@ -112,7 +113,7 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 		return
 	}
 
-	if err := a.Store.UpdateAgent(agent.ID, req.Name, site.ID); err != nil {
+	if err := a.Store.UpdateAgent(agent.ID, req.Name, site.ID, req.WlanInterface); err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
@@ -158,6 +159,7 @@ func (a *API) handleListResults(w http.ResponseWriter, r *http.Request, user *st
 		SiteID:   q.Get("siteId"),
 		AgentID:  q.Get("agentId"),
 		TestID:   q.Get("testId"),
+		TestType: q.Get("type"),
 		Since:    since,
 		Limit:    limit,
 	})

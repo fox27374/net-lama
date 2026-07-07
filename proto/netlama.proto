@@ -37,6 +37,14 @@ message Register {
   // token authenticates the agent and maps it to a tenant/site. Issued
   // when the agent is created on the server.
   string token = 5;
+  // wireless_interfaces the agent detected, for WLAN sensing.
+  repeated WirelessInterface wireless_interfaces = 6;
+}
+
+message WirelessInterface {
+  string name = 1;
+  string phy = 2;
+  bool supports_monitor = 3;
 }
 
 // Config carries the full set of tests the agent has to run. It is
@@ -44,6 +52,9 @@ message Register {
 // replaces the previous configuration.
 message Config {
   repeated TestSpec tests = 1;
+  // wlan_interface is the agent's selected wireless sensor interface,
+  // used by WLAN tests. Empty = let the agent auto-pick.
+  string wlan_interface = 2;
 }
 
 // TestSpec is one named test definition to be executed periodically.
@@ -57,6 +68,7 @@ message TestSpec {
     DnsParams dns = 6;
     HttpParams http = 7;
     TcpParams tcp = 8;
+    WlanScanParams wlan_scan = 9;
   }
 }
 
@@ -83,6 +95,10 @@ message TcpParams {
   uint32 timeout_seconds = 2;
 }
 
+// WlanScanParams configures a managed-mode scan of nearby access points.
+// The interface is per-agent (Config.wlan_interface), not part of the test.
+message WlanScanParams {}
+
 message Command {
   enum Type {
     TYPE_UNSPECIFIED = 0;
@@ -106,6 +122,7 @@ message TestResult {
     DnsResult dns = 7;
     HttpResult http = 8;
     TcpResult tcp = 9;
+    WlanScanResult wlan_scan = 10;
   }
 }
 
@@ -155,6 +172,22 @@ message TcpResult {
   string target = 1;
   bool connected = 2;
   double connect_ms = 3;
+}
+
+message WlanScanResult {
+  string interface = 1;
+  repeated AccessPoint access_points = 2;
+  bool demo = 3; // true when the data is synthetic (NETLAMA_WLAN_DEMO)
+}
+
+message AccessPoint {
+  string bssid = 1;
+  string ssid = 2; // empty = hidden network
+  uint32 channel = 3;
+  uint32 freq_mhz = 4;
+  string band = 5;      // "2.4 GHz" / "5 GHz" / "6 GHz"
+  double rssi_dbm = 6;
+  string security = 7;  // "Open" / "WEP" / "WPA" / "WPA2" / "WPA3"
 }
 
 message LogEntry {

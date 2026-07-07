@@ -30,6 +30,10 @@ services:
     environment:
       NETLAMA_SERVER: ${NETLAMA_SERVER:-server:50051}
       NETLAMA_TOKEN: ${NETLAMA_TOKEN:?create the agent in the UI and put its token into .env}
+      # Set NETLAMA_WLAN_DEMO=1 to emit synthetic WLAN scan data on hosts
+      # without a wireless radio (for trying the Wireless UI). Leave unset
+      # for real scanning (needs a wireless adapter + iw in the image).
+      NETLAMA_WLAN_DEMO: ${NETLAMA_WLAN_DEMO:-}
     sysctls:
       # Allow unprivileged ICMP ping inside the container
       # (list form: the mapping form breaks podman-compose 1.0.x)

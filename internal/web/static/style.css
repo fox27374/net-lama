@@ -159,7 +159,8 @@ main { padding: 1.6rem 1.3rem 3rem; max-width: 1200px; margin: 0 auto; }
 }
 .section-head h2, .section-head h3 { margin: 0; flex: 1; }
 
-.columns { display: flex; gap: 1.1rem; align-items: flex-start; flex-wrap: wrap; }
+.columns { display: flex; gap: 1.1rem; align-items: flex-start; flex-wrap: wrap; margin-bottom: 1.1rem; }
+.columns:last-child { margin-bottom: 0; }
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -412,6 +413,38 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
 .health.nodata::before { background: var(--muted-solid); opacity: 0.5; }
 
 #ov-health-table tbody tr { cursor: pointer; }
+
+/* Wireless page */
+.mono { font-family: var(--mono); font-size: 0.86em; }
+.demo-badge {
+  display: inline-block;
+  margin-right: 0.6rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #d98a00;
+  background: #d98a0018;
+  border: 1px solid #d98a0055;
+  vertical-align: middle;
+}
+/* Section header inside a table card needs its own padding, since the
+   card itself has none (so the table can run edge to edge). */
+.table-card > .section-head {
+  padding: 0.9rem 1.2rem 0.5rem;
+  margin-bottom: 0;
+}
+/* select + button rows (e.g. sensor interface): button keeps its size,
+   the control takes the rest, both vertically centered. */
+.card .row select { flex: 1; width: auto; }
+.card .row button { flex: none; }
+.ssid-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.ssid-list:empty::after { content: "No SSIDs seen yet."; color: var(--muted-solid); font-size: 0.9rem; }
+.chip.type-wlan_scan { color: #12a594; border-color: #12a59455; background: #12a59412; }
+.sig-good { color: var(--ok); font-weight: 650; }
+.sig-ok { color: #d98a00; font-weight: 650; }
+.sig-weak { color: var(--bad); font-weight: 650; }
 
 /* Timeline chart */
 #chart-area { position: relative; margin-bottom: 1rem; }

@@ -27,8 +27,11 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [ ] Agent resource monitoring: CPU, memory, storage — reported over the
       stream and visible in the UI/metrics
 - [ ] Alerting and thresholding (per test/tenant; notify on failing/degraded)
-- [ ] WLAN sensor: WLAN KPIs (scan results, RSSI per SSID/BSSID) — port of
-      `legacy/wlan-sensor`; needs rootful container with host network + NET_ADMIN/NET_RAW
+- [x] WLAN Phase 1: interface inventory + managed-mode AP/SSID scan (agent reports
+      wireless interfaces, per-agent interface selection, periodic scan, Wireless UI)
+- [ ] WLAN Phase 2: monitor-mode client sensing — per-station MAC/RSSI/SNR/rate/MCS
+      per SSID; needs a monitor-capable adapter and a rootful container with host
+      network + NET_ADMIN/NET_RAW; capture via gopacket/afpacket + radiotap/Dot11
 - [ ] Traceroute / path test (per-hop RTT and loss)
 
 ## Server & UI

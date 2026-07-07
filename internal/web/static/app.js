@@ -83,7 +83,7 @@ async function showApp() {
   showSection("overview");
 }
 
-const sections = ["overview", "agents", "tests", "sites", "results", "admin"];
+const sections = ["overview", "agents", "tests", "sites", "results", "wireless", "admin"];
 
 function showSection(name) {
   for (const sec of sections) $("#section-" + sec).classList.add("hidden");
@@ -103,6 +103,7 @@ function reloadSection(name) {
   if (name === "tests") loadTests();
   if (name === "sites") loadSites();
   if (name === "results") initResults();
+  if (name === "wireless") loadWireless();
   if (name === "admin") loadAdmin();
 }
 
@@ -302,6 +303,7 @@ function paramsSummary(t) {
   if (t.type === "dns") return `${(p.queries || []).join(", ")} @ ${(p.servers || []).join(", ")}`;
   if (t.type === "http") return p.url || "";
   if (t.type === "tcp") return (p.targets || []).join(", ");
+  if (t.type === "wlan_scan") return "nearby access points";
   return "nearest server";
 }
 
@@ -337,6 +339,7 @@ function updateTestParamFields() {
   $("#t-params-dns").classList.toggle("hidden", type !== "dns");
   $("#t-params-http").classList.toggle("hidden", type !== "http");
   $("#t-params-tcp").classList.toggle("hidden", type !== "tcp");
+  $("#t-params-wlan").classList.toggle("hidden", type !== "wlan_scan");
 }
 $("#t-type").addEventListener("change", updateTestParamFields);
 
@@ -541,6 +544,10 @@ function resultDetails(r) {
     return t.connected
       ? `${esc(t.target)} · connect ${fmt(t.connectMs)} ms`
       : `${esc(t.target)} · <span class="error">refused</span>`;
+  }
+  if (p.wlanScan) {
+    const n = (p.wlanScan.accessPoints || []).length;
+    return `${n} access point${n === 1 ? "" : "s"} on ${esc(p.wlanScan.interface || "?")}`;
   }
   return "";
 }
@@ -817,6 +824,138 @@ window.addEventListener("resize", () => {
       renderChart(chartState.results, chartState.windowSec);
     }
   }, 150);
+});
+
+// --- Wireless ---
+let wlAgents = [];
+
+async function loadWireless() {
+  wlAgents = await api("GET", "/api/v1/agents" + tenantParam());
+  const sel = $("#wl-agent");
+  const prev = sel.value;
+  sel.innerHTML = wlAgents.map((a) => `<option value="${a.id}">${esc(a.name)} (${esc(a.siteName)})</option>`).join("");
+  $("#wl-noagents").classList.toggle("hidden", wlAgents.length > 0);
+  $("#wl-body").classList.toggle("hidden", wlAgents.length === 0);
+  if (!wlAgents.length) return;
+  if (prev && wlAgents.some((a) => a.id === prev)) sel.value = prev;
+  renderWirelessAgent();
+}
+
+$("#wl-agent").addEventListener("change", renderWirelessAgent);
+$("#wl-refresh").addEventListener("click", renderWirelessAgent);
+
+function currentWlAgent() {
+  const id = $("#wl-agent").value;
+  return wlAgents.find((a) => a.id === id);
+}
+
+async function renderWirelessAgent() {
+  const agent = currentWlAgent();
+  if (!agent) return;
+
+  const ifaces = agent.wirelessInterfaces || [];
+  const isel = $("#wl-iface");
+  if (!ifaces.length) {
+    isel.innerHTML = '<option value="">— none reported —</option>';
+    $("#wl-iface-hint").textContent =
+      "This agent reported no wireless interfaces. It needs a wireless adapter and the iw tool (or run it with NETLAMA_WLAN_DEMO=1 to try the workflow).";
+  } else {
+    isel.innerHTML = ifaces.map((w) => {
+      const mon = w.supportsMonitor ? " · monitor-capable" : "";
+      const selected = w.name === agent.wlanInterface ? "selected" : "";
+      return `<option value="${esc(w.name)}" ${selected}>${esc(w.name)} (${esc(w.phy)})${mon}</option>`;
+    }).join("");
+    $("#wl-iface-hint").textContent = "The interface used for WLAN scan tests on this agent.";
+  }
+  $("#wl-iface-msg").textContent = "";
+
+  // Latest WLAN scan result for this agent
+  const params = new URLSearchParams({ agentId: agent.id, type: "wlan_scan", limit: "1" });
+  const tid = tenantParam("");
+  if (tid) params.set("tenantId", tid.split("=")[1]);
+  const results = await api("GET", "/api/v1/results?" + params.toString());
+  renderScan(results[0]);
+}
+
+function renderScan(result) {
+  const tbody = $("#wl-ap-table tbody");
+  const ssidBox = $("#wl-ssids");
+  tbody.innerHTML = "";
+  ssidBox.innerHTML = "";
+
+  const aps = (result && result.payload && result.payload.wlanScan &&
+    result.payload.wlanScan.accessPoints) || [];
+  $("#wl-empty").classList.toggle("hidden", aps.length > 0 || !!result);
+  const demo = result && result.payload && result.payload.wlanScan && result.payload.wlanScan.demo;
+  const meta = $("#wl-scan-meta");
+  meta.textContent = "";
+  if (result) {
+    if (demo) {
+      const badge = document.createElement("span");
+      badge.className = "demo-badge";
+      badge.textContent = "DEMO DATA";
+      meta.appendChild(badge);
+    }
+    meta.appendChild(document.createTextNode(
+      `${aps.length} APs · ${new Date(result.time).toLocaleString()}`));
+  }
+  if (result && result.error) {
+    $("#wl-empty").textContent = "Last scan failed: " + result.error;
+    $("#wl-empty").classList.remove("hidden");
+  }
+  if (!aps.length) return;
+
+  // SSID summary (grouped, hidden networks folded together)
+  const bySsid = new Map();
+  for (const ap of aps) {
+    const name = ap.ssid || "— hidden —";
+    bySsid.set(name, (bySsid.get(name) || 0) + 1);
+  }
+  for (const [name, count] of [...bySsid.entries()].sort()) {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = count > 1 ? `${name} ×${count}` : name;
+    ssidBox.appendChild(chip);
+  }
+
+  // AP table, strongest signal first
+  const sorted = [...aps].sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
+  for (const ap of sorted) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${esc(ap.ssid || "— hidden —")}</strong></td>
+      <td class="muted mono">${esc(ap.bssid)}</td>
+      <td>${esc(ap.band || "")}</td>
+      <td class="num">${ap.channel || "–"}</td>
+      <td class="num">${signalCell(ap.rssiDbm)}</td>
+      <td>${esc(ap.security || "")}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+// signalCell colours the RSSI by rough quality.
+function signalCell(rssi) {
+  if (rssi === undefined || rssi === null) return "–";
+  let cls = "sig-weak";
+  if (rssi >= -60) cls = "sig-good";
+  else if (rssi >= -72) cls = "sig-ok";
+  return `<span class="${cls}">${fmt(rssi, 0)}</span>`;
+}
+
+$("#wl-iface-save").addEventListener("click", async () => {
+  const agent = currentWlAgent();
+  if (!agent) return;
+  try {
+    await api("PUT", `/api/v1/agents/${agent.id}`, {
+      name: agent.name,
+      siteId: agent.siteId,
+      wlanInterface: $("#wl-iface").value,
+    });
+    agent.wlanInterface = $("#wl-iface").value;
+    $("#wl-iface-msg").textContent = "Saved — pushed to the agent if connected.";
+  } catch (err) {
+    $("#wl-iface-msg").textContent = "Error: " + err.message;
+  }
 });
 
 // --- Admin ---

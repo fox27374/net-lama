@@ -103,7 +103,13 @@ func (s *Store) migrate() error {
 	}
 
 	// Additive migrations for existing databases.
-	return s.addColumnIfMissing("results", "ok", "INTEGER NOT NULL DEFAULT 1")
+	if err := s.addColumnIfMissing("results", "ok", "INTEGER NOT NULL DEFAULT 1"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("agents", "wlan_interface", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	return s.addColumnIfMissing("agents", "wireless_interfaces", "TEXT")
 }
 
 // addColumnIfMissing adds a column to a table if it is not already present.

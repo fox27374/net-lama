@@ -16,6 +16,7 @@ import (
 func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-chan *pb.Command, results chan<- *pb.TestResult) {
 	specs := map[string]*pb.TestSpec{}
 	var cancelTests context.CancelFunc
+	wlanIface := "" // per-agent sensor interface, from the pushed config
 
 	defer func() {
 		if cancelTests != nil {
@@ -31,11 +32,12 @@ func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-c
 			}
 			testCtx, cancel := context.WithCancel(ctx)
 			cancelTests = cancel
+			wlanIface = cfg.WlanInterface
 
 			specs = map[string]*pb.TestSpec{}
 			for _, spec := range cfg.Tests {
 				specs[spec.Id] = spec
-				a.startTest(testCtx, spec, results)
+				a.startTest(testCtx, spec, wlanIface, results)
 			}
 			if len(cfg.Tests) == 0 {
 				a.Logger.Info("No tests assigned, idling")
@@ -44,7 +46,7 @@ func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-c
 		case cmd := <-cmdCh:
 			if cmd.Type == pb.Command_RUN_TEST {
 				if spec, ok := specs[cmd.TestId]; ok {
-					go a.runTest(ctx, spec, results)
+					go a.runTest(ctx, spec, wlanIface, results)
 				} else {
 					a.Logger.Warn("Command for unknown test", slog.String("testId", cmd.TestId))
 				}
@@ -56,12 +58,12 @@ func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-c
 	}
 }
 
-func (a *Agent) startTest(ctx context.Context, spec *pb.TestSpec, results chan<- *pb.TestResult) {
+func (a *Agent) startTest(ctx context.Context, spec *pb.TestSpec, wlanIface string, results chan<- *pb.TestResult) {
 	a.Logger.Info("Scheduling test",
 		slog.String("test", spec.Name),
 		slog.Uint64("intervalSeconds", uint64(spec.IntervalSeconds)),
 	)
-	go runEvery(ctx, spec.IntervalSeconds, func() { a.runTest(ctx, spec, results) })
+	go runEvery(ctx, spec.IntervalSeconds, func() { a.runTest(ctx, spec, wlanIface, results) })
 }
 
 // runEvery runs fn immediately and then on every tick until ctx is cancelled.
@@ -83,7 +85,7 @@ func runEvery(ctx context.Context, intervalSeconds uint32, fn func()) {
 	}
 }
 
-func (a *Agent) runTest(ctx context.Context, spec *pb.TestSpec, results chan<- *pb.TestResult) {
+func (a *Agent) runTest(ctx context.Context, spec *pb.TestSpec, wlanIface string, results chan<- *pb.TestResult) {
 	switch params := spec.Params.(type) {
 	case *pb.TestSpec_Speedtest:
 		a.runSpeedtest(ctx, spec, results)
@@ -95,6 +97,8 @@ func (a *Agent) runTest(ctx context.Context, spec *pb.TestSpec, results chan<- *
 		a.runHTTP(ctx, spec, params.Http, results)
 	case *pb.TestSpec_Tcp:
 		a.runTCP(ctx, spec, params.Tcp, results)
+	case *pb.TestSpec_WlanScan:
+		a.runWlanScan(ctx, spec, wlanIface, results)
 	}
 }
 
@@ -239,6 +243,57 @@ func (a *Agent) runTCP(ctx context.Context, spec *pb.TestSpec, params *pb.TcpPar
 		}
 		sendResult(ctx, results, result)
 	}
+}
+
+func (a *Agent) runWlanScan(ctx context.Context, spec *pb.TestSpec, wlanIface string, results chan<- *pb.TestResult) {
+	iface := wlanIface
+	if iface == "" {
+		// No interface selected: fall back to the first detected one.
+		if detected := probe.WirelessInterfaces(ctx); len(detected) > 0 {
+			iface = detected[0].Name
+		}
+	}
+
+	result := newResult(spec)
+	if iface == "" {
+		a.Logger.Warn("WLAN scan skipped: no wireless interface", slog.String("test", spec.Name))
+		result.Error = "no wireless interface available"
+		result.Result = &pb.TestResult_WlanScan{WlanScan: &pb.WlanScanResult{}}
+		sendResult(ctx, results, result)
+		return
+	}
+
+	usedIface, aps, err := probe.Scan(ctx, iface)
+	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		a.Logger.Error("WLAN scan failed",
+			slog.String("test", spec.Name), slog.String("interface", iface), slog.Any("error", err))
+		result.Error = err.Error()
+		result.Result = &pb.TestResult_WlanScan{WlanScan: &pb.WlanScanResult{Interface: iface}}
+		sendResult(ctx, results, result)
+		return
+	}
+
+	pbAPs := make([]*pb.AccessPoint, 0, len(aps))
+	for _, ap := range aps {
+		pbAPs = append(pbAPs, &pb.AccessPoint{
+			Bssid:    ap.BSSID,
+			Ssid:     ap.SSID,
+			Channel:  ap.Channel,
+			FreqMhz:  ap.FreqMHz,
+			Band:     ap.Band,
+			RssiDbm:  ap.RSSIdBm,
+			Security: ap.Security,
+		})
+	}
+	a.Logger.Info("WLAN scan done",
+		slog.String("test", spec.Name), slog.String("interface", usedIface), slog.Int("aps", len(pbAPs)))
+	result.Result = &pb.TestResult_WlanScan{WlanScan: &pb.WlanScanResult{
+		Interface: usedIface, AccessPoints: pbAPs, Demo: probe.DemoMode(),
+	}}
+	sendResult(ctx, results, result)
 }
 
 func sendResult(ctx context.Context, results chan<- *pb.TestResult, result *pb.TestResult) {

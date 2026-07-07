@@ -8,13 +8,15 @@ import (
 )
 
 type Agent struct {
-	ID        string    `json:"id"`
-	TenantID  string    `json:"tenantId"`
-	SiteID    string    `json:"siteId"`
-	SiteName  string    `json:"siteName,omitempty"`
-	Name      string    `json:"name"`
-	Token     string    `json:"token,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID                 string          `json:"id"`
+	TenantID           string          `json:"tenantId"`
+	SiteID             string          `json:"siteId"`
+	SiteName           string          `json:"siteName,omitempty"`
+	Name               string          `json:"name"`
+	Token              string          `json:"token,omitempty"`
+	WlanInterface      string          `json:"wlanInterface"`
+	WirelessInterfaces json.RawMessage `json:"wirelessInterfaces"`
+	CreatedAt          time.Time       `json:"createdAt"`
 }
 
 type Result struct {
@@ -39,6 +41,7 @@ type ResultFilter struct {
 	SiteID   string
 	AgentID  string
 	TestID   string
+	TestType string
 	Since    time.Time
 	Limit    int
 }
@@ -67,17 +70,25 @@ func (s *Store) CreateAgent(tenantID, siteID, name string) (*Agent, error) {
 
 func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	a := &Agent{}
-	err := row.Scan(&a.ID, &a.TenantID, &a.SiteID, &a.SiteName, &a.Name, &a.Token, &a.CreatedAt)
+	var wlanIface, wireless string
+	err := row.Scan(&a.ID, &a.TenantID, &a.SiteID, &a.SiteName, &a.Name, &a.Token,
+		&wlanIface, &wireless, &a.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
+	a.WlanInterface = wlanIface
+	if wireless == "" {
+		wireless = "[]"
+	}
+	a.WirelessInterfaces = json.RawMessage(wireless)
 	return a, nil
 }
 
-const agentCols = `a.id, a.tenant_id, a.site_id, s.name, a.name, a.token, a.created_at`
+const agentCols = `a.id, a.tenant_id, a.site_id, s.name, a.name, a.token,
+	COALESCE(a.wlan_interface, ''), COALESCE(a.wireless_interfaces, ''), a.created_at`
 const agentFrom = ` FROM agents a JOIN sites s ON s.id = a.site_id `
 
 func (s *Store) GetAgent(id string) (*Agent, error) {
@@ -119,9 +130,12 @@ func (s *Store) DeleteAgent(id string) error {
 	return err
 }
 
-// UpdateAgent renames an agent and/or moves it to another site.
-func (s *Store) UpdateAgent(id, name, siteID string) error {
-	res, err := s.db.Exec(`UPDATE agents SET name = ?, site_id = ? WHERE id = ?`, name, siteID, id)
+// UpdateAgent renames an agent, moves it to another site and sets its
+// WLAN sensor interface.
+func (s *Store) UpdateAgent(id, name, siteID, wlanInterface string) error {
+	res, err := s.db.Exec(
+		`UPDATE agents SET name = ?, site_id = ?, wlan_interface = ? WHERE id = ?`,
+		name, siteID, wlanInterface, id)
 	if err != nil {
 		return err
 	}
@@ -129,6 +143,12 @@ func (s *Store) UpdateAgent(id, name, siteID string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// SetAgentInterfaces records the wireless interfaces an agent reported.
+func (s *Store) SetAgentInterfaces(id string, interfaces json.RawMessage) error {
+	_, err := s.db.Exec(`UPDATE agents SET wireless_interfaces = ? WHERE id = ?`, string(interfaces), id)
+	return err
 }
 
 func (s *Store) AddResult(r *Result) error {
@@ -180,6 +200,10 @@ func (s *Store) ListResults(f ResultFilter) ([]*Result, error) {
 	if f.TestID != "" {
 		query += ` AND r.test_id = ?`
 		args = append(args, f.TestID)
+	}
+	if f.TestType != "" {
+		query += ` AND r.test_type = ?`
+		args = append(args, f.TestType)
 	}
 	if !f.Since.IsZero() {
 		query += ` AND r.time >= ?`

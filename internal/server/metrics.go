@@ -30,6 +30,8 @@ type Metrics struct {
 
 	tcpConnect *prometheus.GaugeVec
 	tcpUp      *prometheus.GaugeVec
+
+	wlanApsVisible *prometheus.GaugeVec
 }
 
 func NewMetrics(reg prometheus.Registerer) *Metrics {
@@ -78,6 +80,8 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 
 		tcpConnect: newGauge("tcp_connect_ms", "TCP connect time in ms", append(base, "target")...),
 		tcpUp:      newGauge("tcp_up", "1 if the last TCP connect succeeded", append(base, "target")...),
+
+		wlanApsVisible: newGauge("wlan_aps_visible", "Number of access points seen in the last WLAN scan", append(base, "interface")...),
 	}
 }
 
@@ -158,5 +162,13 @@ func (m *Metrics) Record(tenant, site, client string, result *pb.TestResult) {
 		}
 		m.tcpConnect.WithLabelValues(labels...).Set(r.Tcp.ConnectMs)
 		m.tcpUp.WithLabelValues(labels...).Set(1)
+
+	case *pb.TestResult_WlanScan:
+		m.resultsTotal.WithLabelValues(append(base, "wlan_scan")...).Inc()
+		if result.Error != "" {
+			m.errorsTotal.WithLabelValues(append(base, "wlan_scan")...).Inc()
+			return
+		}
+		m.wlanApsVisible.WithLabelValues(append(base, r.WlanScan.Interface)...).Set(float64(len(r.WlanScan.AccessPoints)))
 	}
 }

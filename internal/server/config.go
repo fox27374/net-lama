@@ -111,6 +111,12 @@ func ValidateTestDef(t *store.TestDef) error {
 		normalized, _ := json.Marshal(p)
 		t.Params = normalized
 
+	case "wlan_scan":
+		if t.IntervalSeconds < 30 {
+			return fmt.Errorf("wlan scan interval must be at least 30 seconds")
+		}
+		t.Params = json.RawMessage(`{}`)
+
 	default:
 		return fmt.Errorf("unknown test type %q", t.Type)
 	}
@@ -157,6 +163,8 @@ func TestSpec(t *store.TestDef) (*pb.TestSpec, error) {
 		spec.Params = &pb.TestSpec_Tcp{Tcp: &pb.TcpParams{
 			Targets: p.Targets, TimeoutSeconds: p.TimeoutSeconds,
 		}}
+	case "wlan_scan":
+		spec.Params = &pb.TestSpec_WlanScan{WlanScan: &pb.WlanScanParams{}}
 	default:
 		return nil, fmt.Errorf("unknown test type %q", t.Type)
 	}

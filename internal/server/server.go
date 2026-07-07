@@ -50,7 +50,7 @@ func (s *Server) ConfigForAgent(agent *store.Agent) (*pb.Config, error) {
 		return nil, fmt.Errorf("loading tests for site: %w", err)
 	}
 
-	cfg := &pb.Config{}
+	cfg := &pb.Config{WlanInterface: agent.WlanInterface}
 	for _, t := range tests {
 		spec, err := TestSpec(t)
 		if err != nil {
@@ -79,6 +79,26 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 	if err != nil {
 		s.Logger.Warn("Agent with invalid token rejected", slog.String("clientId", register.ClientId))
 		return status.Error(codes.Unauthenticated, "invalid agent token")
+	}
+
+	// Record the wireless interfaces the agent reported, so the UI can
+	// offer them for selection.
+	if ifaces := register.WirelessInterfaces; ifaces != nil {
+		type wi struct {
+			Name            string `json:"name"`
+			PHY             string `json:"phy"`
+			SupportsMonitor bool   `json:"supportsMonitor"`
+		}
+		list := make([]wi, 0, len(ifaces))
+		for _, w := range ifaces {
+			list = append(list, wi{Name: w.Name, PHY: w.Phy, SupportsMonitor: w.SupportsMonitor})
+		}
+		if data, err := json.Marshal(list); err == nil {
+			if err := s.Store.SetAgentInterfaces(agent.ID, data); err != nil {
+				s.Logger.Warn("Storing agent interfaces failed", slog.Any("error", err))
+			}
+			agent.WirelessInterfaces = data
+		}
 	}
 
 	tenantName := agent.TenantID
@@ -263,6 +283,8 @@ func resultOK(r *pb.TestResult) bool {
 		return v.Http.StatusCode >= 200 && v.Http.StatusCode < 400
 	case *pb.TestResult_Tcp:
 		return v.Tcp.Connected
+	case *pb.TestResult_WlanScan:
+		return len(v.WlanScan.AccessPoints) > 0
 	case *pb.TestResult_Speedtest:
 		return true
 	}
@@ -284,6 +306,8 @@ func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result 
 		testType = "http"
 	case *pb.TestResult_Tcp:
 		testType = "tcp"
+	case *pb.TestResult_WlanScan:
+		testType = "wlan_scan"
 	}
 
 	// Persist the result

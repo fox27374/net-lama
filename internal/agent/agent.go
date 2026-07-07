@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/fox27374/net-lama/internal/probe"
 	pb "github.com/fox27374/net-lama/proto"
 )
 
@@ -80,14 +81,24 @@ func (a *Agent) runStream(ctx context.Context) error {
 		return fmt.Errorf("opening stream: %w", err)
 	}
 
+	var wifaces []*pb.WirelessInterface
+	for _, iface := range probe.WirelessInterfaces(streamCtx) {
+		wifaces = append(wifaces, &pb.WirelessInterface{
+			Name:            iface.Name,
+			Phy:             iface.PHY,
+			SupportsMonitor: iface.SupportsMonitor,
+		})
+	}
+
 	register := &pb.AgentMessage{
 		Payload: &pb.AgentMessage_Register{
 			Register: &pb.Register{
-				ClientId:     a.ClientID,
-				ClientType:   "networktest",
-				Version:      a.Version,
-				Capabilities: []string{"speedtest", "ping", "dns"},
-				Token:        a.Token,
+				ClientId:           a.ClientID,
+				ClientType:         "networktest",
+				Version:            a.Version,
+				Capabilities:       []string{"speedtest", "ping", "dns", "http", "tcp", "wlan_scan"},
+				Token:              a.Token,
+				WirelessInterfaces: wifaces,
 			},
 		},
 	}

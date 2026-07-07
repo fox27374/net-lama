@@ -74,7 +74,9 @@ The UI (login with username/password, dark/light theme) has pages for:
 
 * **Overview** — the tenant landing page: site/agent/test counts and per-test health
   (healthy / degraded / failing / no data); click a test to jump to its results
-* **Tests** — define named tests (ping/dns/http/tcp/speedtest) with interval and parameters
+* **Tests** — define named tests (ping/dns/http/tcp/wlan_scan/speedtest) with interval and parameters
+* **Wireless** — per agent: pick its WLAN sensor interface and view the nearby access
+  points (SSID, BSSID, band, channel, RSSI, security) from its latest scan
 * **Sites** — create sites and assign tests to them (pushed live to the site's agents)
 * **Agents** — create agents in a site; shows the one-time enrollment token with a
   ready-to-run `podman` command, and the live connection status
@@ -117,6 +119,11 @@ open on Debian/RPi OS, needs `0 2147483647` in `/etc/sysctl.d/` on Ubuntu). For
 rootless podman, enable lingering once (`loginctl enable-linger`) so containers
 survive logout.
 
+WLAN scanning needs a wireless adapter and the `iw` tool in the agent image (and
+`NET_ADMIN`); set `NETLAMA_WLAN_DEMO=1` to emit synthetic scan data for trying the
+Wireless UI on a host without a radio. Monitor-mode client sensing (per-station
+RSSI/SNR/MCS) is a later phase — see [ROADMAP.md](ROADMAP.md).
+
 ## Metrics
 
 The server exposes on `:9090/metrics`, all labeled with `tenant`, `site`, `client`
@@ -128,6 +135,7 @@ and `test` (plus `target` for ping, `server`+`query` for DNS):
 * `netlama_dns_resolve_time_ms`, `netlama_dns_success`
 * `netlama_http_total_ms`, `netlama_http_ttfb_ms`, `netlama_http_cert_expiry_days`, `netlama_http_up` (labeled by `url`)
 * `netlama_tcp_connect_ms`, `netlama_tcp_up` (labeled by `target`)
+* `netlama_wlan_aps_visible` (labeled by `interface`)
 * `netlama_results_received_total`, `netlama_test_errors_total`
 
 ## Development
