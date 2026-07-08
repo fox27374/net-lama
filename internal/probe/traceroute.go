@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
 	"strconv"
 )
@@ -32,8 +31,7 @@ type TracerouteResult struct {
 }
 
 func tracerouteDemo() bool {
-	_, ok := os.LookupEnv("NETLAMA_TRACEROUTE_DEMO")
-	return ok
+	return envEnabled("NETLAMA_TRACEROUTE_DEMO")
 }
 
 // TracerouteDemoMode reports whether traceroute results are synthetic.

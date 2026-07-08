@@ -3,7 +3,6 @@ package probe
 import (
 	"bufio"
 	"context"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -28,8 +27,7 @@ type AccessPoint struct {
 // wlanDemo reports whether the agent should emit synthetic WLAN data
 // (for pipeline testing on hosts without a wireless radio).
 func wlanDemo() bool {
-	_, ok := os.LookupEnv("NETLAMA_WLAN_DEMO")
-	return ok
+	return envEnabled("NETLAMA_WLAN_DEMO")
 }
 
 // DemoMode reports whether WLAN results are synthetic, so they can be
