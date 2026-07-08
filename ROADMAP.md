@@ -16,9 +16,11 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [ ] Unclaimed state: a new agent connects without a site and waits until
       someone assigns it to a site in the UI (replaces pre-issued tokens as the
       only flow)
-- [ ] Agent authentication at the server (mutual auth on top of the token,
-      e.g. mTLS or signed enrollment)
-- [ ] Encryption for the gRPC control stream (TLS, ideally mTLS)
+- [x] Encryption for the gRPC control stream (TLS): one cert for gRPC + HTTPS
+      UI, self-signed auto-generation or provided cert/key, agent verify via
+      CA/system-roots or skip-verify, secure cookies
+- [ ] Agent authentication at the server: per-agent mTLS (client certs) on top
+      of the token
 
 ## Tests & monitoring
 
@@ -43,7 +45,8 @@ Planned work, roughly grouped. Not ordered by priority yet.
 
 ## Server & UI
 
-- [ ] HTTPS for the web UI with Let's Encrypt (ACME) + secure cookies
+- [x] HTTPS for the web UI + secure cookies (via the shared TLS cert)
+- [ ] ACME/Let's Encrypt automation for public deployments (autocert)
 - [ ] Everything controllable via API (audit the UI-only flows; document the API)
 - [ ] Metrics export to OTEL: keep Prometheus, add OTLP push
 - [ ] Enhanced logging; logs visible in the web UI (agent + server)

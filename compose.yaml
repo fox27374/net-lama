@@ -21,6 +21,13 @@ services:
       # Password for the initial admin user (only used on first start
       # with an empty database; otherwise ignored).
       NETLAMA_ADMIN_PASSWORD: ${NETLAMA_ADMIN_PASSWORD:-}
+      # TLS for the gRPC control stream and the HTTPS UI. Provide a real
+      # cert (NETLAMA_TLS_CERT/KEY) or set NETLAMA_TLS_SELF_SIGNED=1 to
+      # auto-generate one (list UI hostnames/IPs in NETLAMA_TLS_HOSTS).
+      NETLAMA_TLS_CERT: ${NETLAMA_TLS_CERT:-}
+      NETLAMA_TLS_KEY: ${NETLAMA_TLS_KEY:-}
+      NETLAMA_TLS_SELF_SIGNED: ${NETLAMA_TLS_SELF_SIGNED:-}
+      NETLAMA_TLS_HOSTS: ${NETLAMA_TLS_HOSTS:-}
     restart: unless-stopped
 
   # The agent needs a token that only exists after it was created in
@@ -30,6 +37,12 @@ services:
     environment:
       NETLAMA_SERVER: ${NETLAMA_SERVER:-server:50051}
       NETLAMA_TOKEN: ${NETLAMA_TOKEN:?create the agent in the UI and put its token into .env}
+      # Connect over TLS when the server has it enabled. Verify with
+      # NETLAMA_TLS_CA (a copy of the server cert) or set
+      # NETLAMA_TLS_INSECURE=1 to encrypt without verifying.
+      NETLAMA_TLS: ${NETLAMA_TLS:-}
+      NETLAMA_TLS_CA: ${NETLAMA_TLS_CA:-}
+      NETLAMA_TLS_INSECURE: ${NETLAMA_TLS_INSECURE:-}
       # Set NETLAMA_WLAN_DEMO=1 to emit synthetic WLAN scan data on hosts
       # without a wireless radio (for trying the Wireless UI). Leave unset
       # for real scanning (needs a wireless adapter + iw in the image).

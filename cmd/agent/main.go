@@ -17,6 +17,9 @@ func main() {
 	serverAddr := flag.String("server", envOr("NETLAMA_SERVER", "localhost:50051"), "Address of the net-lama server (host:port)")
 	clientID := flag.String("id", envOr("NETLAMA_CLIENT_ID", ""), "Client ID for logging (defaults to the hostname)")
 	token := flag.String("token", envOr("NETLAMA_TOKEN", ""), "Agent token issued by the server")
+	useTLS := flag.Bool("tls", envEnabled("NETLAMA_TLS"), "Connect to the server over TLS")
+	tlsCA := flag.String("tls-ca", envOr("NETLAMA_TLS_CA", ""), "PEM file of the CA/server cert to trust (else system roots)")
+	tlsInsecure := flag.Bool("tls-insecure", envEnabled("NETLAMA_TLS_INSECURE"), "Skip server certificate verification (still encrypted)")
 	flag.Parse()
 
 	logger := newLogger()
@@ -39,17 +42,21 @@ func main() {
 	defer stop()
 
 	a := &agent.Agent{
-		ServerAddr: *serverAddr,
-		ClientID:   *clientID,
-		Token:      *token,
-		Version:    version,
-		Logger:     logger,
+		ServerAddr:  *serverAddr,
+		ClientID:    *clientID,
+		Token:       *token,
+		Version:     version,
+		Logger:      logger,
+		TLS:         *useTLS,
+		TLSCAFile:   *tlsCA,
+		TLSInsecure: *tlsInsecure,
 	}
 
 	logger.Info("Agent starting",
 		slog.String("server", *serverAddr),
 		slog.String("clientId", *clientID),
 		slog.String("version", version),
+		slog.Bool("tls", *useTLS),
 	)
 
 	if err := a.Run(ctx); err != nil {
@@ -64,6 +71,16 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// envEnabled treats unset/""/0/false/off/no as disabled.
+func envEnabled(key string) bool {
+	switch os.Getenv(key) {
+	case "", "0", "false", "off", "no":
+		return false
+	default:
+		return true
+	}
 }
 
 func newLogger() *slog.Logger {

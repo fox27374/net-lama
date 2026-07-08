@@ -162,6 +162,33 @@ Until the above is in place, set `NETLAMA_WLAN_DEMO=1` and/or
 Path UIs on a host without a radio or raw-socket access. Monitor-mode client
 sensing and native-Go traceroute are later phases — see [ROADMAP.md](ROADMAP.md).
 
+## TLS
+
+One certificate secures both the gRPC control stream (so the agent token is never
+sent in cleartext) and the HTTPS web UI/API; session cookies get the `Secure` flag
+automatically when TLS is on.
+
+Server (env): provide a real cert with `NETLAMA_TLS_CERT` + `NETLAMA_TLS_KEY`
+(PEM files — from Let's Encrypt, an internal CA, etc.), **or** set
+`NETLAMA_TLS_SELF_SIGNED=1` to auto-generate and persist a self-signed cert
+(list the UI hostnames/IPs in `NETLAMA_TLS_HOSTS`, default `localhost,127.0.0.1`).
+With neither, the server runs plaintext and logs a warning.
+
+Agent (env): `NETLAMA_TLS=1` to connect over TLS. Verify the server with
+`NETLAMA_TLS_CA=<pem>` (a copy of the server's cert, for self-signed) or the
+system roots (for real certs); or `NETLAMA_TLS_INSECURE=1` to encrypt without
+verifying. A plaintext agent cannot connect to a TLS server.
+
+```sh
+# self-signed, quick internal setup
+NETLAMA_TLS_SELF_SIGNED=1 NETLAMA_TLS_HOSTS=netlama.example.com,10.0.0.5 \
+  docker compose up -d server
+# agent (copy the server's netlama-selfsigned.pem to trust it, or use INSECURE)
+NETLAMA_TLS=1 NETLAMA_TLS_INSECURE=1 docker compose up -d
+```
+
+Per-agent mTLS and ACME/Let's Encrypt automation are on the roadmap.
+
 ## Metrics
 
 The server exposes on `:9090/metrics`, all labeled with `tenant`, `site`, `client`

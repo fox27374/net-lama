@@ -26,6 +26,13 @@ services:
       - netlama-data:/data
     environment:
       NETLAMA_ADMIN_PASSWORD: ${NETLAMA_ADMIN_PASSWORD:-}
+      # TLS for the gRPC control stream and the HTTPS UI. Provide a real
+      # cert via NETLAMA_TLS_CERT/KEY, or set NETLAMA_TLS_SELF_SIGNED=1 to
+      # auto-generate one (list the UI hostnames/IPs in NETLAMA_TLS_HOSTS).
+      NETLAMA_TLS_CERT: ${NETLAMA_TLS_CERT:-}
+      NETLAMA_TLS_KEY: ${NETLAMA_TLS_KEY:-}
+      NETLAMA_TLS_SELF_SIGNED: ${NETLAMA_TLS_SELF_SIGNED:-}
+      NETLAMA_TLS_HOSTS: ${NETLAMA_TLS_HOSTS:-}
     restart: unless-stopped
 
   agent:
@@ -38,6 +45,11 @@ services:
       # Host networking → reach the server on the published host port.
       NETLAMA_SERVER: ${NETLAMA_SERVER:-127.0.0.1:50051}
       NETLAMA_TOKEN: ${NETLAMA_TOKEN:?create the agent in the UI and put its token into .env}
+      # Connect over TLS. Verify with NETLAMA_TLS_CA (a copy of the server
+      # cert), or set NETLAMA_TLS_INSECURE=1 to encrypt without verifying.
+      NETLAMA_TLS: ${NETLAMA_TLS:-}
+      NETLAMA_TLS_CA: ${NETLAMA_TLS_CA:-}
+      NETLAMA_TLS_INSECURE: ${NETLAMA_TLS_INSECURE:-}
       NETLAMA_WLAN_DEMO: ${NETLAMA_WLAN_DEMO:-}
       NETLAMA_TRACEROUTE_DEMO: ${NETLAMA_TRACEROUTE_DEMO:-}
     depends_on:

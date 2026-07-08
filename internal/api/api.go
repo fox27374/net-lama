@@ -12,13 +12,14 @@ import (
 const sessionCookie = "netlama_session"
 
 type API struct {
-	Store  *store.Store
-	Server *server.Server
-	Logger *slog.Logger
+	Store         *store.Store
+	Server        *server.Server
+	Logger        *slog.Logger
+	SecureCookies bool
 }
 
-func New(st *store.Store, srv *server.Server, logger *slog.Logger) *API {
-	return &API{Store: st, Server: srv, Logger: logger}
+func New(st *store.Store, srv *server.Server, logger *slog.Logger, secureCookies bool) *API {
+	return &API{Store: st, Server: srv, Logger: logger, SecureCookies: secureCookies}
 }
 
 // Register mounts all API routes on the mux.

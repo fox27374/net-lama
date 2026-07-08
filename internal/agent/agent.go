@@ -2,16 +2,43 @@ package agent
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/fox27374/net-lama/internal/probe"
 	pb "github.com/fox27374/net-lama/proto"
 )
+
+// transportCredentials builds the gRPC transport security for the agent.
+func (a *Agent) transportCredentials() (credentials.TransportCredentials, error) {
+	if !a.TLS {
+		return insecure.NewCredentials(), nil
+	}
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	switch {
+	case a.TLSInsecure:
+		cfg.InsecureSkipVerify = true
+	case a.TLSCAFile != "":
+		pemData, err := os.ReadFile(a.TLSCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("reading TLS CA: %w", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pemData) {
+			return nil, fmt.Errorf("no certificates found in %s", a.TLSCAFile)
+		}
+		cfg.RootCAs = pool
+	}
+	return credentials.NewTLS(cfg), nil
+}
 
 const (
 	reconnectMinDelay = 1 * time.Second
@@ -24,6 +51,11 @@ type Agent struct {
 	Token      string
 	Version    string
 	Logger     *slog.Logger
+
+	// TLS transport security to the server.
+	TLS         bool   // use TLS
+	TLSCAFile   string // PEM of the CA/server cert to trust (else system roots)
+	TLSInsecure bool   // skip server cert verification (still encrypted)
 }
 
 // Run connects to the server and keeps the control stream alive,
@@ -64,10 +96,11 @@ func (a *Agent) Run(ctx context.Context) error {
 // runStream opens one control stream: registers, then processes incoming
 // config/commands and sends back test results until the stream breaks.
 func (a *Agent) runStream(ctx context.Context) error {
-	conn, err := grpc.NewClient(
-		a.ServerAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	creds, err := a.transportCredentials()
+	if err != nil {
+		return err
+	}
+	conn, err := grpc.NewClient(a.ServerAddr, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return fmt.Errorf("creating connection: %w", err)
 	}

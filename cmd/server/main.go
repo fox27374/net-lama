@@ -8,12 +8,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/fox27374/net-lama/internal/api"
 	"github.com/fox27374/net-lama/internal/server"
@@ -42,6 +45,30 @@ func main() {
 		os.Exit(1)
 	}
 
+	// TLS for both the gRPC control stream and the HTTP UI/API.
+	tlsHosts := []string{"localhost", "127.0.0.1"}
+	if h := os.Getenv("NETLAMA_TLS_HOSTS"); h != "" {
+		tlsHosts = strings.Split(h, ",")
+	}
+	selfSigned := envEnabled("NETLAMA_TLS_SELF_SIGNED")
+	tlsConfig, err := server.LoadTLSConfig(
+		os.Getenv("NETLAMA_TLS_CERT"), os.Getenv("NETLAMA_TLS_KEY"),
+		selfSigned, tlsHosts, filepath.Dir(*dbPath))
+	if err != nil {
+		logger.Error("Loading TLS config failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+	tlsOn := tlsConfig != nil
+	if tlsOn {
+		logger.Info("TLS enabled for gRPC and HTTP")
+		if selfSigned && os.Getenv("NETLAMA_TLS_CERT") == "" {
+			logger.Info("Using self-signed certificate",
+				slog.String("path", server.SelfSignedCertPath(filepath.Dir(*dbPath))))
+		}
+	} else {
+		logger.Warn("TLS is OFF — the agent control stream and web UI are unencrypted; set NETLAMA_TLS_SELF_SIGNED=1 or provide NETLAMA_TLS_CERT/KEY")
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -52,15 +79,25 @@ func main() {
 	// HTTP: web UI, JSON API and Prometheus metrics
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
-	api.New(st, srv, logger).Register(mux)
+	api.New(st, srv, logger, tlsOn).Register(mux)
 	mux.Handle("/", web.Handler())
-	httpServer := &http.Server{Addr: *httpAddr, Handler: mux}
+	httpServer := &http.Server{Addr: *httpAddr, Handler: mux, TLSConfig: tlsConfig}
 
 	errChan := make(chan error, 2)
 
 	go func() {
-		logger.Info("Starting HTTP server (UI, API, metrics)", slog.String("addr", *httpAddr))
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		scheme := "http"
+		if tlsOn {
+			scheme = "https"
+		}
+		logger.Info("Starting HTTP server (UI, API, metrics)", slog.String("addr", *httpAddr), slog.String("scheme", scheme))
+		var err error
+		if tlsOn {
+			err = httpServer.ListenAndServeTLS("", "") // certs come from TLSConfig
+		} else {
+			err = httpServer.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			errChan <- err
 		}
 	}()
@@ -72,11 +109,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	grpcServer := grpc.NewServer()
+	var grpcOpts []grpc.ServerOption
+	if tlsOn {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
+	}
+	grpcServer := grpc.NewServer(grpcOpts...)
 	pb.RegisterControlServiceServer(grpcServer, srv)
 
 	go func() {
-		logger.Info("Starting gRPC control server", slog.String("addr", *grpcAddr))
+		logger.Info("Starting gRPC control server", slog.String("addr", *grpcAddr), slog.Bool("tls", tlsOn))
 		if err := grpcServer.Serve(listener); err != nil {
 			errChan <- err
 		}
@@ -151,6 +192,16 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// envEnabled treats unset/""/0/false/off/no as disabled.
+func envEnabled(key string) bool {
+	switch os.Getenv(key) {
+	case "", "0", "false", "off", "no":
+		return false
+	default:
+		return true
+	}
 }
 
 func newLogger() *slog.Logger {
