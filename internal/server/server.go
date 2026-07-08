@@ -285,6 +285,8 @@ func resultOK(r *pb.TestResult) bool {
 		return v.Tcp.Connected
 	case *pb.TestResult_WlanScan:
 		return len(v.WlanScan.AccessPoints) > 0
+	case *pb.TestResult_Traceroute:
+		return v.Traceroute.Reached
 	case *pb.TestResult_Speedtest:
 		return true
 	}
@@ -308,10 +310,13 @@ func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result 
 		testType = "tcp"
 	case *pb.TestResult_WlanScan:
 		testType = "wlan_scan"
+	case *pb.TestResult_Traceroute:
+		testType = "traceroute"
 	}
 
-	// Persist the result
-	payload, err := protojson.Marshal(result)
+	// Persist the result. EmitDefaultValues keeps zero-valued fields
+	// (reached=false, loss=0, ...) in the JSON so the UI can rely on them.
+	payload, err := protojson.MarshalOptions{EmitDefaultValues: true}.Marshal(result)
 	if err != nil {
 		logger.Error("Marshalling result failed", slog.Any("error", err))
 		return

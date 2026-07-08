@@ -446,6 +446,55 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
 .sig-ok { color: #d98a00; font-weight: 650; }
 .sig-weak { color: var(--bad); font-weight: 650; }
 
+/* Results pagination */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  padding: 0.8rem 0 0.2rem;
+}
+.pager button:disabled { opacity: 0.4; cursor: default; }
+
+/* Path (traceroute) — stack cards with breathing room */
+#pa-body { display: flex; flex-direction: column; gap: 1.1rem; }
+#pa-latency { position: relative; }
+
+/* Path (traceroute) hop chain */
+.chip.type-traceroute { color: #c26bd6; border-color: #c26bd655; background: #c26bd612; }
+.path-status { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.hop-chain {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.hop-node {
+  min-width: 108px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 9px;
+  padding: 0.45rem 0.6rem;
+  background: var(--surface-2);
+}
+.hop-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-solid); }
+.hop-host { font-family: var(--mono); font-size: 0.82rem; font-weight: 600; margin-top: 0.1rem; }
+.hop-sub { font-size: 0.72rem; color: var(--muted-solid); margin-top: 0.1rem; }
+.hop-arrow { display: flex; align-items: center; color: var(--muted-solid); font-size: 1.2rem; padding: 0 0.1rem; }
+.hop-arrow.broken { color: var(--bad); font-weight: 700; }
+
+.hop-node.node-endpoint { border-left-color: var(--accent); }
+.hop-node.node-ok { border-left-color: var(--ok); }
+.hop-node.node-warn { border-left-color: #d98a00; }
+.hop-node.node-bad { border-left-color: var(--bad); }
+.hop-node.node-anon { border-left-color: var(--border); opacity: 0.7; }
+.hop-node.node-fail { border-left-color: var(--bad); background: var(--bad-bg); }
+.hop-node.node-unreached {
+  border-left-color: var(--bad);
+  border-style: dashed;
+  background: transparent;
+}
+
 /* Timeline chart */
 #chart-area { position: relative; margin-bottom: 1rem; }
 .chart-hint { color: var(--muted-solid); font-size: 0.88rem; padding: 0.6rem 0 0.2rem; }

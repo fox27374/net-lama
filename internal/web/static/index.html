@@ -39,6 +39,7 @@
       <button data-nav="sites">Sites</button>
       <button data-nav="results">Results</button>
       <button data-nav="wireless">Wireless</button>
+      <button data-nav="path">Path</button>
       <button data-nav="admin" id="nav-admin" class="hidden">Tenants &amp; Users</button>
     </nav>
     <span class="spacer"></span>
@@ -149,6 +150,7 @@
         </div>
         <div id="chart-area"></div>
         <div id="results-container" class="table-scroll"></div>
+        <div id="results-pager" class="pager"></div>
       </div>
     </section>
 
@@ -187,6 +189,35 @@
             <tbody></tbody>
           </table>
           <p id="wl-empty" class="empty hidden">No scan results yet. Assign a "WLAN scan" test to this agent's site.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Path (traceroute) -->
+    <section id="section-path" class="hidden">
+      <div class="section-head">
+        <h2>Path</h2>
+        <select id="pa-agent" class="compact"></select>
+        <select id="pa-test" class="compact"></select>
+        <span class="spacer"></span>
+        <button id="pa-refresh" class="ghost" title="Refresh">&#8635; Refresh</button>
+      </div>
+      <div id="pa-none" class="empty hidden">No traceroute tests yet. Create a "Traceroute" test, assign it to a site, and it appears here.</div>
+      <div id="pa-body" class="hidden">
+        <div class="card">
+          <div id="pa-status" class="path-status"></div>
+          <div id="pa-chain" class="hop-chain"></div>
+        </div>
+        <div class="card">
+          <h3>Latency by hop</h3>
+          <div id="pa-latency"></div>
+        </div>
+        <div class="card table-card">
+          <div class="section-head"><h3>Hops</h3><span class="muted" id="pa-meta"></span></div>
+          <table id="pa-hop-table">
+            <thead><tr><th>#</th><th>Host</th><th class="num">Loss</th><th class="num">Avg (ms)</th><th class="num">Best</th><th class="num">Worst</th></tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -268,6 +299,7 @@
           <option value="dns">DNS</option>
           <option value="http">HTTP(S)</option>
           <option value="tcp">TCP connect</option>
+          <option value="traceroute">Traceroute (path)</option>
           <option value="wlan_scan">WLAN scan</option>
           <option value="speedtest">Speedtest</option>
         </select>
@@ -300,6 +332,23 @@
     <div id="t-params-wlan" class="hidden">
       <p class="muted">Scans nearby access points on each agent's selected wireless
       interface (set per agent on the Wireless page).</p>
+    </div>
+    <div id="t-params-traceroute" class="hidden">
+      <label>Target (host or IP) <input type="text" id="t-tr-target" placeholder="www.google.com or 8.8.8.8"></label>
+      <div class="grid2">
+        <label>Protocol
+          <select id="t-tr-protocol">
+            <option value="tcp">TCP (to port)</option>
+            <option value="icmp">ICMP</option>
+            <option value="udp">UDP</option>
+          </select>
+        </label>
+        <label>Port <input type="number" id="t-tr-port" min="1" max="65535" value="443"></label>
+      </div>
+      <div class="grid2">
+        <label>Max hops <input type="number" id="t-tr-maxhops" min="1" max="64" value="30"></label>
+        <label>Probes per hop <input type="number" id="t-tr-probes" min="1" max="20" value="5"></label>
+      </div>
     </div>
     <p class="error hidden" id="t-error"></p>
     <div class="row end">

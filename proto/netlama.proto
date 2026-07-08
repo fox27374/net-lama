@@ -69,6 +69,7 @@ message TestSpec {
     HttpParams http = 7;
     TcpParams tcp = 8;
     WlanScanParams wlan_scan = 9;
+    TracerouteParams traceroute = 10;
   }
 }
 
@@ -99,6 +100,14 @@ message TcpParams {
 // The interface is per-agent (Config.wlan_interface), not part of the test.
 message WlanScanParams {}
 
+message TracerouteParams {
+  string target = 1;        // host or IP
+  string protocol = 2;      // "icmp" | "tcp" | "udp"
+  uint32 port = 3;          // for tcp/udp
+  uint32 max_hops = 4;
+  uint32 probes_per_hop = 5;
+}
+
 message Command {
   enum Type {
     TYPE_UNSPECIFIED = 0;
@@ -123,6 +132,7 @@ message TestResult {
     HttpResult http = 8;
     TcpResult tcp = 9;
     WlanScanResult wlan_scan = 10;
+    TracerouteResult traceroute = 11;
   }
 }
 
@@ -188,6 +198,29 @@ message AccessPoint {
   string band = 5;      // "2.4 GHz" / "5 GHz" / "6 GHz"
   double rssi_dbm = 6;
   string security = 7;  // "Open" / "WEP" / "WPA" / "WPA2" / "WPA3"
+}
+
+message TracerouteResult {
+  string target = 1;
+  string target_ip = 2;
+  bool reached = 3;
+  // status: "reached" (target answered), "stalled" (path broke before
+  // the target), or "error" (probe could not run).
+  string status = 4;
+  uint32 failure_hop = 5; // TTL of the last responding hop when stalled
+  double rtt_ms = 6;      // RTT to the destination (or last responder)
+  bool demo = 7;
+  repeated Hop hops = 8;
+}
+
+message Hop {
+  uint32 ttl = 1;
+  string host = 2;        // IP; empty = anonymous (no reply)
+  double loss_percent = 3;
+  double avg_rtt_ms = 4;
+  double best_rtt_ms = 5;
+  double worst_rtt_ms = 6;
+  uint32 sent = 7;
 }
 
 message LogEntry {

@@ -32,6 +32,10 @@ type Metrics struct {
 	tcpUp      *prometheus.GaugeVec
 
 	wlanApsVisible *prometheus.GaugeVec
+
+	pathRtt     *prometheus.GaugeVec
+	pathHops    *prometheus.GaugeVec
+	pathReached *prometheus.GaugeVec
 }
 
 func NewMetrics(reg prometheus.Registerer) *Metrics {
@@ -82,6 +86,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		tcpUp:      newGauge("tcp_up", "1 if the last TCP connect succeeded", append(base, "target")...),
 
 		wlanApsVisible: newGauge("wlan_aps_visible", "Number of access points seen in the last WLAN scan", append(base, "interface")...),
+
+		pathRtt:     newGauge("path_rtt_ms", "Round-trip time to the traceroute destination in ms", append(base, "target")...),
+		pathHops:    newGauge("path_hops", "Number of hops on the traceroute path", append(base, "target")...),
+		pathReached: newGauge("path_reached", "1 if the traceroute reached its destination", append(base, "target")...),
 	}
 }
 
@@ -170,5 +178,21 @@ func (m *Metrics) Record(tenant, site, client string, result *pb.TestResult) {
 			return
 		}
 		m.wlanApsVisible.WithLabelValues(append(base, r.WlanScan.Interface)...).Set(float64(len(r.WlanScan.AccessPoints)))
+
+	case *pb.TestResult_Traceroute:
+		m.resultsTotal.WithLabelValues(append(base, "traceroute")...).Inc()
+		labels := append(base, r.Traceroute.Target)
+		if result.Error != "" {
+			m.errorsTotal.WithLabelValues(append(base, "traceroute")...).Inc()
+			m.pathReached.WithLabelValues(labels...).Set(0)
+			return
+		}
+		reached := 0.0
+		if r.Traceroute.Reached {
+			reached = 1.0
+		}
+		m.pathReached.WithLabelValues(labels...).Set(reached)
+		m.pathHops.WithLabelValues(labels...).Set(float64(len(r.Traceroute.Hops)))
+		m.pathRtt.WithLabelValues(labels...).Set(r.Traceroute.RttMs)
 	}
 }

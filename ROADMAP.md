@@ -32,7 +32,11 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [ ] WLAN Phase 2: monitor-mode client sensing — per-station MAC/RSSI/SNR/rate/MCS
       per SSID; needs a monitor-capable adapter and a rootful container with host
       network + NET_ADMIN/NET_RAW; capture via gopacket/afpacket + radiotap/Dot11
-- [ ] Traceroute / path test (per-hop RTT and loss)
+- [x] Traceroute / path analysis Phase 1: mtr-based path test (TCP/ICMP/UDP),
+      per-hop RTT and loss, failure localization, hop-chain Path visualization
+- [ ] Traceroute Phase 2: native-Go engine (precise SYN-ACK/RST/filtered
+      classification at the destination), Paris/Dublin stable paths for ECMP,
+      hop enrichment (rDNS + ASN/owner + geo), path-change/history detection
 
 ## Server & UI
 

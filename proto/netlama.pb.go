@@ -65,7 +65,7 @@ func (x Command_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Command_Type.Descriptor instead.
 func (Command_Type) EnumDescriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{12, 0}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{13, 0}
 }
 
 type AgentMessage struct {
@@ -467,6 +467,7 @@ type TestSpec struct {
 	//	*TestSpec_Http
 	//	*TestSpec_Tcp
 	//	*TestSpec_WlanScan
+	//	*TestSpec_Traceroute
 	Params        isTestSpec_Params `protobuf_oneof:"params"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -584,6 +585,15 @@ func (x *TestSpec) GetWlanScan() *WlanScanParams {
 	return nil
 }
 
+func (x *TestSpec) GetTraceroute() *TracerouteParams {
+	if x != nil {
+		if x, ok := x.Params.(*TestSpec_Traceroute); ok {
+			return x.Traceroute
+		}
+	}
+	return nil
+}
+
 type isTestSpec_Params interface {
 	isTestSpec_Params()
 }
@@ -612,6 +622,10 @@ type TestSpec_WlanScan struct {
 	WlanScan *WlanScanParams `protobuf:"bytes,9,opt,name=wlan_scan,json=wlanScan,proto3,oneof"`
 }
 
+type TestSpec_Traceroute struct {
+	Traceroute *TracerouteParams `protobuf:"bytes,10,opt,name=traceroute,proto3,oneof"`
+}
+
 func (*TestSpec_Speedtest) isTestSpec_Params() {}
 
 func (*TestSpec_Ping) isTestSpec_Params() {}
@@ -623,6 +637,8 @@ func (*TestSpec_Http) isTestSpec_Params() {}
 func (*TestSpec_Tcp) isTestSpec_Params() {}
 
 func (*TestSpec_WlanScan) isTestSpec_Params() {}
+
+func (*TestSpec_Traceroute) isTestSpec_Params() {}
 
 type SpeedtestParams struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -914,6 +930,82 @@ func (*WlanScanParams) Descriptor() ([]byte, []int) {
 	return file_proto_netlama_proto_rawDescGZIP(), []int{11}
 }
 
+type TracerouteParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Target        string                 `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`     // host or IP
+	Protocol      string                 `protobuf:"bytes,2,opt,name=protocol,proto3" json:"protocol,omitempty"` // "icmp" | "tcp" | "udp"
+	Port          uint32                 `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`        // for tcp/udp
+	MaxHops       uint32                 `protobuf:"varint,4,opt,name=max_hops,json=maxHops,proto3" json:"max_hops,omitempty"`
+	ProbesPerHop  uint32                 `protobuf:"varint,5,opt,name=probes_per_hop,json=probesPerHop,proto3" json:"probes_per_hop,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TracerouteParams) Reset() {
+	*x = TracerouteParams{}
+	mi := &file_proto_netlama_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TracerouteParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TracerouteParams) ProtoMessage() {}
+
+func (x *TracerouteParams) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_netlama_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TracerouteParams.ProtoReflect.Descriptor instead.
+func (*TracerouteParams) Descriptor() ([]byte, []int) {
+	return file_proto_netlama_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *TracerouteParams) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *TracerouteParams) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
+func (x *TracerouteParams) GetPort() uint32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *TracerouteParams) GetMaxHops() uint32 {
+	if x != nil {
+		return x.MaxHops
+	}
+	return 0
+}
+
+func (x *TracerouteParams) GetProbesPerHop() uint32 {
+	if x != nil {
+		return x.ProbesPerHop
+	}
+	return 0
+}
+
 type Command struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Type          Command_Type           `protobuf:"varint,1,opt,name=type,proto3,enum=netlama.v1.Command_Type" json:"type,omitempty"`
@@ -924,7 +1016,7 @@ type Command struct {
 
 func (x *Command) Reset() {
 	*x = Command{}
-	mi := &file_proto_netlama_proto_msgTypes[12]
+	mi := &file_proto_netlama_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -936,7 +1028,7 @@ func (x *Command) String() string {
 func (*Command) ProtoMessage() {}
 
 func (x *Command) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_netlama_proto_msgTypes[12]
+	mi := &file_proto_netlama_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -949,7 +1041,7 @@ func (x *Command) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Command.ProtoReflect.Descriptor instead.
 func (*Command) Descriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{12}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Command) GetType() Command_Type {
@@ -983,6 +1075,7 @@ type TestResult struct {
 	//	*TestResult_Http
 	//	*TestResult_Tcp
 	//	*TestResult_WlanScan
+	//	*TestResult_Traceroute
 	Result        isTestResult_Result `protobuf_oneof:"result"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -990,7 +1083,7 @@ type TestResult struct {
 
 func (x *TestResult) Reset() {
 	*x = TestResult{}
-	mi := &file_proto_netlama_proto_msgTypes[13]
+	mi := &file_proto_netlama_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1002,7 +1095,7 @@ func (x *TestResult) String() string {
 func (*TestResult) ProtoMessage() {}
 
 func (x *TestResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_netlama_proto_msgTypes[13]
+	mi := &file_proto_netlama_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1015,7 +1108,7 @@ func (x *TestResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestResult.ProtoReflect.Descriptor instead.
 func (*TestResult) Descriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{13}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TestResult) GetTime() *timestamppb.Timestamp {
@@ -1107,6 +1200,15 @@ func (x *TestResult) GetWlanScan() *WlanScanResult {
 	return nil
 }
 
+func (x *TestResult) GetTraceroute() *TracerouteResult {
+	if x != nil {
+		if x, ok := x.Result.(*TestResult_Traceroute); ok {
+			return x.Traceroute
+		}
+	}
+	return nil
+}
+
 type isTestResult_Result interface {
 	isTestResult_Result()
 }
@@ -1135,6 +1237,10 @@ type TestResult_WlanScan struct {
 	WlanScan *WlanScanResult `protobuf:"bytes,10,opt,name=wlan_scan,json=wlanScan,proto3,oneof"`
 }
 
+type TestResult_Traceroute struct {
+	Traceroute *TracerouteResult `protobuf:"bytes,11,opt,name=traceroute,proto3,oneof"`
+}
+
 func (*TestResult_Speedtest) isTestResult_Result() {}
 
 func (*TestResult_Ping) isTestResult_Result() {}
@@ -1146,6 +1252,8 @@ func (*TestResult_Http) isTestResult_Result() {}
 func (*TestResult_Tcp) isTestResult_Result() {}
 
 func (*TestResult_WlanScan) isTestResult_Result() {}
+
+func (*TestResult_Traceroute) isTestResult_Result() {}
 
 type SpeedtestResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1162,7 +1270,7 @@ type SpeedtestResult struct {
 
 func (x *SpeedtestResult) Reset() {
 	*x = SpeedtestResult{}
-	mi := &file_proto_netlama_proto_msgTypes[14]
+	mi := &file_proto_netlama_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1174,7 +1282,7 @@ func (x *SpeedtestResult) String() string {
 func (*SpeedtestResult) ProtoMessage() {}
 
 func (x *SpeedtestResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_netlama_proto_msgTypes[14]
+	mi := &file_proto_netlama_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1187,7 +1295,7 @@ func (x *SpeedtestResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpeedtestResult.ProtoReflect.Descriptor instead.
 func (*SpeedtestResult) Descriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{14}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SpeedtestResult) GetServerName() string {
@@ -1254,7 +1362,7 @@ type PingResult struct {
 
 func (x *PingResult) Reset() {
 	*x = PingResult{}
-	mi := &file_proto_netlama_proto_msgTypes[15]
+	mi := &file_proto_netlama_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1266,7 +1374,7 @@ func (x *PingResult) String() string {
 func (*PingResult) ProtoMessage() {}
 
 func (x *PingResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_netlama_proto_msgTypes[15]
+	mi := &file_proto_netlama_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1279,7 +1387,7 @@ func (x *PingResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingResult.ProtoReflect.Descriptor instead.
 func (*PingResult) Descriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{15}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PingResult) GetTarget() string {
@@ -1344,7 +1452,7 @@ type DnsResult struct {
 
 func (x *DnsResult) Reset() {
 	*x = DnsResult{}
-	mi := &file_proto_netlama_proto_msgTypes[16]
+	mi := &file_proto_netlama_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1356,7 +1464,7 @@ func (x *DnsResult) String() string {
 func (*DnsResult) ProtoMessage() {}
 
 func (x *DnsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_netlama_proto_msgTypes[16]
+	mi := &file_proto_netlama_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1369,7 +1477,7 @@ func (x *DnsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DnsResult.ProtoReflect.Descriptor instead.
 func (*DnsResult) Descriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{16}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *DnsResult) GetQuery() string {
@@ -1426,7 +1534,7 @@ type HttpResult struct {
 
 func (x *HttpResult) Reset() {
 	*x = HttpResult{}
-	mi := &file_proto_netlama_proto_msgTypes[17]
+	mi := &file_proto_netlama_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1438,7 +1546,7 @@ func (x *HttpResult) String() string {
 func (*HttpResult) ProtoMessage() {}
 
 func (x *HttpResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_netlama_proto_msgTypes[17]
+	mi := &file_proto_netlama_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1451,7 +1559,7 @@ func (x *HttpResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HttpResult.ProtoReflect.Descriptor instead.
 func (*HttpResult) Descriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{17}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *HttpResult) GetUrl() string {
@@ -1528,7 +1636,7 @@ type TcpResult struct {
 
 func (x *TcpResult) Reset() {
 	*x = TcpResult{}
-	mi := &file_proto_netlama_proto_msgTypes[18]
+	mi := &file_proto_netlama_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1540,7 +1648,7 @@ func (x *TcpResult) String() string {
 func (*TcpResult) ProtoMessage() {}
 
 func (x *TcpResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_netlama_proto_msgTypes[18]
+	mi := &file_proto_netlama_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1553,7 +1661,7 @@ func (x *TcpResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TcpResult.ProtoReflect.Descriptor instead.
 func (*TcpResult) Descriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{18}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *TcpResult) GetTarget() string {
@@ -1588,7 +1696,7 @@ type WlanScanResult struct {
 
 func (x *WlanScanResult) Reset() {
 	*x = WlanScanResult{}
-	mi := &file_proto_netlama_proto_msgTypes[19]
+	mi := &file_proto_netlama_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1600,7 +1708,7 @@ func (x *WlanScanResult) String() string {
 func (*WlanScanResult) ProtoMessage() {}
 
 func (x *WlanScanResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_netlama_proto_msgTypes[19]
+	mi := &file_proto_netlama_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1613,7 +1721,7 @@ func (x *WlanScanResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WlanScanResult.ProtoReflect.Descriptor instead.
 func (*WlanScanResult) Descriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{19}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *WlanScanResult) GetInterface() string {
@@ -1652,7 +1760,7 @@ type AccessPoint struct {
 
 func (x *AccessPoint) Reset() {
 	*x = AccessPoint{}
-	mi := &file_proto_netlama_proto_msgTypes[20]
+	mi := &file_proto_netlama_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1664,7 +1772,7 @@ func (x *AccessPoint) String() string {
 func (*AccessPoint) ProtoMessage() {}
 
 func (x *AccessPoint) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_netlama_proto_msgTypes[20]
+	mi := &file_proto_netlama_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1677,7 +1785,7 @@ func (x *AccessPoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessPoint.ProtoReflect.Descriptor instead.
 func (*AccessPoint) Descriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{20}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *AccessPoint) GetBssid() string {
@@ -1729,6 +1837,200 @@ func (x *AccessPoint) GetSecurity() string {
 	return ""
 }
 
+type TracerouteResult struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Target   string                 `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	TargetIp string                 `protobuf:"bytes,2,opt,name=target_ip,json=targetIp,proto3" json:"target_ip,omitempty"`
+	Reached  bool                   `protobuf:"varint,3,opt,name=reached,proto3" json:"reached,omitempty"`
+	// status: "reached" (target answered), "stalled" (path broke before
+	// the target), or "error" (probe could not run).
+	Status        string  `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	FailureHop    uint32  `protobuf:"varint,5,opt,name=failure_hop,json=failureHop,proto3" json:"failure_hop,omitempty"` // TTL of the last responding hop when stalled
+	RttMs         float64 `protobuf:"fixed64,6,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`               // RTT to the destination (or last responder)
+	Demo          bool    `protobuf:"varint,7,opt,name=demo,proto3" json:"demo,omitempty"`
+	Hops          []*Hop  `protobuf:"bytes,8,rep,name=hops,proto3" json:"hops,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TracerouteResult) Reset() {
+	*x = TracerouteResult{}
+	mi := &file_proto_netlama_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TracerouteResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TracerouteResult) ProtoMessage() {}
+
+func (x *TracerouteResult) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_netlama_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TracerouteResult.ProtoReflect.Descriptor instead.
+func (*TracerouteResult) Descriptor() ([]byte, []int) {
+	return file_proto_netlama_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *TracerouteResult) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *TracerouteResult) GetTargetIp() string {
+	if x != nil {
+		return x.TargetIp
+	}
+	return ""
+}
+
+func (x *TracerouteResult) GetReached() bool {
+	if x != nil {
+		return x.Reached
+	}
+	return false
+}
+
+func (x *TracerouteResult) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *TracerouteResult) GetFailureHop() uint32 {
+	if x != nil {
+		return x.FailureHop
+	}
+	return 0
+}
+
+func (x *TracerouteResult) GetRttMs() float64 {
+	if x != nil {
+		return x.RttMs
+	}
+	return 0
+}
+
+func (x *TracerouteResult) GetDemo() bool {
+	if x != nil {
+		return x.Demo
+	}
+	return false
+}
+
+func (x *TracerouteResult) GetHops() []*Hop {
+	if x != nil {
+		return x.Hops
+	}
+	return nil
+}
+
+type Hop struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ttl           uint32                 `protobuf:"varint,1,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	Host          string                 `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"` // IP; empty = anonymous (no reply)
+	LossPercent   float64                `protobuf:"fixed64,3,opt,name=loss_percent,json=lossPercent,proto3" json:"loss_percent,omitempty"`
+	AvgRttMs      float64                `protobuf:"fixed64,4,opt,name=avg_rtt_ms,json=avgRttMs,proto3" json:"avg_rtt_ms,omitempty"`
+	BestRttMs     float64                `protobuf:"fixed64,5,opt,name=best_rtt_ms,json=bestRttMs,proto3" json:"best_rtt_ms,omitempty"`
+	WorstRttMs    float64                `protobuf:"fixed64,6,opt,name=worst_rtt_ms,json=worstRttMs,proto3" json:"worst_rtt_ms,omitempty"`
+	Sent          uint32                 `protobuf:"varint,7,opt,name=sent,proto3" json:"sent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Hop) Reset() {
+	*x = Hop{}
+	mi := &file_proto_netlama_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Hop) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Hop) ProtoMessage() {}
+
+func (x *Hop) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_netlama_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Hop.ProtoReflect.Descriptor instead.
+func (*Hop) Descriptor() ([]byte, []int) {
+	return file_proto_netlama_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *Hop) GetTtl() uint32 {
+	if x != nil {
+		return x.Ttl
+	}
+	return 0
+}
+
+func (x *Hop) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *Hop) GetLossPercent() float64 {
+	if x != nil {
+		return x.LossPercent
+	}
+	return 0
+}
+
+func (x *Hop) GetAvgRttMs() float64 {
+	if x != nil {
+		return x.AvgRttMs
+	}
+	return 0
+}
+
+func (x *Hop) GetBestRttMs() float64 {
+	if x != nil {
+		return x.BestRttMs
+	}
+	return 0
+}
+
+func (x *Hop) GetWorstRttMs() float64 {
+	if x != nil {
+		return x.WorstRttMs
+	}
+	return 0
+}
+
+func (x *Hop) GetSent() uint32 {
+	if x != nil {
+		return x.Sent
+	}
+	return 0
+}
+
 type LogEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Time          *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
@@ -1740,7 +2042,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_proto_netlama_proto_msgTypes[21]
+	mi := &file_proto_netlama_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1752,7 +2054,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_netlama_proto_msgTypes[21]
+	mi := &file_proto_netlama_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1765,7 +2067,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_proto_netlama_proto_rawDescGZIP(), []int{21}
+	return file_proto_netlama_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *LogEntry) GetTime() *timestamppb.Timestamp {
@@ -1818,7 +2120,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\x10supports_monitor\x18\x03 \x01(\bR\x0fsupportsMonitor\"[\n" +
 	"\x06Config\x12*\n" +
 	"\x05tests\x18\x01 \x03(\v2\x14.netlama.v1.TestSpecR\x05tests\x12%\n" +
-	"\x0ewlan_interface\x18\x02 \x01(\tR\rwlanInterface\"\x8d\x03\n" +
+	"\x0ewlan_interface\x18\x02 \x01(\tR\rwlanInterface\"\xcd\x03\n" +
 	"\bTestSpec\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12)\n" +
@@ -1828,7 +2130,11 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\x03dns\x18\x06 \x01(\v2\x15.netlama.v1.DnsParamsH\x00R\x03dns\x12,\n" +
 	"\x04http\x18\a \x01(\v2\x16.netlama.v1.HttpParamsH\x00R\x04http\x12)\n" +
 	"\x03tcp\x18\b \x01(\v2\x15.netlama.v1.TcpParamsH\x00R\x03tcp\x129\n" +
-	"\twlan_scan\x18\t \x01(\v2\x1a.netlama.v1.WlanScanParamsH\x00R\bwlanScanB\b\n" +
+	"\twlan_scan\x18\t \x01(\v2\x1a.netlama.v1.WlanScanParamsH\x00R\bwlanScan\x12>\n" +
+	"\n" +
+	"traceroute\x18\n" +
+	" \x01(\v2\x1c.netlama.v1.TracerouteParamsH\x00R\n" +
+	"tracerouteB\b\n" +
 	"\x06params\"\x11\n" +
 	"\x0fSpeedtestParams\"<\n" +
 	"\n" +
@@ -1846,13 +2152,19 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\tTcpParams\x12\x18\n" +
 	"\atargets\x18\x01 \x03(\tR\atargets\x12'\n" +
 	"\x0ftimeout_seconds\x18\x02 \x01(\rR\x0etimeoutSeconds\"\x10\n" +
-	"\x0eWlanScanParams\"|\n" +
+	"\x0eWlanScanParams\"\x9b\x01\n" +
+	"\x10TracerouteParams\x12\x16\n" +
+	"\x06target\x18\x01 \x01(\tR\x06target\x12\x1a\n" +
+	"\bprotocol\x18\x02 \x01(\tR\bprotocol\x12\x12\n" +
+	"\x04port\x18\x03 \x01(\rR\x04port\x12\x19\n" +
+	"\bmax_hops\x18\x04 \x01(\rR\amaxHops\x12$\n" +
+	"\x0eprobes_per_hop\x18\x05 \x01(\rR\fprobesPerHop\"|\n" +
 	"\aCommand\x12,\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x18.netlama.v1.Command.TypeR\x04type\x12\x17\n" +
 	"\atest_id\x18\x02 \x01(\tR\x06testId\"*\n" +
 	"\x04Type\x12\x14\n" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\f\n" +
-	"\bRUN_TEST\x10\x01\"\xbc\x03\n" +
+	"\bRUN_TEST\x10\x01\"\xfc\x03\n" +
 	"\n" +
 	"TestResult\x12.\n" +
 	"\x04time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x14\n" +
@@ -1865,7 +2177,10 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\x04http\x18\b \x01(\v2\x16.netlama.v1.HttpResultH\x00R\x04http\x12)\n" +
 	"\x03tcp\x18\t \x01(\v2\x15.netlama.v1.TcpResultH\x00R\x03tcp\x129\n" +
 	"\twlan_scan\x18\n" +
-	" \x01(\v2\x1a.netlama.v1.WlanScanResultH\x00R\bwlanScanB\b\n" +
+	" \x01(\v2\x1a.netlama.v1.WlanScanResultH\x00R\bwlanScan\x12>\n" +
+	"\n" +
+	"traceroute\x18\v \x01(\v2\x1c.netlama.v1.TracerouteResultH\x00R\n" +
+	"tracerouteB\b\n" +
 	"\x06result\"\xf2\x01\n" +
 	"\x0fSpeedtestResult\x12\x1f\n" +
 	"\vserver_name\x18\x01 \x01(\tR\n" +
@@ -1925,7 +2240,27 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bfreq_mhz\x18\x04 \x01(\rR\afreqMhz\x12\x12\n" +
 	"\x04band\x18\x05 \x01(\tR\x04band\x12\x19\n" +
 	"\brssi_dbm\x18\x06 \x01(\x01R\arssiDbm\x12\x1a\n" +
-	"\bsecurity\x18\a \x01(\tR\bsecurity\"j\n" +
+	"\bsecurity\x18\a \x01(\tR\bsecurity\"\xea\x01\n" +
+	"\x10TracerouteResult\x12\x16\n" +
+	"\x06target\x18\x01 \x01(\tR\x06target\x12\x1b\n" +
+	"\ttarget_ip\x18\x02 \x01(\tR\btargetIp\x12\x18\n" +
+	"\areached\x18\x03 \x01(\bR\areached\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1f\n" +
+	"\vfailure_hop\x18\x05 \x01(\rR\n" +
+	"failureHop\x12\x15\n" +
+	"\x06rtt_ms\x18\x06 \x01(\x01R\x05rttMs\x12\x12\n" +
+	"\x04demo\x18\a \x01(\bR\x04demo\x12#\n" +
+	"\x04hops\x18\b \x03(\v2\x0f.netlama.v1.HopR\x04hops\"\xc2\x01\n" +
+	"\x03Hop\x12\x10\n" +
+	"\x03ttl\x18\x01 \x01(\rR\x03ttl\x12\x12\n" +
+	"\x04host\x18\x02 \x01(\tR\x04host\x12!\n" +
+	"\floss_percent\x18\x03 \x01(\x01R\vlossPercent\x12\x1c\n" +
+	"\n" +
+	"avg_rtt_ms\x18\x04 \x01(\x01R\bavgRttMs\x12\x1e\n" +
+	"\vbest_rtt_ms\x18\x05 \x01(\x01R\tbestRttMs\x12 \n" +
+	"\fworst_rtt_ms\x18\x06 \x01(\x01R\n" +
+	"worstRttMs\x12\x12\n" +
+	"\x04sent\x18\a \x01(\rR\x04sent\"j\n" +
 	"\bLogEntry\x12.\n" +
 	"\x04time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x12\x18\n" +
@@ -1946,7 +2281,7 @@ func file_proto_netlama_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_netlama_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_netlama_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_proto_netlama_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_proto_netlama_proto_goTypes = []any{
 	(Command_Type)(0),             // 0: netlama.v1.Command.Type
 	(*AgentMessage)(nil),          // 1: netlama.v1.AgentMessage
@@ -1961,24 +2296,27 @@ var file_proto_netlama_proto_goTypes = []any{
 	(*HttpParams)(nil),            // 10: netlama.v1.HttpParams
 	(*TcpParams)(nil),             // 11: netlama.v1.TcpParams
 	(*WlanScanParams)(nil),        // 12: netlama.v1.WlanScanParams
-	(*Command)(nil),               // 13: netlama.v1.Command
-	(*TestResult)(nil),            // 14: netlama.v1.TestResult
-	(*SpeedtestResult)(nil),       // 15: netlama.v1.SpeedtestResult
-	(*PingResult)(nil),            // 16: netlama.v1.PingResult
-	(*DnsResult)(nil),             // 17: netlama.v1.DnsResult
-	(*HttpResult)(nil),            // 18: netlama.v1.HttpResult
-	(*TcpResult)(nil),             // 19: netlama.v1.TcpResult
-	(*WlanScanResult)(nil),        // 20: netlama.v1.WlanScanResult
-	(*AccessPoint)(nil),           // 21: netlama.v1.AccessPoint
-	(*LogEntry)(nil),              // 22: netlama.v1.LogEntry
-	(*timestamppb.Timestamp)(nil), // 23: google.protobuf.Timestamp
+	(*TracerouteParams)(nil),      // 13: netlama.v1.TracerouteParams
+	(*Command)(nil),               // 14: netlama.v1.Command
+	(*TestResult)(nil),            // 15: netlama.v1.TestResult
+	(*SpeedtestResult)(nil),       // 16: netlama.v1.SpeedtestResult
+	(*PingResult)(nil),            // 17: netlama.v1.PingResult
+	(*DnsResult)(nil),             // 18: netlama.v1.DnsResult
+	(*HttpResult)(nil),            // 19: netlama.v1.HttpResult
+	(*TcpResult)(nil),             // 20: netlama.v1.TcpResult
+	(*WlanScanResult)(nil),        // 21: netlama.v1.WlanScanResult
+	(*AccessPoint)(nil),           // 22: netlama.v1.AccessPoint
+	(*TracerouteResult)(nil),      // 23: netlama.v1.TracerouteResult
+	(*Hop)(nil),                   // 24: netlama.v1.Hop
+	(*LogEntry)(nil),              // 25: netlama.v1.LogEntry
+	(*timestamppb.Timestamp)(nil), // 26: google.protobuf.Timestamp
 }
 var file_proto_netlama_proto_depIdxs = []int32{
 	3,  // 0: netlama.v1.AgentMessage.register:type_name -> netlama.v1.Register
-	14, // 1: netlama.v1.AgentMessage.result:type_name -> netlama.v1.TestResult
-	22, // 2: netlama.v1.AgentMessage.log:type_name -> netlama.v1.LogEntry
+	15, // 1: netlama.v1.AgentMessage.result:type_name -> netlama.v1.TestResult
+	25, // 2: netlama.v1.AgentMessage.log:type_name -> netlama.v1.LogEntry
 	5,  // 3: netlama.v1.ServerMessage.config:type_name -> netlama.v1.Config
-	13, // 4: netlama.v1.ServerMessage.command:type_name -> netlama.v1.Command
+	14, // 4: netlama.v1.ServerMessage.command:type_name -> netlama.v1.Command
 	4,  // 5: netlama.v1.Register.wireless_interfaces:type_name -> netlama.v1.WirelessInterface
 	6,  // 6: netlama.v1.Config.tests:type_name -> netlama.v1.TestSpec
 	7,  // 7: netlama.v1.TestSpec.speedtest:type_name -> netlama.v1.SpeedtestParams
@@ -1987,23 +2325,26 @@ var file_proto_netlama_proto_depIdxs = []int32{
 	10, // 10: netlama.v1.TestSpec.http:type_name -> netlama.v1.HttpParams
 	11, // 11: netlama.v1.TestSpec.tcp:type_name -> netlama.v1.TcpParams
 	12, // 12: netlama.v1.TestSpec.wlan_scan:type_name -> netlama.v1.WlanScanParams
-	0,  // 13: netlama.v1.Command.type:type_name -> netlama.v1.Command.Type
-	23, // 14: netlama.v1.TestResult.time:type_name -> google.protobuf.Timestamp
-	15, // 15: netlama.v1.TestResult.speedtest:type_name -> netlama.v1.SpeedtestResult
-	16, // 16: netlama.v1.TestResult.ping:type_name -> netlama.v1.PingResult
-	17, // 17: netlama.v1.TestResult.dns:type_name -> netlama.v1.DnsResult
-	18, // 18: netlama.v1.TestResult.http:type_name -> netlama.v1.HttpResult
-	19, // 19: netlama.v1.TestResult.tcp:type_name -> netlama.v1.TcpResult
-	20, // 20: netlama.v1.TestResult.wlan_scan:type_name -> netlama.v1.WlanScanResult
-	21, // 21: netlama.v1.WlanScanResult.access_points:type_name -> netlama.v1.AccessPoint
-	23, // 22: netlama.v1.LogEntry.time:type_name -> google.protobuf.Timestamp
-	1,  // 23: netlama.v1.ControlService.ControlStream:input_type -> netlama.v1.AgentMessage
-	2,  // 24: netlama.v1.ControlService.ControlStream:output_type -> netlama.v1.ServerMessage
-	24, // [24:25] is the sub-list for method output_type
-	23, // [23:24] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	13, // 13: netlama.v1.TestSpec.traceroute:type_name -> netlama.v1.TracerouteParams
+	0,  // 14: netlama.v1.Command.type:type_name -> netlama.v1.Command.Type
+	26, // 15: netlama.v1.TestResult.time:type_name -> google.protobuf.Timestamp
+	16, // 16: netlama.v1.TestResult.speedtest:type_name -> netlama.v1.SpeedtestResult
+	17, // 17: netlama.v1.TestResult.ping:type_name -> netlama.v1.PingResult
+	18, // 18: netlama.v1.TestResult.dns:type_name -> netlama.v1.DnsResult
+	19, // 19: netlama.v1.TestResult.http:type_name -> netlama.v1.HttpResult
+	20, // 20: netlama.v1.TestResult.tcp:type_name -> netlama.v1.TcpResult
+	21, // 21: netlama.v1.TestResult.wlan_scan:type_name -> netlama.v1.WlanScanResult
+	23, // 22: netlama.v1.TestResult.traceroute:type_name -> netlama.v1.TracerouteResult
+	22, // 23: netlama.v1.WlanScanResult.access_points:type_name -> netlama.v1.AccessPoint
+	24, // 24: netlama.v1.TracerouteResult.hops:type_name -> netlama.v1.Hop
+	26, // 25: netlama.v1.LogEntry.time:type_name -> google.protobuf.Timestamp
+	1,  // 26: netlama.v1.ControlService.ControlStream:input_type -> netlama.v1.AgentMessage
+	2,  // 27: netlama.v1.ControlService.ControlStream:output_type -> netlama.v1.ServerMessage
+	27, // [27:28] is the sub-list for method output_type
+	26, // [26:27] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_proto_netlama_proto_init() }
@@ -2027,14 +2368,16 @@ func file_proto_netlama_proto_init() {
 		(*TestSpec_Http)(nil),
 		(*TestSpec_Tcp)(nil),
 		(*TestSpec_WlanScan)(nil),
+		(*TestSpec_Traceroute)(nil),
 	}
-	file_proto_netlama_proto_msgTypes[13].OneofWrappers = []any{
+	file_proto_netlama_proto_msgTypes[14].OneofWrappers = []any{
 		(*TestResult_Speedtest)(nil),
 		(*TestResult_Ping)(nil),
 		(*TestResult_Dns)(nil),
 		(*TestResult_Http)(nil),
 		(*TestResult_Tcp)(nil),
 		(*TestResult_WlanScan)(nil),
+		(*TestResult_Traceroute)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2042,7 +2385,7 @@ func file_proto_netlama_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_netlama_proto_rawDesc), len(file_proto_netlama_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   22,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

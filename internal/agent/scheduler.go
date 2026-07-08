@@ -99,6 +99,8 @@ func (a *Agent) runTest(ctx context.Context, spec *pb.TestSpec, wlanIface string
 		a.runTCP(ctx, spec, params.Tcp, results)
 	case *pb.TestSpec_WlanScan:
 		a.runWlanScan(ctx, spec, wlanIface, results)
+	case *pb.TestSpec_Traceroute:
+		a.runTraceroute(ctx, spec, params.Traceroute, results)
 	}
 }
 
@@ -292,6 +294,52 @@ func (a *Agent) runWlanScan(ctx context.Context, spec *pb.TestSpec, wlanIface st
 		slog.String("test", spec.Name), slog.String("interface", usedIface), slog.Int("aps", len(pbAPs)))
 	result.Result = &pb.TestResult_WlanScan{WlanScan: &pb.WlanScanResult{
 		Interface: usedIface, AccessPoints: pbAPs, Demo: probe.DemoMode(),
+	}}
+	sendResult(ctx, results, result)
+}
+
+func (a *Agent) runTraceroute(ctx context.Context, spec *pb.TestSpec, params *pb.TracerouteParams, results chan<- *pb.TestResult) {
+	res, err := probe.Traceroute(ctx, params.Target, params.Protocol, params.Port, params.MaxHops, params.ProbesPerHop)
+
+	result := newResult(spec)
+	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		a.Logger.Error("Traceroute failed",
+			slog.String("test", spec.Name), slog.String("target", params.Target), slog.Any("error", err))
+		result.Error = err.Error()
+		result.Result = &pb.TestResult_Traceroute{Traceroute: &pb.TracerouteResult{
+			Target: params.Target, Status: "error",
+		}}
+		sendResult(ctx, results, result)
+		return
+	}
+
+	hops := make([]*pb.Hop, 0, len(res.Hops))
+	for _, h := range res.Hops {
+		hops = append(hops, &pb.Hop{
+			Ttl:         h.TTL,
+			Host:        h.Host,
+			LossPercent: h.LossPercent,
+			AvgRttMs:    h.AvgRttMs,
+			BestRttMs:   h.BestRttMs,
+			WorstRttMs:  h.WorstRttMs,
+			Sent:        h.Sent,
+		})
+	}
+	a.Logger.Info("Traceroute done",
+		slog.String("test", spec.Name), slog.String("target", res.Target),
+		slog.Bool("reached", res.Reached), slog.Int("hops", len(hops)))
+	result.Result = &pb.TestResult_Traceroute{Traceroute: &pb.TracerouteResult{
+		Target:     res.Target,
+		TargetIp:   res.TargetIP,
+		Reached:    res.Reached,
+		Status:     res.Status,
+		FailureHop: res.FailureHop,
+		RttMs:      res.RttMs,
+		Demo:       res.Demo,
+		Hops:       hops,
 	}}
 	sendResult(ctx, results, result)
 }

@@ -83,7 +83,7 @@ async function showApp() {
   showSection("overview");
 }
 
-const sections = ["overview", "agents", "tests", "sites", "results", "wireless", "admin"];
+const sections = ["overview", "agents", "tests", "sites", "results", "wireless", "path", "admin"];
 
 function showSection(name) {
   for (const sec of sections) $("#section-" + sec).classList.add("hidden");
@@ -104,6 +104,7 @@ function reloadSection(name) {
   if (name === "sites") loadSites();
   if (name === "results") initResults();
   if (name === "wireless") loadWireless();
+  if (name === "path") loadPath();
   if (name === "admin") loadAdmin();
 }
 
@@ -304,6 +305,11 @@ function paramsSummary(t) {
   if (t.type === "http") return p.url || "";
   if (t.type === "tcp") return (p.targets || []).join(", ");
   if (t.type === "wlan_scan") return "nearby access points";
+  if (t.type === "traceroute") {
+    const proto = (p.protocol || "tcp").toUpperCase();
+    const port = (p.protocol === "icmp") ? "" : `:${p.port || 443}`;
+    return `${p.target || ""} · ${proto}${port}`;
+  }
   return "nearest server";
 }
 
@@ -340,6 +346,7 @@ function updateTestParamFields() {
   $("#t-params-http").classList.toggle("hidden", type !== "http");
   $("#t-params-tcp").classList.toggle("hidden", type !== "tcp");
   $("#t-params-wlan").classList.toggle("hidden", type !== "wlan_scan");
+  $("#t-params-traceroute").classList.toggle("hidden", type !== "traceroute");
 }
 $("#t-type").addEventListener("change", updateTestParamFields);
 
@@ -363,6 +370,11 @@ function openTestDialog(test) {
   $("#t-http-skiptls").checked = !!p.skipTlsVerify;
   $("#t-tcp-timeout").value = (test && test.type === "tcp" && p.timeoutSeconds) || 5;
   $("#t-tcp-targets").value = (test && test.type === "tcp" ? (p.targets || []) : []).join("\n");
+  $("#t-tr-target").value = (test && test.type === "traceroute" && p.target) || "";
+  $("#t-tr-protocol").value = (test && test.type === "traceroute" && p.protocol) || "tcp";
+  $("#t-tr-port").value = (test && test.type === "traceroute" && p.port) || 443;
+  $("#t-tr-maxhops").value = (test && test.type === "traceroute" && p.maxHops) || 30;
+  $("#t-tr-probes").value = (test && test.type === "traceroute" && p.probesPerHop) || 5;
   updateTestParamFields();
   $("#dlg-test").showModal();
 }
@@ -385,6 +397,14 @@ $("#form-test").addEventListener("submit", async (e) => {
     params = { url: $("#t-http-url").value.trim(), timeoutSeconds: +$("#t-http-timeout").value, skipTlsVerify: $("#t-http-skiptls").checked };
   } else if (type === "tcp") {
     params = { targets: lines($("#t-tcp-targets").value), timeoutSeconds: +$("#t-tcp-timeout").value };
+  } else if (type === "traceroute") {
+    params = {
+      target: $("#t-tr-target").value.trim(),
+      protocol: $("#t-tr-protocol").value,
+      port: +$("#t-tr-port").value,
+      maxHops: +$("#t-tr-maxhops").value,
+      probesPerHop: +$("#t-tr-probes").value,
+    };
   }
   const body = {
     name: $("#t-name").value.trim(),
@@ -549,6 +569,13 @@ function resultDetails(r) {
     const n = (p.wlanScan.accessPoints || []).length;
     return `${n} access point${n === 1 ? "" : "s"} on ${esc(p.wlanScan.interface || "?")}`;
   }
+  if (p.traceroute) {
+    const t = p.traceroute;
+    const hops = (t.hops || []).length;
+    return t.reached
+      ? `${esc(t.target)} · reached in ${hops} hops · ${fmt(t.rttMs)} ms`
+      : `${esc(t.target)} · <span class="error">stalled at hop ${t.failureHop || "?"}</span> of ${hops}`;
+  }
   return "";
 }
 
@@ -566,13 +593,30 @@ async function loadResults() {
   const results = await api("GET", "/api/v1/results?" + params.toString());
   renderChart(results, windowSec);
 
+  resultsAll = results;
+  resultsPage = 0;
+  renderResultsPage();
+}
+
+let resultsAll = [];
+let resultsPage = 0;
+const RESULTS_PER_PAGE = 10;
+
+function renderResultsPage() {
   const c = $("#results-container");
-  if (!results.length) {
+  const pager = $("#results-pager");
+  if (!resultsAll.length) {
     c.innerHTML = '<p class="empty">No results in this time window.</p>';
+    pager.innerHTML = "";
     return;
   }
 
-  const rows = results.map((r) => `
+  const pages = Math.ceil(resultsAll.length / RESULTS_PER_PAGE);
+  if (resultsPage > pages - 1) resultsPage = pages - 1;
+  const start = resultsPage * RESULTS_PER_PAGE;
+  const slice = resultsAll.slice(start, start + RESULTS_PER_PAGE);
+
+  const rows = slice.map((r) => `
     <tr>
       <td class="muted nowrap">${new Date(r.time).toLocaleString()}</td>
       <td>${esc(r.siteName)}</td>
@@ -585,6 +629,23 @@ async function loadResults() {
   c.innerHTML = `<table>
     <thead><tr><th>Time</th><th>Site</th><th>Agent</th><th>Test</th><th>Type</th><th>Details</th></tr></thead>
     <tbody>${rows}</tbody></table>`;
+
+  pager.innerHTML = "";
+  if (pages <= 1) return;
+  const prev = document.createElement("button");
+  prev.className = "ghost";
+  prev.textContent = "‹ Prev";
+  prev.disabled = resultsPage === 0;
+  prev.addEventListener("click", () => { resultsPage--; renderResultsPage(); });
+  const next = document.createElement("button");
+  next.className = "ghost";
+  next.textContent = "Next ›";
+  next.disabled = resultsPage >= pages - 1;
+  next.addEventListener("click", () => { resultsPage++; renderResultsPage(); });
+  const info = document.createElement("span");
+  info.className = "muted";
+  info.textContent = `Page ${resultsPage + 1} of ${pages} · ${resultsAll.length} results`;
+  pager.append(prev, info, next);
 }
 
 // --- Timeline chart ---
@@ -624,6 +685,8 @@ function buildSeries(results) {
       add("TTFB", r.time, p.http.ttfbMs);
     } else if (type === "tcp" && p.tcp) {
       if (p.tcp.connected) add(p.tcp.target, r.time, p.tcp.connectMs);
+    } else if (type === "traceroute" && p.traceroute) {
+      if (p.traceroute.reached) add("Path RTT", r.time, p.traceroute.rttMs);
     } else if (type === "speedtest" && p.speedtest) {
       unit = "Mbps";
       add("Download", r.time, p.speedtest.downloadMbps);
@@ -957,6 +1020,267 @@ $("#wl-iface-save").addEventListener("click", async () => {
     $("#wl-iface-msg").textContent = "Error: " + err.message;
   }
 });
+
+// --- Path (traceroute) ---
+let paAgents = [];
+let paTests = [];
+
+async function loadPath() {
+  [paAgents, paTests] = await Promise.all([
+    api("GET", "/api/v1/agents" + tenantParam()),
+    api("GET", "/api/v1/tests" + tenantParam()),
+  ]);
+  paTests = paTests.filter((t) => t.type === "traceroute");
+
+  const noTests = paTests.length === 0 || paAgents.length === 0;
+  $("#pa-none").classList.toggle("hidden", !noTests);
+  $("#pa-body").classList.toggle("hidden", noTests);
+  if (noTests) return;
+
+  const asel = $("#pa-agent");
+  const aprev = asel.value;
+  asel.innerHTML = paAgents.map((a) => `<option value="${a.id}">${esc(a.name)} (${esc(a.siteName)})</option>`).join("");
+  if (aprev && paAgents.some((a) => a.id === aprev)) asel.value = aprev;
+
+  const tsel = $("#pa-test");
+  const tprev = tsel.value;
+  tsel.innerHTML = paTests.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  if (tprev && paTests.some((t) => t.id === tprev)) tsel.value = tprev;
+
+  renderPath();
+}
+
+$("#pa-agent").addEventListener("change", renderPath);
+$("#pa-test").addEventListener("change", renderPath);
+$("#pa-refresh").addEventListener("click", renderPath);
+
+async function renderPath() {
+  const agentId = $("#pa-agent").value;
+  const testId = $("#pa-test").value;
+  if (!agentId || !testId) return;
+
+  const params = new URLSearchParams({ agentId, testId, type: "traceroute", limit: "1" });
+  const tid = tenantParam("");
+  if (tid) params.set("tenantId", tid.split("=")[1]);
+  const results = await api("GET", "/api/v1/results?" + params.toString());
+
+  const statusEl = $("#pa-status");
+  const chainEl = $("#pa-chain");
+  const tbody = $("#pa-hop-table tbody");
+  statusEl.innerHTML = "";
+  chainEl.innerHTML = "";
+  tbody.innerHTML = "";
+  $("#pa-meta").textContent = "";
+
+  if (!results.length) {
+    statusEl.innerHTML = '<p class="empty">No path results yet for this agent + test.</p>';
+    return;
+  }
+  const r = results[0];
+  const t = r.payload && r.payload.traceroute;
+  if (!t) {
+    statusEl.innerHTML = '<p class="empty">No path data in the latest result.</p>';
+    return;
+  }
+
+  // Status banner
+  const agent = paAgents.find((a) => a.id === agentId);
+  const demo = t.demo ? '<span class="demo-badge">DEMO DATA</span>' : "";
+  if (r.error) {
+    statusEl.innerHTML = `${demo}<span class="health failing">Error</span> ${esc(r.error)}`;
+  } else if (t.reached) {
+    statusEl.innerHTML = `${demo}<span class="health healthy">Reached ${esc(t.target)}</span>` +
+      ` <span class="muted">${(t.hops || []).length} hops · ${fmt(t.rttMs)} ms round-trip</span>`;
+  } else {
+    statusEl.innerHTML = `${demo}<span class="health failing">Path stalled</span>` +
+      ` <span class="muted">to ${esc(t.target)} — last response at hop ${t.failureHop || "?"}, then no reply</span>`;
+  }
+  $("#pa-meta").textContent = new Date(r.time).toLocaleString();
+
+  // Hop chain: agent -> hops -> target
+  chainEl.appendChild(chainNode("This agent", esc(agent ? agent.name : ""), "node-endpoint", ""));
+  const hops = t.hops || [];
+  for (const h of hops) {
+    chainEl.appendChild(chainArrow());
+    const anon = !h.host;
+    const cls = anon ? "node-anon"
+      : (h.ttl === t.failureHop && !t.reached) ? "node-fail"
+      : lossClass(h.lossPercent);
+    const host = anon ? "* * *" : h.host;
+    const sub = anon ? "no reply" : `${fmt(h.avgRttMs)} ms · ${fmt(h.lossPercent, 0)}% loss`;
+    chainEl.appendChild(chainNode(`Hop ${h.ttl}`, esc(host), cls, sub));
+  }
+  if (!t.reached) {
+    chainEl.appendChild(chainArrow(true));
+    chainEl.appendChild(chainNode("", esc(t.target), "node-unreached", "unreached"));
+  }
+
+  // Per-hop latency chart
+  renderHopChart(hops, t);
+
+  // Hop table
+  for (const h of hops) {
+    const tr = document.createElement("tr");
+    const host = h.host ? `<span class="mono">${esc(h.host)}</span>` : '<span class="muted">* * *</span>';
+    tr.innerHTML = `
+      <td class="num">${h.ttl}</td>
+      <td>${host}</td>
+      <td class="num">${lossCell(h.lossPercent)}</td>
+      <td class="num">${h.host ? fmt(h.avgRttMs) : "–"}</td>
+      <td class="num">${h.host ? fmt(h.bestRttMs) : "–"}</td>
+      <td class="num">${h.host ? fmt(h.worstRttMs) : "–"}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+// renderHopChart draws a column per hop (avg RTT), coloured by loss, so
+// the hop where latency or loss jumps is obvious across the whole path.
+function renderHopChart(hops, t) {
+  const area = $("#pa-latency");
+  area.innerHTML = "";
+  if (!hops.length) return;
+
+  const NS = "http://www.w3.org/2000/svg";
+  const W = Math.max(area.clientWidth || 600, 320);
+  const H = 220;
+  const M = { l: 44, r: 12, t: 12, b: 40 };
+  const maxV = niceMax(Math.max(0.1, ...hops.map((h) => h.avgRttMs || 0)) * 1.1);
+  const plotW = W - M.l - M.r;
+  const plotH = H - M.t - M.b;
+  const band = plotW / hops.length;
+  const barW = Math.min(24, band - 6);
+  const y = (v) => M.t + (1 - v / maxV) * plotH;
+
+  const style = getComputedStyle(document.documentElement);
+  const col = {
+    ok: style.getPropertyValue("--series-1").trim(),
+    warn: "#d98a00",
+    bad: style.getPropertyValue("--bad").trim(),
+    muted: style.getPropertyValue("--border").trim(),
+    accent: style.getPropertyValue("--accent").trim(),
+  };
+  const surface = style.getPropertyValue("--surface").trim();
+
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "chart-svg");
+  svg.setAttribute("height", H);
+  const el = (name, attrs, parent = svg) => {
+    const n = document.createElementNS(NS, name);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    parent.appendChild(n);
+    return n;
+  };
+
+  // Grid + y ticks (ms)
+  for (let i = 0; i <= 4; i++) {
+    const v = (maxV / 4) * i;
+    el("line", { class: "grid", x1: M.l, x2: W - M.r, y1: y(v), y2: y(v) });
+    const lab = el("text", { x: M.l - 6, y: y(v) + 4, "text-anchor": "end" });
+    lab.textContent = v >= 100 ? Math.round(v) : +v.toFixed(0);
+  }
+  const unit = el("text", { x: M.l - 6, y: M.t - 2, "text-anchor": "end" });
+  unit.textContent = "ms";
+
+  const tip = document.createElement("div");
+  tip.className = "chart-tip hidden";
+  area.style.position = "relative";
+  area.appendChild(tip);
+
+  hops.forEach((h, i) => {
+    const cx = M.l + band * i + band / 2;
+    const anon = !h.host;
+    const isTarget = !anon && (h.host === t.targetIp || h.host === t.target);
+    let color = col.ok;
+    if (h.lossPercent >= 60) color = col.bad;
+    else if (h.lossPercent >= 20) color = col.warn;
+    if (isTarget && t.reached) color = col.accent;
+
+    // x label: hop number
+    const lab = el("text", { x: cx, y: H - 24, "text-anchor": "middle" });
+    lab.textContent = h.ttl;
+
+    if (anon) {
+      // no reply: a muted baseline tick with a star
+      const star = el("text", { x: cx, y: y(0) - 4, "text-anchor": "middle", fill: col.muted });
+      star.textContent = "✳";
+      return;
+    }
+
+    const barH = Math.max(2, y(0) - y(h.avgRttMs));
+    el("rect", {
+      x: cx - barW / 2, y: y(h.avgRttMs), width: barW, height: barH,
+      rx: 4, fill: color,
+    });
+
+    // Hover hit area (full band) + tooltip
+    const hit = el("rect", { x: M.l + band * i, y: M.t, width: band, height: plotH, fill: "transparent" });
+    hit.addEventListener("pointermove", (ev) => {
+      tip.textContent = "";
+      const head = document.createElement("div");
+      head.className = "tip-time";
+      head.textContent = `Hop ${h.ttl} · ${h.host}`;
+      tip.appendChild(head);
+      const rows = [
+        ["avg", `${fmt(h.avgRttMs)} ms`],
+        ["best / worst", `${fmt(h.bestRttMs)} / ${fmt(h.worstRttMs)} ms`],
+        ["loss", `${fmt(h.lossPercent, 0)} %`],
+      ];
+      for (const [k, v] of rows) {
+        const row = document.createElement("div");
+        row.className = "tip-row";
+        const val = document.createElement("span");
+        val.className = "val";
+        val.textContent = v;
+        const name = document.createElement("span");
+        name.className = "name";
+        name.textContent = k;
+        row.append(val, name);
+        tip.appendChild(row);
+      }
+      tip.classList.remove("hidden");
+      const rect = area.getBoundingClientRect();
+      const tx = ev.clientX - rect.left + 14;
+      const flip = tx + tip.offsetWidth + 10 > rect.width;
+      tip.style.left = (flip ? tx - tip.offsetWidth - 28 : tx) + "px";
+      tip.style.top = (ev.clientY - rect.top - 10) + "px";
+    });
+    hit.addEventListener("pointerleave", () => tip.classList.add("hidden"));
+  });
+
+  // x-axis caption
+  const cap = el("text", { x: M.l + plotW / 2, y: H - 6, "text-anchor": "middle", fill: col.muted });
+  cap.textContent = "hop";
+
+  area.appendChild(svg);
+}
+
+function chainNode(label, host, cls, sub) {
+  const node = document.createElement("div");
+  node.className = "hop-node " + cls;
+  node.innerHTML = `<div class="hop-label">${label}</div>` +
+    `<div class="hop-host">${host}</div>` +
+    (sub ? `<div class="hop-sub">${sub}</div>` : "");
+  return node;
+}
+
+function chainArrow(broken) {
+  const a = document.createElement("div");
+  a.className = "hop-arrow" + (broken ? " broken" : "");
+  a.textContent = broken ? "✕" : "›";
+  return a;
+}
+
+function lossClass(loss) {
+  if (loss >= 60) return "node-bad";
+  if (loss >= 20) return "node-warn";
+  return "node-ok";
+}
+
+function lossCell(loss) {
+  const cls = loss >= 60 ? "sig-weak" : loss >= 20 ? "sig-ok" : "sig-good";
+  return `<span class="${cls}">${fmt(loss, 0)}%</span>`;
+}
 
 // --- Admin ---
 async function loadAdmin() {

@@ -1,8 +1,8 @@
 # Net-Lama
 
 Net-Lama places small compute units (e.g. a Raspberry Pi) anywhere in a network to run
-network measurements: speedtest, ping, DNS, HTTP(S) and TCP connect checks (and —
-planned — WLAN KPI sensing). All configuration lives on a central server with a
+network measurements: speedtest, ping, DNS, HTTP(S), TCP connect, traceroute path
+analysis and WLAN AP scanning. All configuration lives on a central server with a
 multi-tenant web UI; the sensors dial out, authenticate with a token, receive their
 configuration and stream results back.
 
@@ -74,9 +74,11 @@ The UI (login with username/password, dark/light theme) has pages for:
 
 * **Overview** — the tenant landing page: site/agent/test counts and per-test health
   (healthy / degraded / failing / no data); click a test to jump to its results
-* **Tests** — define named tests (ping/dns/http/tcp/wlan_scan/speedtest) with interval and parameters
+* **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_scan/speedtest) with interval and parameters
 * **Wireless** — per agent: pick its WLAN sensor interface and view the nearby access
   points (SSID, BSSID, band, channel, RSSI, security) from its latest scan
+* **Path** — traceroute path visualization: the hop chain from an agent to a target
+  (TCP/ICMP/UDP), per-hop latency and loss, and where a failing path breaks
 * **Sites** — create sites and assign tests to them (pushed live to the site's agents)
 * **Agents** — create agents in a site; shows the one-time enrollment token with a
   ready-to-run `podman` command, and the live connection status
@@ -119,10 +121,34 @@ open on Debian/RPi OS, needs `0 2147483647` in `/etc/sysctl.d/` on Ubuntu). For
 rootless podman, enable lingering once (`loginctl enable-linger`) so containers
 survive logout.
 
-WLAN scanning needs a wireless adapter and the `iw` tool in the agent image (and
-`NET_ADMIN`); set `NETLAMA_WLAN_DEMO=1` to emit synthetic scan data for trying the
-Wireless UI on a host without a radio. Monitor-mode client sensing (per-station
-RSSI/SNR/MCS) is a later phase — see [ROADMAP.md](ROADMAP.md).
+### Sensor agents (WLAN scan and traceroute)
+
+The WLAN scan and traceroute probes shell out to external tools (`iw`, `mtr`) that
+are **not** in the default distroless agent image, and they need raw-socket
+privileges. To run them for real:
+
+1. **Use the sensor image** — build the `agent-sensor` target, which is a
+   Debian-slim image with `iw` and `mtr-tiny` added:
+   `podman build --target agent-sensor -t netlama-agent-sensor .`
+   (point compose at it via `NETLAMA_AGENT_IMAGE=…/netlama-agent-sensor`).
+
+2. **Grant capabilities** — traceroute needs `CAP_NET_RAW` (custom-TTL packets and
+   receiving ICMP); WLAN scanning needs `CAP_NET_ADMIN`. In compose:
+   `cap_add: [NET_RAW, NET_ADMIN]`.
+
+3. **Give it a working network path for raw sockets.** Rootless podman's default
+   `slirp4netns` does **not** pass raw/custom-TTL packets, so traceroute won't work
+   there. Use one of:
+   - **rootful** podman (`sudo podman …`) with the caps above — most reliable, or
+   - **host networking** (`network_mode: host`), or
+   - the **pasta** rootless backend (better ICMP/traceroute support than slirp4netns).
+   Keep `net.ipv4.ping_group_range` open on the host (as for ping). WLAN monitor
+   mode (Phase 2) additionally wants `--network host` so the radio is visible.
+
+Until the above is in place, set `NETLAMA_WLAN_DEMO=1` and/or
+`NETLAMA_TRACEROUTE_DEMO=1` to emit synthetic data so you can use the Wireless and
+Path UIs on a host without a radio or raw-socket access. Monitor-mode client
+sensing and native-Go traceroute are later phases — see [ROADMAP.md](ROADMAP.md).
 
 ## Metrics
 
@@ -136,6 +162,7 @@ and `test` (plus `target` for ping, `server`+`query` for DNS):
 * `netlama_http_total_ms`, `netlama_http_ttfb_ms`, `netlama_http_cert_expiry_days`, `netlama_http_up` (labeled by `url`)
 * `netlama_tcp_connect_ms`, `netlama_tcp_up` (labeled by `target`)
 * `netlama_wlan_aps_visible` (labeled by `interface`)
+* `netlama_path_rtt_ms`, `netlama_path_hops`, `netlama_path_reached` (labeled by `target`)
 * `netlama_results_received_total`, `netlama_test_errors_total`
 
 ## Development

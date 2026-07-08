@@ -32,6 +32,14 @@ type TCPParams struct {
 	TimeoutSeconds uint32   `json:"timeoutSeconds"`
 }
 
+type TracerouteParams struct {
+	Target       string `json:"target"`
+	Protocol     string `json:"protocol"`
+	Port         uint32 `json:"port"`
+	MaxHops      uint32 `json:"maxHops"`
+	ProbesPerHop uint32 `json:"probesPerHop"`
+}
+
 // ValidateTestDef checks type, interval and the type-specific parameters
 // and returns the definition with normalized params.
 func ValidateTestDef(t *store.TestDef) error {
@@ -117,6 +125,40 @@ func ValidateTestDef(t *store.TestDef) error {
 		}
 		t.Params = json.RawMessage(`{}`)
 
+	case "traceroute":
+		var p TracerouteParams
+		if err := json.Unmarshal(t.Params, &p); err != nil {
+			return fmt.Errorf("invalid traceroute parameters: %w", err)
+		}
+		p.Target = strings.TrimSpace(p.Target)
+		if p.Target == "" {
+			return fmt.Errorf("traceroute requires a target")
+		}
+		switch p.Protocol {
+		case "":
+			p.Protocol = "tcp"
+		case "icmp", "tcp", "udp":
+		default:
+			return fmt.Errorf("traceroute protocol must be icmp, tcp or udp")
+		}
+		if (p.Protocol == "tcp" || p.Protocol == "udp") && p.Port == 0 {
+			p.Port = 443
+		}
+		if p.MaxHops == 0 {
+			p.MaxHops = 30
+		}
+		if p.MaxHops > 64 {
+			return fmt.Errorf("maxHops must be at most 64")
+		}
+		if p.ProbesPerHop == 0 {
+			p.ProbesPerHop = 5
+		}
+		if t.IntervalSeconds < 30 {
+			return fmt.Errorf("traceroute interval must be at least 30 seconds")
+		}
+		normalized, _ := json.Marshal(p)
+		t.Params = normalized
+
 	default:
 		return fmt.Errorf("unknown test type %q", t.Type)
 	}
@@ -165,6 +207,15 @@ func TestSpec(t *store.TestDef) (*pb.TestSpec, error) {
 		}}
 	case "wlan_scan":
 		spec.Params = &pb.TestSpec_WlanScan{WlanScan: &pb.WlanScanParams{}}
+	case "traceroute":
+		var p TracerouteParams
+		if err := json.Unmarshal(t.Params, &p); err != nil {
+			return nil, err
+		}
+		spec.Params = &pb.TestSpec_Traceroute{Traceroute: &pb.TracerouteParams{
+			Target: p.Target, Protocol: p.Protocol, Port: p.Port,
+			MaxHops: p.MaxHops, ProbesPerHop: p.ProbesPerHop,
+		}}
 	default:
 		return nil, fmt.Errorf("unknown test type %q", t.Type)
 	}
