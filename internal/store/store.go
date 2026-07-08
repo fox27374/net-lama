@@ -97,6 +97,29 @@ func (s *Store) migrate() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_results_agent_time ON results (agent_id, time DESC);
 	CREATE INDEX IF NOT EXISTS idx_results_test ON results (test_id, time DESC);
+	CREATE TABLE IF NOT EXISTS alert_rules (
+		id          TEXT PRIMARY KEY,
+		tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+		test_id     TEXT NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
+		name        TEXT NOT NULL,
+		metric      TEXT NOT NULL,   -- unhealthy | latency_ms | loss_percent | download_mbps | upload_mbps
+		operator    TEXT NOT NULL DEFAULT '>',
+		threshold   REAL NOT NULL DEFAULT 0,
+		for_count   INTEGER NOT NULL DEFAULT 1,
+		webhook_url TEXT NOT NULL DEFAULT '',
+		created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS alerts (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		rule_id     TEXT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
+		agent_id    TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+		state       TEXT NOT NULL,   -- firing | resolved
+		value       REAL NOT NULL,
+		message     TEXT NOT NULL,
+		started_at  TIMESTAMP NOT NULL,
+		resolved_at TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts (rule_id, agent_id, state);
 	`)
 	if err != nil {
 		return err
@@ -109,7 +132,10 @@ func (s *Store) migrate() error {
 	if err := s.addColumnIfMissing("agents", "wlan_interface", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
-	return s.addColumnIfMissing("agents", "wireless_interfaces", "TEXT")
+	if err := s.addColumnIfMissing("agents", "wireless_interfaces", "TEXT"); err != nil {
+		return err
+	}
+	return s.addColumnIfMissing("alerts", "subject", "TEXT NOT NULL DEFAULT ''")
 }
 
 // addColumnIfMissing adds a column to a table if it is not already present.

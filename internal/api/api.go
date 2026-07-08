@@ -48,10 +48,16 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/agents", a.auth(a.handleListAgents))
 	mux.HandleFunc("POST /api/v1/agents", a.auth(a.handleCreateAgent))
 	mux.HandleFunc("PUT /api/v1/agents/{id}", a.auth(a.handleUpdateAgent))
+	mux.HandleFunc("POST /api/v1/agents/{id}/run", a.auth(a.handleRunTest))
 	mux.HandleFunc("DELETE /api/v1/agents/{id}", a.auth(a.handleDeleteAgent))
 
 	mux.HandleFunc("GET /api/v1/results", a.auth(a.handleListResults))
 	mux.HandleFunc("GET /api/v1/overview", a.auth(a.handleOverview))
+
+	mux.HandleFunc("GET /api/v1/alert-rules", a.auth(a.handleListAlertRules))
+	mux.HandleFunc("POST /api/v1/alert-rules", a.auth(a.handleCreateAlertRule))
+	mux.HandleFunc("DELETE /api/v1/alert-rules/{id}", a.auth(a.handleDeleteAlertRule))
+	mux.HandleFunc("GET /api/v1/alerts", a.auth(a.handleListAlerts))
 }
 
 // --- middleware ---

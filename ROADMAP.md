@@ -26,7 +26,10 @@ Planned work, roughly grouped. Not ordered by priority yet.
       throughput/latency, e.g. iperf-style with one agent as reflector)
 - [ ] Agent resource monitoring: CPU, memory, storage — reported over the
       stream and visible in the UI/metrics
-- [ ] Alerting and thresholding (per test/tenant; notify on failing/degraded)
+- [x] Alerting and thresholding: per-test rules (unhealthy, or latency/loss/
+      throughput thresholds) with consecutive-breach counts, per-target alert
+      state, webhook notification, Alerts UI + nav badge. Later: email/SMTP,
+      more metrics, maintenance windows, per-rule scoping to sites/agents.
 - [x] WLAN Phase 1: interface inventory + managed-mode AP/SSID scan (agent reports
       wireless interfaces, per-agent interface selection, periodic scan, Wireless UI)
 - [ ] WLAN Phase 2: monitor-mode client sensing — per-station MAC/RSSI/SNR/rate/MCS
@@ -45,7 +48,8 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [ ] Metrics export to OTEL: keep Prometheus, add OTLP push
 - [ ] Enhanced logging; logs visible in the web UI (agent + server)
 - [ ] Password change / user self-service in the UI
-- [ ] On-demand test runs (`RUN_TEST`) from the UI (contract already in the proto)
+- [x] On-demand test runs (`RUN_TEST`) from the UI — "Run now" on the Path and
+      Results pages
 - [ ] Optional result forwarding (e.g. Splunk HEC, port of `legacy/hec-forwarder`)
 
 ## Documentation

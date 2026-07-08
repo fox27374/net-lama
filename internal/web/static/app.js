@@ -83,7 +83,7 @@ async function showApp() {
   showSection("overview");
 }
 
-const sections = ["overview", "agents", "tests", "sites", "results", "wireless", "path", "admin"];
+const sections = ["overview", "agents", "tests", "sites", "results", "wireless", "path", "alerts", "admin"];
 
 function showSection(name) {
   for (const sec of sections) $("#section-" + sec).classList.add("hidden");
@@ -105,6 +105,7 @@ function reloadSection(name) {
   if (name === "results") initResults();
   if (name === "wireless") loadWireless();
   if (name === "path") loadPath();
+  if (name === "alerts") loadAlerts();
   if (name === "admin") loadAdmin();
 }
 
@@ -145,6 +146,7 @@ async function loadOverview() {
   $("#ov-agents-sub").textContent =
     ov.agents ? `${ov.agentsConnected} connected` : "";
   $("#ov-tests").textContent = ov.tests;
+  updateAlertBadge(ov.activeAlerts);
 
   const health = ov.testHealth || [];
   const counts = { healthy: 0, degraded: 0, failing: 0, nodata: 0 };
@@ -521,6 +523,7 @@ async function initResults() {
     $("#flt-test").value = pendingResultTest;
     pendingResultTest = null;
   }
+  updateRunNowBtn();
   loadResults();
 }
 
@@ -533,8 +536,16 @@ function fillFilter(sel, items, allLabel) {
 }
 
 ["#flt-window", "#flt-site", "#flt-agent", "#flt-test"].forEach((sel) =>
-  $(sel).addEventListener("change", loadResults));
+  $(sel).addEventListener("change", () => { updateRunNowBtn(); loadResults(); }));
 $("#btn-results-refresh").addEventListener("click", loadResults);
+$("#btn-results-run").addEventListener("click", () => {
+  runTestNow($("#flt-agent").value, $("#flt-test").value, $("#btn-results-run"), loadResults);
+});
+
+// "Run now" needs both a specific agent and a specific test selected.
+function updateRunNowBtn() {
+  $("#btn-results-run").disabled = !($("#flt-agent").value && $("#flt-test").value);
+}
 
 const fmt = (v, digits = 1) =>
   v === undefined || v === null ? "–" : Number(v).toFixed(digits);
@@ -1053,6 +1064,31 @@ async function loadPath() {
 $("#pa-agent").addEventListener("change", renderPath);
 $("#pa-test").addEventListener("change", renderPath);
 $("#pa-refresh").addEventListener("click", renderPath);
+$("#pa-run").addEventListener("click", async () => {
+  const btn = $("#pa-run");
+  await runTestNow($("#pa-agent").value, $("#pa-test").value, btn, renderPath);
+});
+
+// runTestNow triggers an on-demand run and refreshes after a short delay.
+async function runTestNow(agentId, testId, btn, refresh) {
+  if (!agentId || !testId) return;
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Running…";
+  try {
+    await api("POST", `/api/v1/agents/${agentId}/run`, { testId });
+    // Give the agent a few seconds to run and stream the result back.
+    setTimeout(async () => {
+      await refresh();
+      btn.disabled = false;
+      btn.textContent = label;
+    }, 6000);
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
 
 async function renderPath() {
   const agentId = $("#pa-agent").value;
@@ -1281,6 +1317,108 @@ function lossCell(loss) {
   const cls = loss >= 60 ? "sig-weak" : loss >= 20 ? "sig-ok" : "sig-good";
   return `<span class="${cls}">${fmt(loss, 0)}%</span>`;
 }
+
+// --- Alerts ---
+const METRIC_LABEL = {
+  unhealthy: "unhealthy", latency_ms: "latency (ms)", loss_percent: "loss (%)",
+  download_mbps: "download (Mbps)", upload_mbps: "upload (Mbps)",
+};
+
+function updateAlertBadge(count) {
+  const badge = $("#nav-alert-badge");
+  badge.textContent = count > 0 ? count : "";
+  badge.classList.toggle("hidden", !count);
+}
+
+async function loadAlerts() {
+  const [alerts, rules] = await Promise.all([
+    api("GET", "/api/v1/alerts" + tenantParam()),
+    api("GET", "/api/v1/alert-rules" + tenantParam()),
+  ]);
+
+  updateAlertBadge(alerts.filter((a) => a.state === "firing").length);
+
+  const at = $("#alerts-table tbody");
+  at.innerHTML = "";
+  $("#alerts-empty").classList.toggle("hidden", alerts.length > 0);
+  for (const a of alerts) {
+    const firing = a.state === "firing";
+    const since = firing ? new Date(a.startedAt).toLocaleString()
+      : `${new Date(a.startedAt).toLocaleString()} → ${a.resolvedAt ? new Date(a.resolvedAt).toLocaleString() : ""}`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><span class="health ${firing ? "failing" : "healthy"}">${firing ? "Firing" : "Resolved"}</span></td>
+      <td><strong>${esc(a.ruleName)}</strong></td>
+      <td>${esc(a.agentName)}</td>
+      <td class="muted">${esc(a.message)}</td>
+      <td class="muted nowrap">${since}</td>`;
+    at.appendChild(tr);
+  }
+
+  const rt = $("#rules-table tbody");
+  rt.innerHTML = "";
+  $("#rules-empty").classList.toggle("hidden", rules.length > 0);
+  for (const r of rules) {
+    const cond = r.metric === "unhealthy"
+      ? "is unhealthy"
+      : `${METRIC_LABEL[r.metric] || r.metric} ${r.operator} ${r.threshold}`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${esc(r.name)}</strong></td>
+      <td>${esc(r.testName)}</td>
+      <td class="muted">${esc(cond)}</td>
+      <td class="muted">${r.forCount}×</td>
+      <td class="muted">${r.webhookUrl ? "✓" : "—"}</td>
+      <td style="text-align:right"><button class="danger" data-del>Delete</button></td>`;
+    tr.querySelector("[data-del]").addEventListener("click", async () => {
+      if (!confirm(`Delete rule "${r.name}"?`)) return;
+      await api("DELETE", `/api/v1/alert-rules/${r.id}`);
+      loadAlerts();
+    });
+    rt.appendChild(tr);
+  }
+}
+
+$("#ar-metric").addEventListener("change", () => {
+  $("#ar-threshold-wrap").classList.toggle("hidden", $("#ar-metric").value === "unhealthy");
+});
+
+$("#btn-new-rule").addEventListener("click", async () => {
+  const tests = await api("GET", "/api/v1/tests" + tenantParam());
+  if (!tests.length) { alert("Create a test first."); return; }
+  $("#ar-name").value = "";
+  $("#ar-test").innerHTML = tests.map((t) => `<option value="${t.id}">${esc(t.name)} (${t.type})</option>`).join("");
+  $("#ar-metric").value = "unhealthy";
+  $("#ar-threshold-wrap").classList.add("hidden");
+  $("#ar-threshold").value = 0;
+  $("#ar-forcount").value = 2;
+  $("#ar-webhook").value = "";
+  dialogError("#ar-error", "");
+  $("#dlg-rule").showModal();
+});
+
+$("#form-rule").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const metric = $("#ar-metric").value;
+  const body = {
+    name: $("#ar-name").value.trim(),
+    testId: $("#ar-test").value,
+    metric,
+    operator: metric === "unhealthy" ? ">" : $("#ar-op").value,
+    threshold: metric === "unhealthy" ? 0 : +$("#ar-threshold").value,
+    forCount: +$("#ar-forcount").value,
+    webhookUrl: $("#ar-webhook").value.trim(),
+  };
+  const tid = tenantParam("");
+  if (tid) body.tenantId = tid.split("=")[1];
+  try {
+    await api("POST", "/api/v1/alert-rules", body);
+    $("#dlg-rule").close();
+    loadAlerts();
+  } catch (err) {
+    dialogError("#ar-error", err.message);
+  }
+});
 
 // --- Admin ---
 async function loadAdmin() {

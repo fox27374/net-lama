@@ -79,6 +79,12 @@ The UI (login with username/password, dark/light theme) has pages for:
   points (SSID, BSSID, band, channel, RSSI, security) from its latest scan
 * **Path** — traceroute path visualization: the hop chain from an agent to a target
   (TCP/ICMP/UDP), per-hop latency and loss, and where a failing path breaks
+* **Alerts** — define rules (a test is unhealthy, or a metric such as latency/loss
+  crosses a threshold for N consecutive runs) with optional webhook notification;
+  see active and recent alerts, with a firing count badge in the nav
+
+The Path and Results pages also have a **Run now** button to trigger a test on a
+specific agent immediately instead of waiting for its interval.
 * **Sites** — create sites and assign tests to them (pushed live to the site's agents)
 * **Agents** — create agents in a site; shows the one-time enrollment token with a
   ready-to-run `podman` command, and the live connection status

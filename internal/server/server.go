@@ -31,14 +31,18 @@ type Server struct {
 
 	mu        sync.Mutex
 	connected map[string]*connectedAgent // keyed by agent ID
+
+	breachMu    sync.Mutex
+	breachCount map[string]int // consecutive alert-rule breaches, keyed by rule|agent
 }
 
 func New(st *store.Store, metrics *Metrics, logger *slog.Logger) *Server {
 	return &Server{
-		Store:     st,
-		Metrics:   metrics,
-		Logger:    logger,
-		connected: make(map[string]*connectedAgent),
+		Store:       st,
+		Metrics:     metrics,
+		Logger:      logger,
+		connected:   make(map[string]*connectedAgent),
+		breachCount: make(map[string]int),
 	}
 }
 
@@ -261,6 +265,26 @@ func (s *Server) RefreshAgent(agentID string) int {
 	return s.PushConfigs([]string{agentID})
 }
 
+// RunTest asks a connected agent to run a specific test immediately.
+// Returns true if the command was queued to a connected agent.
+func (s *Server) RunTest(agentID, testID string) bool {
+	s.mu.Lock()
+	conn, ok := s.connected[agentID]
+	s.mu.Unlock()
+	if !ok {
+		return false
+	}
+	msg := &pb.ServerMessage{Payload: &pb.ServerMessage_Command{
+		Command: &pb.Command{Type: pb.Command_RUN_TEST, TestId: testID},
+	}}
+	select {
+	case conn.push <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
 // AgentConnected reports whether an agent currently has an open stream.
 func (s *Server) AgentConnected(agentID string) bool {
 	s.mu.Lock()
@@ -338,6 +362,9 @@ func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result 
 	if err != nil {
 		logger.Error("Storing result failed", slog.Any("error", err))
 	}
+
+	// Evaluate alert rules against this result.
+	s.evaluateAlerts(conn, result)
 
 	if result.Error != "" {
 		logger.Warn("Test failed on agent",

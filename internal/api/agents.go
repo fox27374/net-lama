@@ -124,6 +124,49 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 	writeJSON(w, http.StatusOK, map[string]any{"pushed": pushed})
 }
 
+// handleRunTest triggers an immediate run of one of the agent's tests.
+func (a *API) handleRunTest(w http.ResponseWriter, r *http.Request, user *store.User) {
+	agent := a.getScopedAgent(w, r, user)
+	if agent == nil {
+		return
+	}
+	var req struct {
+		TestID string `json:"testId"`
+	}
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	if req.TestID == "" {
+		writeError(w, http.StatusBadRequest, "testId is required")
+		return
+	}
+
+	// The test must be assigned to the agent's site (that's what the agent
+	// actually has scheduled and can run on demand).
+	testIDs, err := a.Store.SiteTestIDs(agent.SiteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	assigned := false
+	for _, id := range testIDs {
+		if id == req.TestID {
+			assigned = true
+			break
+		}
+	}
+	if !assigned {
+		writeError(w, http.StatusBadRequest, "test is not assigned to this agent's site")
+		return
+	}
+
+	if !a.Server.RunTest(agent.ID, req.TestID) {
+		writeError(w, http.StatusConflict, "agent is offline")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"triggered": true})
+}
+
 func (a *API) handleDeleteAgent(w http.ResponseWriter, r *http.Request, user *store.User) {
 	agent := a.getScopedAgent(w, r, user)
 	if agent == nil {

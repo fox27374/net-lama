@@ -446,6 +446,22 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
 .sig-ok { color: #d98a00; font-weight: 650; }
 .sig-weak { color: var(--bad); font-weight: 650; }
 
+/* Nav alert badge */
+.nav-badge {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  margin-left: 0.15rem;
+  border-radius: 999px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 18px;
+  vertical-align: middle;
+}
+
 /* Results pagination */
 .pager {
   display: flex;

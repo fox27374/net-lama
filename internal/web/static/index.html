@@ -40,6 +40,7 @@
       <button data-nav="results">Results</button>
       <button data-nav="wireless">Wireless</button>
       <button data-nav="path">Path</button>
+      <button data-nav="alerts">Alerts <span id="nav-alert-badge" class="nav-badge hidden"></span></button>
       <button data-nav="admin" id="nav-admin" class="hidden">Tenants &amp; Users</button>
     </nav>
     <span class="spacer"></span>
@@ -146,6 +147,7 @@
           <label>Agent <select id="flt-agent"><option value="">All agents</option></select></label>
           <label>Test <select id="flt-test"><option value="">All tests</option></select></label>
           <span class="spacer"></span>
+          <button id="btn-results-run" class="primary" disabled title="Select an agent and a test to run it now">Run now</button>
           <button id="btn-results-refresh" class="ghost" title="Refresh">&#8635; Refresh</button>
         </div>
         <div id="chart-area"></div>
@@ -200,6 +202,7 @@
         <select id="pa-agent" class="compact"></select>
         <select id="pa-test" class="compact"></select>
         <span class="spacer"></span>
+        <button id="pa-run" class="primary">Run now</button>
         <button id="pa-refresh" class="ghost" title="Refresh">&#8635; Refresh</button>
       </div>
       <div id="pa-none" class="empty hidden">No traceroute tests yet. Create a "Traceroute" test, assign it to a site, and it appears here.</div>
@@ -219,6 +222,27 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
+    </section>
+
+    <!-- Alerts -->
+    <section id="section-alerts" class="hidden">
+      <div class="section-head"><h2>Alerts</h2></div>
+      <div class="card table-card">
+        <div class="section-head"><h3>Active &amp; recent</h3></div>
+        <table id="alerts-table">
+          <thead><tr><th>State</th><th>Rule</th><th>Agent</th><th>Details</th><th>Since</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="alerts-empty" class="empty hidden">No alerts yet.</p>
+      </div>
+      <div class="card table-card">
+        <div class="section-head"><h3>Rules</h3><button id="btn-new-rule" class="primary">New rule</button></div>
+        <table id="rules-table">
+          <thead><tr><th>Name</th><th>Test</th><th>Condition</th><th>For</th><th>Webhook</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="rules-empty" class="empty hidden">No alert rules yet. Create one to be notified when a test fails or breaches a threshold.</p>
       </div>
     </section>
 
@@ -379,6 +403,41 @@
     <div class="row end">
       <button type="button" class="ghost" data-close>Cancel</button>
       <button type="submit" class="primary">Save &amp; push</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-rule">
+  <form id="form-rule">
+    <h3>New alert rule</h3>
+    <label>Name <input type="text" id="ar-name" placeholder="High latency to gateway" required></label>
+    <label>Test <select id="ar-test"></select></label>
+    <label>Condition
+      <select id="ar-metric">
+        <option value="unhealthy">Test is unhealthy (fails)</option>
+        <option value="latency_ms">Latency (ms)</option>
+        <option value="loss_percent">Packet loss (%)</option>
+        <option value="download_mbps">Download (Mbps)</option>
+        <option value="upload_mbps">Upload (Mbps)</option>
+      </select>
+    </label>
+    <div id="ar-threshold-wrap" class="grid2 hidden">
+      <label>Operator
+        <select id="ar-op">
+          <option value="&gt;">&gt; greater than</option>
+          <option value="&gt;=">&gt;= at least</option>
+          <option value="&lt;">&lt; less than</option>
+          <option value="&lt;=">&lt;= at most</option>
+        </select>
+      </label>
+      <label>Threshold <input type="number" id="ar-threshold" step="any" value="0"></label>
+    </div>
+    <label>Fire after N consecutive breaches <input type="number" id="ar-forcount" min="1" value="2"></label>
+    <label>Webhook URL (optional) <input type="text" id="ar-webhook" placeholder="https://hooks.slack.com/services/..."></label>
+    <p class="error hidden" id="ar-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Create</button>
     </div>
   </form>
 </dialog>

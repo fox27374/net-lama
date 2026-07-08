@@ -18,6 +18,7 @@ type Overview struct {
 	Agents          int           `json:"agents"`
 	AgentsConnected int           `json:"agentsConnected"`
 	Tests           int           `json:"tests"`
+	ActiveAlerts    int           `json:"activeAlerts"`
 	TestHealth      []*TestHealth `json:"testHealth"`
 }
 
@@ -40,6 +41,10 @@ func (s *Store) TenantOverview(tenantID string) (*Overview, error) {
 		return nil, err
 	}
 	ov.Tests = len(tests)
+
+	if n, err := s.CountActiveAlerts(tenantID); err == nil {
+		ov.ActiveAlerts = n
+	}
 
 	for _, t := range tests {
 		h := &TestHealth{TestID: t.ID, Name: t.Name, Type: t.Type, Status: "nodata"}
