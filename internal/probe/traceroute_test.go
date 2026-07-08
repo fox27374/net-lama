@@ -15,7 +15,7 @@ const mtrReached = `{
 }`
 
 func TestParseMTRReached(t *testing.T) {
-	res, err := parseMTR([]byte(mtrReached), "dns.google", "8.8.8.8")
+	res, err := parseMTR([]byte(mtrReached), "dns.google", 30)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ const mtrStalled = `{
 }`
 
 func TestParseMTRStalled(t *testing.T) {
-	res, err := parseMTR([]byte(mtrStalled), "203.0.113.9", "203.0.113.9")
+	res, err := parseMTR([]byte(mtrStalled), "203.0.113.9", 4)
 	if err != nil {
 		t.Fatal(err)
 	}

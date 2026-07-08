@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os/exec"
 	"strconv"
 )
@@ -50,13 +49,6 @@ func Traceroute(ctx context.Context, target, protocol string, port, maxHops, pro
 		probes = 5
 	}
 
-	// Resolve the target so we can tell "reached the destination" from
-	// "reached some other last-responding hop".
-	targetIP := target
-	if ips, err := net.DefaultResolver.LookupIP(ctx, "ip4", target); err == nil && len(ips) > 0 {
-		targetIP = ips[0].String()
-	}
-
 	args := []string{"--json", "-n", "-c", strconv.Itoa(int(probes)), "-m", strconv.Itoa(int(maxHops))}
 	switch protocol {
 	case "tcp":
@@ -77,7 +69,7 @@ func Traceroute(ctx context.Context, target, protocol string, port, maxHops, pro
 		return nil, fmt.Errorf("running mtr: %w", err)
 	}
 
-	res, err := parseMTR(out, target, targetIP)
+	res, err := parseMTR(out, target, maxHops)
 	if err != nil {
 		return nil, err
 	}
@@ -102,13 +94,13 @@ type mtrReport struct {
 	} `json:"report"`
 }
 
-func parseMTR(data []byte, target, targetIP string) (*TracerouteResult, error) {
+func parseMTR(data []byte, target string, maxHops uint32) (*TracerouteResult, error) {
 	var m mtrReport
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("parsing mtr json: %w", err)
 	}
 
-	res := &TracerouteResult{Target: target, TargetIP: targetIP}
+	res := &TracerouteResult{Target: target}
 	var lastResponder *Hop
 	for _, h := range m.Report.Hubs {
 		host := h.Host
@@ -131,13 +123,18 @@ func parseMTR(data []byte, target, targetIP string) (*TracerouteResult, error) {
 		}
 	}
 
-	// Reached if the destination IP appears as a responding final hop.
+	// mtr stops incrementing TTL only once it reaches the destination, so a
+	// report that ends before maxHops with a responding final hop means the
+	// target was reached — and that final hop is its real address. If it ran
+	// all the way to maxHops, the path stalled before the destination.
+	// (Intermediate hops may still be anonymous, e.g. routers that don't send
+	// ICMP Time Exceeded to TCP-SYN probes — that is not a failure.)
 	if len(res.Hops) > 0 {
 		last := res.Hops[len(res.Hops)-1]
-		if last.Host != "" && last.LossPercent < 100 &&
-			(last.Host == targetIP || last.Host == target) {
+		if last.Host != "" && last.LossPercent < 100 && uint32(len(res.Hops)) < maxHops {
 			res.Reached = true
 			res.Status = "reached"
+			res.TargetIP = last.Host
 			res.RttMs = last.AvgRttMs
 		}
 	}

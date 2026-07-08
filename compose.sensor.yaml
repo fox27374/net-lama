@@ -1,0 +1,49 @@
+# Sensor deployment.
+#
+# The agent runs the sensor image (bundles iw + mtr) with HOST networking
+# and CAP_NET_RAW, so real traceroute — and, with a wireless adapter, WLAN
+# scanning — work. This runs rootless; no sudo needed.
+#
+# Host networking is required for path tracing: rootless user-mode network
+# stacks (slirp4netns / pasta) NAT everything, so the agent would only ever
+# see the destination and none of the intermediate routers. With host
+# networking the probe packets traverse the real routing table.
+#
+#   1. docker compose -f compose.sensor.yaml up -d server
+#   2. create the agent in the UI, then: echo "NETLAMA_TOKEN=<token>" >> .env
+#   3. docker compose -f compose.sensor.yaml up -d
+#
+# Works the same with podman-compose. The host must allow unprivileged ICMP
+# (net.ipv4.ping_group_range) as for the plain agent.
+
+services:
+  server:
+    image: ${NETLAMA_SERVER_IMAGE:-ghcr.io/fox27374/netlama-server}:${NETLAMA_IMAGE_TAG:-latest}
+    ports:
+      - "9090:9090"
+      - "50051:50051"
+    volumes:
+      - netlama-data:/data
+    environment:
+      NETLAMA_ADMIN_PASSWORD: ${NETLAMA_ADMIN_PASSWORD:-}
+    restart: unless-stopped
+
+  agent:
+    image: ${NETLAMA_AGENT_IMAGE:-ghcr.io/fox27374/netlama-agent-sensor}:${NETLAMA_IMAGE_TAG:-latest}
+    network_mode: host
+    cap_add:
+      - NET_RAW    # traceroute: custom-TTL packets + receiving ICMP
+      - NET_ADMIN  # WLAN scanning via iw
+    environment:
+      # Host networking → reach the server on the published host port.
+      NETLAMA_SERVER: ${NETLAMA_SERVER:-127.0.0.1:50051}
+      NETLAMA_TOKEN: ${NETLAMA_TOKEN:?create the agent in the UI and put its token into .env}
+      NETLAMA_WLAN_DEMO: ${NETLAMA_WLAN_DEMO:-}
+      NETLAMA_TRACEROUTE_DEMO: ${NETLAMA_TRACEROUTE_DEMO:-}
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  netlama-data:
+    name: netlama-data

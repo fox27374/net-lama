@@ -124,26 +124,32 @@ survive logout.
 ### Sensor agents (WLAN scan and traceroute)
 
 The WLAN scan and traceroute probes shell out to external tools (`iw`, `mtr`) that
-are **not** in the default distroless agent image, and they need raw-socket
-privileges. To run them for real:
+are **not** in the default distroless agent image and need raw-socket access. Use
+the ready-made [compose.sensor.yaml](compose.sensor.yaml), which runs the agent as:
 
-1. **Use the sensor image** — build the `agent-sensor` target, which is a
-   Debian-slim image with `iw` and `mtr-tiny` added:
-   `podman build --target agent-sensor -t netlama-agent-sensor .`
-   (point compose at it via `NETLAMA_AGENT_IMAGE=…/netlama-agent-sensor`).
+1. **the sensor image** (`agent-sensor` target — Debian-slim with `iw` + `mtr`);
+2. with **`cap_add: [NET_RAW, NET_ADMIN]`** — `NET_RAW` for traceroute (custom-TTL
+   packets + receiving ICMP), `NET_ADMIN` for WLAN scanning; and
+3. with **`network_mode: host`**. This is required for path tracing: rootless
+   user-mode network stacks (`slirp4netns` / `pasta`) NAT everything, so the agent
+   would only ever see the destination and *none* of the intermediate routers. With
+   host networking the probe packets traverse the real routing table.
 
-2. **Grant capabilities** — traceroute needs `CAP_NET_RAW` (custom-TTL packets and
-   receiving ICMP); WLAN scanning needs `CAP_NET_ADMIN`. In compose:
-   `cap_add: [NET_RAW, NET_ADMIN]`.
+This runs **rootless — no sudo/rootful needed** (verified with podman-compose). Keep
+`net.ipv4.ping_group_range` open on the host (as for ping), and `loginctl
+enable-linger` so the containers survive logout.
 
-3. **Give it a working network path for raw sockets.** Rootless podman's default
-   `slirp4netns` does **not** pass raw/custom-TTL packets, so traceroute won't work
-   there. Use one of:
-   - **rootful** podman (`sudo podman …`) with the caps above — most reliable, or
-   - **host networking** (`network_mode: host`), or
-   - the **pasta** rootless backend (better ICMP/traceroute support than slirp4netns).
-   Keep `net.ipv4.ping_group_range` open on the host (as for ping). WLAN monitor
-   mode (Phase 2) additionally wants `--network host` so the radio is visible.
+```sh
+podman build --target agent-sensor -t netlama-agent-sensor .   # or pull from GHCR
+NETLAMA_AGENT_IMAGE=netlama-agent-sensor \
+  podman-compose -f compose.sensor.yaml up -d
+```
+
+Because it uses host networking, the agent reaches the server on the published host
+port (`NETLAMA_SERVER=127.0.0.1:50051`, the compose default). Note that TCP-mode
+traceroute shows only hops that return ICMP for TCP-SYN probes — many networks
+answer for ICMP-mode traceroute but not TCP, so an ICMP test often shows a fuller
+path while a TCP test better reflects the real application path and port reachability.
 
 Until the above is in place, set `NETLAMA_WLAN_DEMO=1` and/or
 `NETLAMA_TRACEROUTE_DEMO=1` to emit synthetic data so you can use the Wireless and
