@@ -29,6 +29,10 @@ type Server struct {
 	Metrics *Metrics
 	Logger  *slog.Logger
 
+	// MTLS: the gRPC listener requires verified client certs; additionally
+	// bind each cert to its agent by matching the CN against the agent name.
+	MTLS bool
+
 	mu        sync.Mutex
 	connected map[string]*connectedAgent // keyed by agent ID
 
@@ -83,6 +87,18 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 	if err != nil {
 		s.Logger.Warn("Agent with invalid token rejected", slog.String("clientId", register.ClientId))
 		return status.Error(codes.Unauthenticated, "invalid agent token")
+	}
+
+	// Per-agent mTLS: a valid token is not enough, the client certificate
+	// must also be issued to this agent (CN = agent name).
+	if s.MTLS {
+		if cn := PeerCertCN(stream.Context()); cn != agent.Name {
+			s.Logger.Warn("Agent client certificate rejected",
+				slog.String("clientId", register.ClientId),
+				slog.String("certCN", cn),
+				slog.String("agent", agent.Name))
+			return status.Error(codes.Unauthenticated, "client certificate does not match agent")
+		}
 	}
 
 	// Record the wireless interfaces the agent reported, so the UI can

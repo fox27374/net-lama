@@ -20,6 +20,8 @@ func main() {
 	useTLS := flag.Bool("tls", envEnabled("NETLAMA_TLS"), "Connect to the server over TLS")
 	tlsCA := flag.String("tls-ca", envOr("NETLAMA_TLS_CA", ""), "PEM file of the CA/server cert to trust (else system roots)")
 	tlsInsecure := flag.Bool("tls-insecure", envEnabled("NETLAMA_TLS_INSECURE"), "Skip server certificate verification (still encrypted)")
+	tlsCert := flag.String("tls-cert", envOr("NETLAMA_TLS_CERT", ""), "Client certificate for mTLS (issued per agent by the server)")
+	tlsKey := flag.String("tls-key", envOr("NETLAMA_TLS_KEY", ""), "Key for the mTLS client certificate")
 	flag.Parse()
 
 	logger := newLogger()
@@ -50,6 +52,8 @@ func main() {
 		TLS:         *useTLS,
 		TLSCAFile:   *tlsCA,
 		TLSInsecure: *tlsInsecure,
+		TLSCertFile: *tlsCert,
+		TLSKeyFile:  *tlsKey,
 	}
 
 	logger.Info("Agent starting",

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"log/slog"
 	"net"
@@ -29,9 +30,24 @@ func main() {
 	grpcAddr := flag.String("grpc", envOr("NETLAMA_GRPC_ADDR", ":50051"), "gRPC listen address for agents")
 	httpAddr := flag.String("http", envOr("NETLAMA_HTTP_ADDR", ":9090"), "HTTP listen address for UI, API and metrics")
 	dbPath := flag.String("db", envOr("NETLAMA_DB", "netlama.db"), "Path to the SQLite database")
+	issueAgentCert := flag.String("issue-agent-cert", "", "Issue an mTLS client certificate for the named agent (signed by the built-in agent CA) and exit")
 	flag.Parse()
 
 	logger := newLogger()
+
+	if *issueAgentCert != "" {
+		certPath, keyPath, err := server.IssueAgentCert(filepath.Dir(*dbPath), *issueAgentCert)
+		if err != nil {
+			logger.Error("Issuing agent certificate failed", slog.Any("error", err))
+			os.Exit(1)
+		}
+		logger.Info("Issued agent client certificate",
+			slog.String("agent", *issueAgentCert),
+			slog.String("cert", certPath),
+			slog.String("key", keyPath),
+			slog.String("note", "copy both to the agent and set NETLAMA_TLS_CERT/KEY there"))
+		return
+	}
 
 	st, err := store.Open(*dbPath)
 	if err != nil {
@@ -69,12 +85,40 @@ func main() {
 		logger.Warn("TLS is OFF — the agent control stream and web UI are unencrypted; set NETLAMA_TLS_SELF_SIGNED=1 or provide NETLAMA_TLS_CERT/KEY")
 	}
 
+	// mTLS: agents must present a client cert on the gRPC stream. The HTTP
+	// UI/API keeps plain server-auth TLS (browsers have no client certs).
+	mtlsCA := os.Getenv("NETLAMA_MTLS_CA")
+	mtlsOn := envEnabled("NETLAMA_MTLS") || mtlsCA != ""
+	grpcTLS := tlsConfig
+	if mtlsOn {
+		if !tlsOn {
+			logger.Error("mTLS requires TLS: set NETLAMA_TLS_SELF_SIGNED=1 or provide NETLAMA_TLS_CERT/KEY")
+			os.Exit(1)
+		}
+		pool, err := server.ClientCAPool(mtlsCA, filepath.Dir(*dbPath))
+		if err != nil {
+			logger.Error("Loading mTLS client CA failed", slog.Any("error", err))
+			os.Exit(1)
+		}
+		grpcTLS = tlsConfig.Clone()
+		grpcTLS.ClientCAs = pool
+		grpcTLS.ClientAuth = tls.RequireAndVerifyClientCert
+		if mtlsCA != "" {
+			logger.Info("mTLS enabled for the agent control stream", slog.String("clientCA", mtlsCA))
+		} else {
+			logger.Info("mTLS enabled for the agent control stream",
+				slog.String("clientCA", server.AgentCAPath(filepath.Dir(*dbPath))),
+				slog.String("note", "issue agent certs with -issue-agent-cert <agent-name>"))
+		}
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	registry := prometheus.NewRegistry()
 	metrics := server.NewMetrics(registry)
 	srv := server.New(st, metrics, logger)
+	srv.MTLS = mtlsOn
 
 	// HTTP: web UI, JSON API and Prometheus metrics
 	mux := http.NewServeMux()
@@ -111,7 +155,7 @@ func main() {
 
 	var grpcOpts []grpc.ServerOption
 	if tlsOn {
-		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(grpcTLS)))
 	}
 	grpcServer := grpc.NewServer(grpcOpts...)
 	pb.RegisterControlServiceServer(grpcServer, srv)

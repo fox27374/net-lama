@@ -33,6 +33,12 @@ services:
       NETLAMA_TLS_KEY: ${NETLAMA_TLS_KEY:-}
       NETLAMA_TLS_SELF_SIGNED: ${NETLAMA_TLS_SELF_SIGNED:-}
       NETLAMA_TLS_HOSTS: ${NETLAMA_TLS_HOSTS:-}
+      # mTLS: set NETLAMA_MTLS=1 to require per-agent client certs on the
+      # control stream (built-in agent CA; issue certs with
+      # `docker compose -f compose.sensor.yaml run --rm server -issue-agent-cert <agent-name>`),
+      # or point NETLAMA_MTLS_CA at your own CA bundle.
+      NETLAMA_MTLS: ${NETLAMA_MTLS:-}
+      NETLAMA_MTLS_CA: ${NETLAMA_MTLS_CA:-}
     restart: unless-stopped
 
   agent:
@@ -50,6 +56,10 @@ services:
       NETLAMA_TLS: ${NETLAMA_TLS:-}
       NETLAMA_TLS_CA: ${NETLAMA_TLS_CA:-}
       NETLAMA_TLS_INSECURE: ${NETLAMA_TLS_INSECURE:-}
+      # mTLS client certificate (mount the files into the container and
+      # point these at the in-container paths).
+      NETLAMA_TLS_CERT: ${NETLAMA_TLS_CERT:-}
+      NETLAMA_TLS_KEY: ${NETLAMA_TLS_KEY:-}
       NETLAMA_WLAN_DEMO: ${NETLAMA_WLAN_DEMO:-}
       NETLAMA_TRACEROUTE_DEMO: ${NETLAMA_TRACEROUTE_DEMO:-}
     depends_on:

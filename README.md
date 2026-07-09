@@ -187,7 +187,29 @@ NETLAMA_TLS_SELF_SIGNED=1 NETLAMA_TLS_HOSTS=netlama.example.com,10.0.0.5 \
 NETLAMA_TLS=1 NETLAMA_TLS_INSECURE=1 docker compose up -d
 ```
 
-Per-agent mTLS and ACME/Let's Encrypt automation are on the roadmap.
+### mTLS (per-agent client certificates)
+
+On top of the token, the server can require each agent to present a client
+certificate on the gRPC control stream; the certificate CN must match the
+agent's name. The web UI/API is unaffected.
+
+Server (env): `NETLAMA_MTLS=1` enables it with a built-in agent CA
+(auto-generated next to the database), **or** point `NETLAMA_MTLS_CA` at your
+own CA bundle (then issue agent certs with CN = agent name yourself). mTLS
+requires TLS to be enabled.
+
+Issue a certificate for an agent with the built-in CA:
+
+```sh
+# writes agent-<name>.pem / agent-<name>.key next to the database
+docker compose run --rm server -issue-agent-cert branch1
+```
+
+Agent (env): `NETLAMA_TLS_CERT` + `NETLAMA_TLS_KEY` point at the issued pair
+(mount it into the container). An agent without a matching client certificate
+cannot connect.
+
+ACME/Let's Encrypt automation is on the roadmap.
 
 ## Metrics
 
@@ -215,5 +237,5 @@ make vet     # go vet
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the full backlog (Kubernetes/Helm, zero-touch agent
-enrollment via DNS + WireGuard, TLS/mTLS, agent-to-agent perfmon, alerting, OTEL
+enrollment via DNS + WireGuard, agent-to-agent perfmon, alerting, OTEL
 export, native packages, WLAN sensing, and more).

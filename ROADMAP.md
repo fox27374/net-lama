@@ -19,8 +19,9 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] Encryption for the gRPC control stream (TLS): one cert for gRPC + HTTPS
       UI, self-signed auto-generation or provided cert/key, agent verify via
       CA/system-roots or skip-verify, secure cookies
-- [ ] Agent authentication at the server: per-agent mTLS (client certs) on top
-      of the token
+- [x] Agent authentication at the server: per-agent mTLS (client certs) on top
+      of the token — gRPC requires client certs (built-in agent CA or provided
+      bundle), cert CN bound to the agent name, `-issue-agent-cert` helper
 
 ## Tests & monitoring
 

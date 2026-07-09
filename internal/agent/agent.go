@@ -37,6 +37,14 @@ func (a *Agent) transportCredentials() (credentials.TransportCredentials, error)
 		}
 		cfg.RootCAs = pool
 	}
+	// mTLS: present a client certificate when the server requires one.
+	if a.TLSCertFile != "" || a.TLSKeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(a.TLSCertFile, a.TLSKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("loading TLS client certificate: %w", err)
+		}
+		cfg.Certificates = []tls.Certificate{cert}
+	}
 	return credentials.NewTLS(cfg), nil
 }
 
@@ -56,6 +64,8 @@ type Agent struct {
 	TLS         bool   // use TLS
 	TLSCAFile   string // PEM of the CA/server cert to trust (else system roots)
 	TLSInsecure bool   // skip server cert verification (still encrypted)
+	TLSCertFile string // client certificate for mTLS (issued per agent)
+	TLSKeyFile  string // key for TLSCertFile
 }
 
 // Run connects to the server and keeps the control stream alive,
