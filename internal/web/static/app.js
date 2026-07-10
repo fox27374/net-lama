@@ -517,7 +517,10 @@ async function loadSites() {
   tbody.innerHTML = "";
   $("#sites-empty").classList.toggle("hidden", sites.length > 0);
   for (const s of sites) {
-    const chips = (s.testIds || []).map((id) => `<span class="chip">${esc(testName(id))}</span>`).join(" ")
+    const chips = (s.testIds || []).map((id) => {
+      const t = tests.find((t) => t.id === id);
+      return `<span class="chip${t ? ` type-${t.type}` : ""}">${esc(testName(id))}</span>`;
+    }).join(" ")
       || '<span class="muted">none</span>';
     const tr = document.createElement("tr");
     tr.innerHTML = `

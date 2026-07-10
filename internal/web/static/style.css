@@ -316,6 +316,7 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
 /* Chips */
 .chip {
   display: inline-block;
+  margin: 2px 2px 2px 0;
   padding: 0.12rem 0.55rem;
   border-radius: 999px;
   font-size: 0.76rem;
@@ -327,6 +328,8 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
 .chip.type-ping { color: #2f81f7; border-color: #2f81f755; background: #2f81f712; }
 .chip.type-dns { color: #b57ee5; border-color: #b57ee555; background: #b57ee512; }
 .chip.type-speedtest { color: #e8a33d; border-color: #e8a33d55; background: #e8a33d12; }
+.chip.type-http { color: #3fb950; border-color: #3fb95055; background: #3fb95012; }
+.chip.type-tcp { color: #56d4dd; border-color: #56d4dd55; background: #56d4dd12; }
 
 /* Filters */
 .filters {
