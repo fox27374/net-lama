@@ -43,14 +43,29 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [ ] Traceroute Phase 2: native-Go engine (precise SYN-ACK/RST/filtered
       classification at the destination), Paris/Dublin stable paths for ECMP,
       hop enrichment (rDNS + ASN/owner + geo), path-change/history detection
+- [x] Speedtest provider selection: `speedtest` tests take a `provider`
+      param — `ookla` (default, existing speedtest-go client), `ndt7`
+      (M-Lab's official Go client) or `cloudflare` (speed.cloudflare.com,
+      stdlib-only) — so trustworthiness can be cross-checked across
+      independently operated fleets
 
 ## Server & UI
 
 - [x] HTTPS for the web UI + secure cookies (via the shared TLS cert)
 - [ ] ACME/Let's Encrypt automation for public deployments (autocert)
-- [ ] Everything controllable via API (audit the UI-only flows; document the API)
+- [x] Everything controllable via API (audited: every UI flow already went
+      through `/api/v1`, so GUI/API parity already existed) plus API-key
+      (`nlk_...` bearer token) authentication for scripted/CI use alongside
+      the session cookie, self-service API Keys UI page, and a full API
+      reference (`doc/API.md`)
+- [ ] API key expiry / scopes (currently keys never expire and carry the
+      full privileges of the owning user)
 - [ ] Metrics export to OTEL: keep Prometheus, add OTLP push
-- [ ] Enhanced logging; logs visible in the web UI (agent + server)
+- [x] Enhanced logging Phase 1: server and agent `log/slog` output (Info+) teed
+      into SQLite (bounded per-scope history via `NETLAMA_LOG_HISTORY`), agent
+      logs shipped over the existing control stream (buffered while
+      disconnected), Logs UI page with agent/level/source filters and
+      auto-refresh. Later: log download, DEBUG-level capture, retention by age.
 - [ ] Password change / user self-service in the UI
 - [x] On-demand test runs (`RUN_TEST`) from the UI — "Run now" on the Path and
       Results pages
@@ -59,3 +74,6 @@ Planned work, roughly grouped. Not ordered by priority yet.
 ## Documentation
 
 - [ ] Documentation website (user guide, API reference, deployment guides)
+- [ ] OpenAPI spec (`doc/openapi.yaml`) generated from the API surface, plus
+      an embedded Swagger UI page served by the server (e.g. `/api/docs`,
+      vendored static assets, works with API-key auth)

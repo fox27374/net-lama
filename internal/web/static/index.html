@@ -41,6 +41,8 @@
       <button data-nav="wireless">Wireless</button>
       <button data-nav="path">Path</button>
       <button data-nav="alerts">Alerts <span id="nav-alert-badge" class="nav-badge hidden"></span></button>
+      <button data-nav="logs">Logs</button>
+      <button data-nav="apikeys">API Keys</button>
       <button data-nav="admin" id="nav-admin" class="hidden">Tenants &amp; Users</button>
     </nav>
     <span class="spacer"></span>
@@ -246,6 +248,54 @@
       </div>
     </section>
 
+    <!-- Logs -->
+    <section id="section-logs" class="hidden">
+      <div class="section-head"><h2>Logs</h2></div>
+      <div class="card">
+        <div class="filters">
+          <label id="lg-source-wrap" class="hidden">Source
+            <select id="lg-source">
+              <option value="">All sources</option>
+              <option value="server">Server</option>
+              <option value="agent">Agent</option>
+            </select>
+          </label>
+          <label>Agent <select id="lg-agent"><option value="">All agents</option></select></label>
+          <label>Level
+            <select id="lg-level">
+              <option value="">All levels</option>
+              <option value="INFO">Info</option>
+              <option value="WARN">Warn</option>
+              <option value="ERROR">Error</option>
+            </select>
+          </label>
+          <span class="spacer"></span>
+          <label class="check"><input type="checkbox" id="lg-autorefresh" checked> Auto-refresh</label>
+          <button id="btn-logs-refresh" class="ghost" title="Refresh">&#8635; Refresh</button>
+        </div>
+        <div id="logs-container" class="table-scroll"></div>
+        <p id="logs-empty" class="empty hidden">No log entries yet.</p>
+      </div>
+    </section>
+
+    <!-- API Keys -->
+    <section id="section-apikeys" class="hidden">
+      <div class="section-head">
+        <h2>API Keys</h2>
+        <button id="btn-new-apikey" class="primary">New key</button>
+      </div>
+      <p class="muted">Keys carry your own privileges (admin or tenant-scoped) and work
+      anywhere a session cookie does &mdash; send <code>Authorization: Bearer &lt;key&gt;</code>.
+      See <code>doc/API.md</code> in the repository for the full API reference.</p>
+      <div class="card table-card">
+        <table id="apikeys-table">
+          <thead><tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="apikeys-empty" class="empty hidden">No API keys yet. Create one to script against the API.</p>
+      </div>
+    </section>
+
     <!-- Admin -->
     <section id="section-admin" class="hidden">
       <div class="columns">
@@ -357,6 +407,15 @@
       <p class="muted">Scans nearby access points on each agent's selected wireless
       interface (set per agent on the Wireless page).</p>
     </div>
+    <div id="t-params-speedtest" class="hidden">
+      <label>Provider
+        <select id="t-st-provider">
+          <option value="ookla">Ookla speedtest.net</option>
+          <option value="ndt7">M-Lab NDT7</option>
+          <option value="cloudflare">Cloudflare</option>
+        </select>
+      </label>
+    </div>
     <div id="t-params-traceroute" class="hidden">
       <label>Target (host or IP) <input type="text" id="t-tr-target" placeholder="www.google.com or 8.8.8.8"></label>
       <div class="grid2">
@@ -440,6 +499,30 @@
       <button type="submit" class="primary">Create</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="dlg-new-apikey">
+  <form id="form-new-apikey">
+    <h3>New API key</h3>
+    <label>Name <input type="text" id="ak-name" placeholder="ci" required></label>
+    <p class="error hidden" id="ak-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-apikey-created">
+  <h3>API key created</h3>
+  <p>Copy this key now &mdash; it is shown <strong>only once</strong> and cannot be
+  retrieved again:</p>
+  <pre id="apikey-value" class="token"></pre>
+  <pre id="apikey-cmd"></pre>
+  <div class="row end">
+    <button class="ghost" id="btn-copy-apikey">Copy key</button>
+    <button class="primary" onclick="this.closest('dialog').close()">Done</button>
+  </div>
 </dialog>
 
 <dialog id="dlg-new-tenant">

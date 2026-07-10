@@ -558,3 +558,13 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
 }
 .chart-tip .tip-row .val { font-weight: 650; color: var(--fg); }
 .chart-tip .tip-row .name { color: var(--muted-solid); }
+
+/* Logs page */
+.chip.type-server { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.chip.type-agent { color: #12a594; border-color: #12a59455; background: #12a59412; }
+.log-level { font-weight: 650; font-size: 0.82rem; letter-spacing: 0.02em; }
+.log-level.info { color: var(--muted-solid); }
+.log-level.warn { color: #d98a00; }
+.log-level.error { color: var(--bad); }
+.log-level.debug { color: var(--muted-solid); }
+.log-msg { font-family: var(--mono); font-size: 0.82rem; word-break: break-word; }

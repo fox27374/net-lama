@@ -83,7 +83,7 @@ async function showApp() {
   showSection("overview");
 }
 
-const sections = ["overview", "agents", "tests", "sites", "results", "wireless", "path", "alerts", "admin"];
+const sections = ["overview", "agents", "tests", "sites", "results", "wireless", "path", "alerts", "logs", "apikeys", "admin"];
 
 function showSection(name) {
   for (const sec of sections) $("#section-" + sec).classList.add("hidden");
@@ -106,6 +106,8 @@ function reloadSection(name) {
   if (name === "wireless") loadWireless();
   if (name === "path") loadPath();
   if (name === "alerts") loadAlerts();
+  if (name === "logs") loadLogs();
+  if (name === "apikeys") loadApiKeys();
   if (name === "admin") loadAdmin();
 }
 
@@ -312,7 +314,16 @@ function paramsSummary(t) {
     const port = (p.protocol === "icmp") ? "" : `:${p.port || 443}`;
     return `${p.target || ""} · ${proto}${port}`;
   }
+  if (t.type === "speedtest") return speedtestProviderLabel(p.provider);
   return "nearest server";
+}
+
+function speedtestProviderLabel(provider) {
+  switch (provider) {
+    case "ndt7": return "M-Lab NDT7";
+    case "cloudflare": return "Cloudflare";
+    default: return "Ookla speedtest.net";
+  }
 }
 
 async function loadTests() {
@@ -349,6 +360,7 @@ function updateTestParamFields() {
   $("#t-params-tcp").classList.toggle("hidden", type !== "tcp");
   $("#t-params-wlan").classList.toggle("hidden", type !== "wlan_scan");
   $("#t-params-traceroute").classList.toggle("hidden", type !== "traceroute");
+  $("#t-params-speedtest").classList.toggle("hidden", type !== "speedtest");
 }
 $("#t-type").addEventListener("change", updateTestParamFields);
 
@@ -377,6 +389,7 @@ function openTestDialog(test) {
   $("#t-tr-port").value = (test && test.type === "traceroute" && p.port) || 443;
   $("#t-tr-maxhops").value = (test && test.type === "traceroute" && p.maxHops) || 30;
   $("#t-tr-probes").value = (test && test.type === "traceroute" && p.probesPerHop) || 5;
+  $("#t-st-provider").value = (test && test.type === "speedtest" && p.provider) || "ookla";
   updateTestParamFields();
   $("#dlg-test").showModal();
 }
@@ -407,6 +420,8 @@ $("#form-test").addEventListener("submit", async (e) => {
       maxHops: +$("#t-tr-maxhops").value,
       probesPerHop: +$("#t-tr-probes").value,
     };
+  } else if (type === "speedtest") {
+    params = { provider: $("#t-st-provider").value };
   }
   const body = {
     name: $("#t-name").value.trim(),
@@ -555,7 +570,8 @@ function resultDetails(r) {
   if (r.error) return `<span class="error">${esc(r.error)}</span>`;
   if (p.speedtest) {
     const s = p.speedtest;
-    return `↓ ${fmt(s.downloadMbps)} Mbps · ↑ ${fmt(s.uploadMbps)} Mbps · ${fmt(s.latencyMs, 0)} ms · ${esc(s.serverName || "")}`;
+    const provider = speedtestProviderLabel(s.provider);
+    return `↓ ${fmt(s.downloadMbps)} Mbps · ↑ ${fmt(s.uploadMbps)} Mbps · ${fmt(s.latencyMs, 0)} ms · ${esc(s.serverName || "")} · <span class="muted">${esc(provider)}</span>`;
   }
   if (p.ping) {
     const g = p.ping;
@@ -1418,6 +1434,114 @@ $("#form-rule").addEventListener("submit", async (e) => {
   } catch (err) {
     dialogError("#ar-error", err.message);
   }
+});
+
+// --- Logs ---
+let logsAutoTimer = null;
+
+async function loadLogs() {
+  await fetchAgents();
+  fillFilter("#lg-agent", agents, "All agents");
+  $("#lg-source-wrap").classList.toggle("hidden", !me.isAdmin);
+  await refreshLogs();
+  scheduleLogsAutoRefresh();
+}
+
+// Auto-refresh every 5s while the Logs page is the visible section and
+// the toggle is checked; harmless no-op otherwise (checked before fetching).
+function scheduleLogsAutoRefresh() {
+  clearInterval(logsAutoTimer);
+  logsAutoTimer = setInterval(() => {
+    if (currentSection() === "logs" && $("#lg-autorefresh").checked) refreshLogs();
+  }, 5000);
+}
+
+async function refreshLogs() {
+  const params = new URLSearchParams();
+  const tid = tenantParam("");
+  if (tid) params.set("tenantId", tid.split("=")[1]);
+  if ($("#lg-agent").value) params.set("agentId", $("#lg-agent").value);
+  if ($("#lg-level").value) params.set("level", $("#lg-level").value);
+  if (me.isAdmin && $("#lg-source").value) params.set("source", $("#lg-source").value);
+  params.set("limit", "500");
+
+  const logs = await api("GET", "/api/v1/logs?" + params.toString());
+  renderLogs(logs);
+}
+
+function renderLogs(logs) {
+  const c = $("#logs-container");
+  $("#logs-empty").classList.toggle("hidden", logs.length > 0);
+  if (!logs.length) {
+    c.innerHTML = "";
+    return;
+  }
+  const rows = logs.map((l) => `
+    <tr>
+      <td class="muted nowrap">${new Date(l.time).toLocaleString()}</td>
+      <td><span class="chip type-${l.source}">${esc(l.source)}</span></td>
+      <td>${esc(l.source === "server" ? "–" : (l.agentName || "?"))}</td>
+      <td><span class="log-level ${esc((l.level || "").toLowerCase())}">${esc(l.level)}</span></td>
+      <td class="log-msg">${esc(l.message)}</td>
+    </tr>`).join("");
+  c.innerHTML = `<table>
+    <thead><tr><th>Time</th><th>Source</th><th>Agent</th><th>Level</th><th>Message</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+$("#lg-agent").addEventListener("change", refreshLogs);
+$("#lg-level").addEventListener("change", refreshLogs);
+$("#lg-source").addEventListener("change", refreshLogs);
+$("#btn-logs-refresh").addEventListener("click", refreshLogs);
+
+// --- API Keys ---
+async function loadApiKeys() {
+  const keys = await api("GET", "/api/v1/apikeys");
+  const tbody = $("#apikeys-table tbody");
+  tbody.innerHTML = "";
+  $("#apikeys-empty").classList.toggle("hidden", keys.length > 0);
+  for (const k of keys) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${esc(k.name)}</strong></td>
+      <td class="muted">${esc(k.prefix)}&hellip;</td>
+      <td class="muted nowrap">${new Date(k.createdAt).toLocaleString()}</td>
+      <td class="muted nowrap">${k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleString() : "never"}</td>
+      <td style="text-align:right"><button class="danger" data-del>Revoke</button></td>`;
+    tr.querySelector("[data-del]").addEventListener("click", async () => {
+      if (!confirm(`Revoke API key "${k.name}"? Anything using it stops working immediately.`)) return;
+      await api("DELETE", `/api/v1/apikeys/${k.id}`);
+      loadApiKeys();
+    });
+    tbody.appendChild(tr);
+  }
+}
+
+$("#btn-new-apikey").addEventListener("click", () => {
+  $("#ak-name").value = "";
+  dialogError("#ak-error", "");
+  $("#dlg-new-apikey").showModal();
+});
+
+$("#form-new-apikey").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const key = await api("POST", "/api/v1/apikeys", { name: $("#ak-name").value.trim() });
+    $("#dlg-new-apikey").close();
+    $("#apikey-value").textContent = key.secret;
+    $("#apikey-cmd").textContent =
+      `curl -H "Authorization: Bearer ${key.secret}" https://<server>/api/v1/me`;
+    $("#dlg-apikey-created").showModal();
+    loadApiKeys();
+  } catch (err) {
+    dialogError("#ak-error", err.message);
+  }
+});
+
+$("#btn-copy-apikey").addEventListener("click", () => {
+  navigator.clipboard.writeText($("#apikey-value").textContent);
+  $("#btn-copy-apikey").textContent = "Copied!";
+  setTimeout(() => { $("#btn-copy-apikey").textContent = "Copy key"; }, 1500);
 });
 
 // --- Admin ---

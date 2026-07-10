@@ -39,7 +39,7 @@ This is the Go rebuild of the original Python prototype (preserved in [legacy/](
 |------|-------------|
 | `cmd/server` | Central server: gRPC control endpoint, web UI, JSON API, SQLite, Prometheus exporter |
 | `cmd/agent` | Sensor agent: runs speedtest/ping/DNS on schedule, streams results |
-| `internal/probe` | Test implementations (speedtest.net, ICMP ping, timed DNS lookups) |
+| `internal/probe` | Test implementations (speedtest: ookla/ndt7/cloudflare, ICMP ping, timed DNS lookups) |
 | `internal/store` | SQLite persistence (tenants, users, sessions, agents, results) |
 | `internal/api` | JSON REST API under `/api/v1` |
 | `internal/web` | Embedded single-page web UI |
@@ -64,7 +64,8 @@ On first start with an empty database the server creates an `admin` user; the pa
 comes from `NETLAMA_ADMIN_PASSWORD` or is generated and printed in the log.
 
 Server flags/env: `-grpc`/`NETLAMA_GRPC_ADDR` (default `:50051`), `-http`/`NETLAMA_HTTP_ADDR`
-(default `:9090`), `-db`/`NETLAMA_DB`. Agent: `-server`/`NETLAMA_SERVER`,
+(default `:9090`), `-db`/`NETLAMA_DB`, `-log-history`/`NETLAMA_LOG_HISTORY` (default `1000`,
+see [Logs](#logs) below). Agent: `-server`/`NETLAMA_SERVER`,
 `-token`/`NETLAMA_TOKEN`, `-id`/`NETLAMA_CLIENT_ID` (informational, defaults to hostname).
 Set `DEBUG=1` for debug logging. Cross-compile the agent for a Raspberry Pi with `make pi`.
 
@@ -75,6 +76,17 @@ The UI (login with username/password, dark/light theme) has pages for:
 * **Overview** — the tenant landing page: site/agent/test counts and per-test health
   (healthy / degraded / failing / no data); click a test to jump to its results
 * **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_scan/speedtest) with interval and parameters
+  * `speedtest` tests pick a **provider**: `ookla` (default, speedtest.net via the
+    unofficial `showwin/speedtest-go` client against volunteer-run servers — the
+    most widely available but occasionally untrustworthy, so results are
+    retried across servers and implausible readings are rejected), `ndt7`
+    (M-Lab's official Go client against the M-Lab measurement fleet — research-grade
+    and independently operated) or `cloudflare` (speed.cloudflare.com via a
+    stdlib-only HTTP implementation against Cloudflare's edge network). Run more
+    than one side by side to cross-check readings. On a Raspberry Pi, TLS
+    throughput (all three providers measure over HTTPS/WSS) caps what any of
+    them can report on fast links — expect the ceiling to be the Pi's, not the
+    link's, above a few hundred Mbps.
 * **Wireless** — per agent: pick its WLAN sensor interface and view the nearby access
   points (SSID, BSSID, band, channel, RSSI, security) from its latest scan
 * **Path** — traceroute path visualization: the hop chain from an agent to a target
@@ -82,6 +94,13 @@ The UI (login with username/password, dark/light theme) has pages for:
 * **Alerts** — define rules (a test is unhealthy, or a metric such as latency/loss
   crosses a threshold for N consecutive runs) with optional webhook notification;
   see active and recent alerts, with a firing count badge in the nav
+* **Logs** — server and agent log lines (Info and above) in one place, newest
+  first, filterable by agent and level; admins can also filter by source and see
+  server logs (tenant users only ever see their own agents' logs). Auto-refreshes
+  every 5s while the page is open.
+* **API Keys** — every user creates and revokes their own bearer tokens
+  (`nlk_...`) for scripted/CI access to the API; a key carries exactly the
+  owning user's privileges, and the full secret is shown once, at creation.
 
 The Path and Results pages also have a **Run now** button to trigger a test on a
 specific agent immediately instead of waiting for its interval.
@@ -91,10 +110,29 @@ specific agent immediately instead of waiting for its interval.
 * **Results** — recent results filterable by site, agent and test
 * **Tenants & Users** — admin only
 
-Everything the UI does goes through the JSON API under `/api/v1`
-(cookie session via `POST /api/v1/login`): `tenants`, `users`, `sites`,
-`sites/{id}/tests`, `tests`, `agents`, `results?siteId=&agentId=&testId=&limit=`.
-Admins pass `?tenantId=` to scope requests; tenant users are scoped automatically.
+Everything the UI does goes through the JSON API under `/api/v1`: `tenants`,
+`users`, `sites`, `sites/{id}/tests`, `tests`, `agents`, `apikeys`,
+`results?siteId=&agentId=&testId=&limit=`, `logs?source=&agentId=&level=&limit=`,
+`alert-rules`, `alerts`. Two auth methods are accepted on every route: the
+session cookie (`POST /api/v1/login`) used by the UI, or an
+`Authorization: Bearer nlk_...` API key for scripts — create one via
+`POST /api/v1/apikeys` (with a session cookie) or the API Keys page, then
+use it standalone with zero further per-endpoint differences. Admins pass
+`?tenantId=` to scope requests; tenant users are scoped automatically. See
+[doc/API.md](doc/API.md) for the full reference (every route, request/response
+shapes, auth flow with curl examples).
+
+### Logs
+
+Both the server and every agent tee their own `log/slog` output (Info level and
+above) onto the Logs page: the server writes directly to its SQLite database, an
+agent buffers lines in a small ring buffer (capacity 200, drops the oldest while
+disconnected) and ships them over its existing control stream once connected.
+Neither path ever blocks the process it runs in — a full buffer just drops the
+oldest/newest entry rather than slowing down tests or the server's hot path.
+History is bounded per scope (the server is one scope, each agent is its own) by
+`NETLAMA_LOG_HISTORY` (default `1000` lines); older rows are pruned automatically,
+the same way results are.
 
 ## Running in containers
 
