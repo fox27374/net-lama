@@ -11,6 +11,10 @@ import (
 
 type Store struct {
 	db *sql.DB
+
+	// logHistory caps how many log rows are kept per scope (the server,
+	// and each agent). Overridable via SetLogHistory.
+	logHistory int
 }
 
 func Open(path string) (*Store, error) {
@@ -23,7 +27,7 @@ func Open(path string) (*Store, error) {
 	// SQLITE_BUSY errors under concurrent API and result writes.
 	db.SetMaxOpenConns(1)
 
-	s := &Store{db: db}
+	s := &Store{db: db, logHistory: defaultLogHistory}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
@@ -120,6 +124,17 @@ func (s *Store) migrate() error {
 		resolved_at TIMESTAMP
 	);
 	CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts (rule_id, agent_id, state);
+	CREATE TABLE IF NOT EXISTS logs (
+		id        INTEGER PRIMARY KEY AUTOINCREMENT,
+		time      TIMESTAMP NOT NULL,
+		tenant_id TEXT NOT NULL DEFAULT '',
+		agent_id  TEXT NOT NULL DEFAULT '',
+		source    TEXT NOT NULL,   -- server | agent
+		level     TEXT NOT NULL,
+		message   TEXT NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_logs_scope_time ON logs (source, agent_id, time DESC);
+	CREATE INDEX IF NOT EXISTS idx_logs_tenant_time ON logs (tenant_id, time DESC);
 	`)
 	if err != nil {
 		return err

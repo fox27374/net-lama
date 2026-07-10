@@ -200,10 +200,7 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 			case *pb.AgentMessage_Result:
 				s.handleResult(logger, conn, payload.Result)
 			case *pb.AgentMessage_Log:
-				logger.Info("Agent log",
-					slog.String("level", payload.Log.Level),
-					slog.String("message", payload.Log.Message),
-				)
+				s.handleAgentLog(logger, conn, payload.Log)
 			}
 
 		case push, ok := <-conn.push:
@@ -331,6 +328,29 @@ func resultOK(r *pb.TestResult) bool {
 		return true
 	}
 	return true
+}
+
+// handleAgentLog persists a log line shipped by a connected (and thus
+// already registered) agent, scoped to its tenant and agent ID. This is
+// deliberately not routed through s.Logger: that would tee it back into
+// the server's own "source: server" log stream as a second, differently
+// formatted copy of the same line.
+func (s *Server) handleAgentLog(logger *slog.Logger, conn *connectedAgent, log *pb.LogEntry) {
+	t := time.Now()
+	if log.Time != nil {
+		t = log.Time.AsTime()
+	}
+	err := s.Store.InsertLog(&store.LogEntry{
+		Time:     t,
+		TenantID: conn.agent.TenantID,
+		AgentID:  conn.agent.ID,
+		Source:   "agent",
+		Level:    log.Level,
+		Message:  log.Message,
+	})
+	if err != nil {
+		logger.Warn("Storing agent log failed", slog.Any("error", err))
+	}
 }
 
 func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result *pb.TestResult) {

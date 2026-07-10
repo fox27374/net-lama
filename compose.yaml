@@ -34,6 +34,9 @@ services:
       # or point NETLAMA_MTLS_CA at your own CA bundle.
       NETLAMA_MTLS: ${NETLAMA_MTLS:-}
       NETLAMA_MTLS_CA: ${NETLAMA_MTLS_CA:-}
+      # How many log lines (Info+) to keep per scope (the server, and each
+      # agent) for the Logs page. Default: 1000.
+      NETLAMA_LOG_HISTORY: ${NETLAMA_LOG_HISTORY:-}
     restart: unless-stopped
 
   # The agent needs a token that only exists after it was created in

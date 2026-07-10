@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -30,6 +31,7 @@ func main() {
 	grpcAddr := flag.String("grpc", envOr("NETLAMA_GRPC_ADDR", ":50051"), "gRPC listen address for agents")
 	httpAddr := flag.String("http", envOr("NETLAMA_HTTP_ADDR", ":9090"), "HTTP listen address for UI, API and metrics")
 	dbPath := flag.String("db", envOr("NETLAMA_DB", "netlama.db"), "Path to the SQLite database")
+	logHistory := flag.Int("log-history", envIntOr("NETLAMA_LOG_HISTORY", 1000), "Number of log lines kept per scope (the server, and each agent) for the Logs page")
 	issueAgentCert := flag.String("issue-agent-cert", "", "Issue an mTLS client certificate for the named agent (signed by the built-in agent CA) and exit")
 	flag.Parse()
 
@@ -55,6 +57,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer st.Close()
+
+	st.SetLogHistory(*logHistory)
+	// Tee Info+ server logs into the store so they show up on the Logs
+	// UI page, alongside shipped agent logs. Anything logged before the
+	// store was open (above) only went to stderr, which is fine.
+	logger = slog.New(server.NewLogTee(logger.Handler(), st))
+	slog.SetDefault(logger)
 
 	if err := bootstrapAdmin(st, logger); err != nil {
 		logger.Error("Bootstrapping admin user failed", slog.Any("error", err))
@@ -236,6 +245,20 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// envIntOr parses an integer env var, falling back to (and ignoring
+// non-numeric values in favor of) fallback.
+func envIntOr(key string, fallback int) int {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return n
 }
 
 // envEnabled treats unset/""/0/false/off/no as disabled.

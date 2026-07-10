@@ -12,10 +12,20 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/fox27374/net-lama/internal/logtee"
 	"github.com/fox27374/net-lama/internal/probe"
 	pb "github.com/fox27374/net-lama/proto"
 )
+
+// logShipInterval is how often the send loop drains the buffered Info+
+// log lines and ships them to the server, while the stream is connected.
+const logShipInterval = 2 * time.Second
+
+// logBufferCapacity bounds how many log lines are held while
+// disconnected; the oldest is dropped once full.
+const logBufferCapacity = 200
 
 // transportCredentials builds the gRPC transport security for the agent.
 func (a *Agent) transportCredentials() (credentials.TransportCredentials, error) {
@@ -66,11 +76,25 @@ type Agent struct {
 	TLSInsecure bool   // skip server cert verification (still encrypted)
 	TLSCertFile string // client certificate for mTLS (issued per agent)
 	TLSKeyFile  string // key for TLSCertFile
+
+	// logBuf holds Info+ log lines (Logger tees into it) until the send
+	// loop can ship them to the server; it survives across reconnects so
+	// nothing logged while disconnected is lost (up to its capacity).
+	logBuf *logRingBuffer
 }
 
 // Run connects to the server and keeps the control stream alive,
 // reconnecting with exponential backoff until ctx is cancelled.
 func (a *Agent) Run(ctx context.Context) error {
+	if a.logBuf == nil {
+		a.logBuf = newLogRingBuffer(logBufferCapacity)
+		// Tee Info+ log lines into the buffer; the chatty per-connection
+		// debug lines never reach it since the tee only forwards Info+.
+		a.Logger = slog.New(logtee.New(a.Logger.Handler(), func(e logtee.Entry) {
+			a.logBuf.Push(e)
+		}))
+	}
+
 	delay := reconnectMinDelay
 
 	for {
@@ -181,7 +205,14 @@ func (a *Agent) runStream(ctx context.Context) error {
 	// Scheduler: runs the tests according to the active config
 	go a.schedule(streamCtx, cfgCh, cmdCh, results)
 
-	// Send loop: single writer on the stream
+	// Ship any log lines buffered while disconnected right away, then
+	// keep draining periodically.
+	a.sendBufferedLogs(stream)
+	logTicker := time.NewTicker(logShipInterval)
+	defer logTicker.Stop()
+
+	// Send loop: single writer on the stream — results and buffered log
+	// lines both go through stream.Send here so they can never interleave.
 	for {
 		select {
 		case result := <-results:
@@ -189,10 +220,32 @@ func (a *Agent) runStream(ctx context.Context) error {
 			if err := stream.Send(msg); err != nil {
 				return fmt.Errorf("sending result: %w", err)
 			}
+		case <-logTicker.C:
+			if err := a.sendBufferedLogs(stream); err != nil {
+				return err
+			}
 		case err := <-recvErr:
 			return fmt.Errorf("receiving: %w", err)
 		case <-streamCtx.Done():
 			return streamCtx.Err()
 		}
 	}
+}
+
+// sendBufferedLogs drains the log ring buffer and ships every entry on
+// the stream. It is only ever called from the single-writer send loop
+// (plus once right after registration), so it cannot interleave with
+// result sends.
+func (a *Agent) sendBufferedLogs(stream pb.ControlService_ControlStreamClient) error {
+	for _, e := range a.logBuf.Drain() {
+		msg := &pb.AgentMessage{Payload: &pb.AgentMessage_Log{Log: &pb.LogEntry{
+			Time:    timestamppb.New(e.Time),
+			Level:   e.Level,
+			Message: e.Message,
+		}}}
+		if err := stream.Send(msg); err != nil {
+			return fmt.Errorf("sending log: %w", err)
+		}
+	}
+	return nil
 }
