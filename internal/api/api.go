@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/fox27374/net-lama/internal/server"
 	"github.com/fox27374/net-lama/internal/store"
@@ -54,19 +55,42 @@ func (a *API) Register(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /api/v1/results", a.auth(a.handleListResults))
 	mux.HandleFunc("GET /api/v1/overview", a.auth(a.handleOverview))
+	mux.HandleFunc("GET /api/v1/logs", a.auth(a.handleListLogs))
 
 	mux.HandleFunc("GET /api/v1/alert-rules", a.auth(a.handleListAlertRules))
 	mux.HandleFunc("POST /api/v1/alert-rules", a.auth(a.handleCreateAlertRule))
 	mux.HandleFunc("DELETE /api/v1/alert-rules/{id}", a.auth(a.handleDeleteAlertRule))
 	mux.HandleFunc("GET /api/v1/alerts", a.auth(a.handleListAlerts))
+
+	mux.HandleFunc("GET /api/v1/apikeys", a.auth(a.handleListAPIKeys))
+	mux.HandleFunc("POST /api/v1/apikeys", a.auth(a.handleCreateAPIKey))
+	mux.HandleFunc("DELETE /api/v1/apikeys/{id}", a.auth(a.handleDeleteAPIKey))
 }
 
 // --- middleware ---
 
 type authedHandler func(w http.ResponseWriter, r *http.Request, user *store.User)
 
+// auth accepts either an "Authorization: Bearer nlk_..." API key (for
+// scripted/programmatic use) or the session cookie set by /api/v1/login.
+// A presented bearer token is never logged, even on failure.
 func (a *API) auth(next authedHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if hdr := r.Header.Get("Authorization"); hdr != "" {
+			secret, ok := strings.CutPrefix(hdr, "Bearer ")
+			if !ok || secret == "" {
+				writeError(w, http.StatusUnauthorized, "malformed Authorization header")
+				return
+			}
+			user, err := a.Store.APIKeyUser(secret)
+			if err != nil {
+				writeError(w, http.StatusUnauthorized, "invalid API key")
+				return
+			}
+			next(w, r, user)
+			return
+		}
+
 		cookie, err := r.Cookie(sessionCookie)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "not logged in")

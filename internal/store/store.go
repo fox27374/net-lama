@@ -135,6 +135,16 @@ func (s *Store) migrate() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_logs_scope_time ON logs (source, agent_id, time DESC);
 	CREATE INDEX IF NOT EXISTS idx_logs_tenant_time ON logs (tenant_id, time DESC);
+	CREATE TABLE IF NOT EXISTS api_keys (
+		id           TEXT PRIMARY KEY,
+		user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		name         TEXT NOT NULL,
+		key_hash     TEXT NOT NULL UNIQUE,
+		prefix       TEXT NOT NULL,
+		created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		last_used_at TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys (user_id);
 	`)
 	if err != nil {
 		return err
