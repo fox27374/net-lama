@@ -117,6 +117,12 @@ What has been done so far, in chronological order. Planned work lives in
   correct `provider` field via `GET /api/v1/results`, and a test created
   with an empty `provider` (pre-existing-row shape) ran as `ookla`,
   confirming backward compatibility.
+- **Robustness fix**: treat uninterpolated compose placeholders as unset.
+  Older podman-compose versions (e.g., Debian 12's) pass `${VAR:-default}`
+  syntax literally to the container. Updated `envOr`, `envEnabled`, and
+  `envIntOr` helpers in both cmd mains and `internal/probe/env.go` to detect
+  and ignore such placeholders, so they behave like empty/unset values.
+  Added unit tests and a README note about the old podman-compose behavior.
 
 ## Live deployment
 

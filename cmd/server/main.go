@@ -242,16 +242,25 @@ func bootstrapAdmin(st *store.Store, logger *slog.Logger) error {
 
 func envOr(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
+		// Treat uninterpolated ${...} compose placeholders as unset
+		if len(value) > 0 && value[0] == '$' && len(value) > 1 && value[1] == '{' {
+			return fallback
+		}
 		return value
 	}
 	return fallback
 }
 
 // envIntOr parses an integer env var, falling back to (and ignoring
-// non-numeric values in favor of) fallback.
+// non-numeric values in favor of) fallback. Also treats uninterpolated
+// ${...} compose placeholders as unset.
 func envIntOr(key string, fallback int) int {
 	value, ok := os.LookupEnv(key)
 	if !ok {
+		return fallback
+	}
+	// Treat uninterpolated ${...} compose placeholders as unset
+	if len(value) > 0 && value[0] == '$' && len(value) > 1 && value[1] == '{' {
 		return fallback
 	}
 	n, err := strconv.Atoi(value)
@@ -262,8 +271,14 @@ func envIntOr(key string, fallback int) int {
 }
 
 // envEnabled treats unset/""/0/false/off/no as disabled.
+// Also treats uninterpolated ${...} compose placeholders as disabled.
 func envEnabled(key string) bool {
-	switch os.Getenv(key) {
+	value := os.Getenv(key)
+	// Treat uninterpolated ${...} compose placeholders as unset
+	if len(value) > 0 && value[0] == '$' && len(value) > 1 && value[1] == '{' {
+		return false
+	}
+	switch value {
 	case "", "0", "false", "off", "no":
 		return false
 	default:

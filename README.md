@@ -159,6 +159,12 @@ To build locally instead, use the [Containerfile](Containerfile):
 `podman build --target server -t netlama-server .` (same for `agent`), and point
 compose at them via `NETLAMA_SERVER_IMAGE`/`NETLAMA_AGENT_IMAGE` in `.env`.
 
+**Note on old podman-compose versions:** Older podman-compose (e.g., Debian 12's
+version) does not interpolate `${VAR:-default}` syntax in compose `environment:`
+values and passes the literal string instead. Net-lama treats such uninterpolated
+placeholders as unset, but for full control over agent variables, set them
+explicitly in `.env` (e.g., `echo "NETLAMA_TLS=1" >> .env`).
+
 The agent's sysctl in the compose file allows unprivileged ICMP ping inside the
 container; the *host* must also allow it (`sysctl net.ipv4.ping_group_range` — wide
 open on Debian/RPi OS, needs `0 2147483647` in `/etc/sysctl.d/` on Ubuntu). For

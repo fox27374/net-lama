@@ -72,14 +72,24 @@ func main() {
 
 func envOr(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
+		// Treat uninterpolated ${...} compose placeholders as unset
+		if len(value) > 0 && value[0] == '$' && len(value) > 1 && value[1] == '{' {
+			return fallback
+		}
 		return value
 	}
 	return fallback
 }
 
 // envEnabled treats unset/""/0/false/off/no as disabled.
+// Also treats uninterpolated ${...} compose placeholders as disabled.
 func envEnabled(key string) bool {
-	switch os.Getenv(key) {
+	value := os.Getenv(key)
+	// Treat uninterpolated ${...} compose placeholders as unset
+	if len(value) > 0 && value[0] == '$' && len(value) > 1 && value[1] == '{' {
+		return false
+	}
+	switch value {
 	case "", "0", "false", "off", "no":
 		return false
 	default:
