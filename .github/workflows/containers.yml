@@ -18,7 +18,7 @@ jobs:
 
     strategy:
       matrix:
-        component: [server, agent]
+        component: [server, agent, agent-sensor]
 
     steps:
     - name: Checkout code
