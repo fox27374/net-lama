@@ -142,6 +142,31 @@ What has been done so far, in chronological order. Planned work lives in
   and ignore such placeholders, so they behave like empty/unset values.
   Added unit tests and a README note about the old podman-compose behavior.
 
+## 2026-07-10 — Agent resource statistics
+
+- **Agent stats** (CPU, memory, disk): agents collect and report resource usage
+  every 30s via a new `AgentStats` protobuf message. Stats are gathered by reading
+  host-level `/proc/stat` (CPU percentage calculated from two samples spaced by
+  reporting interval), `/proc/meminfo` (used = MemTotal - MemAvailable), and
+  `syscall.Statfs` on the root filesystem (disk usage). On non-Linux systems
+  stats collection fails gracefully and returns false/zero; no error loops.
+  Fixture-based unit tests for `/proc` parsing with provided test data; e2e
+  verification of stat collection and Prometheus export.
+- **Storage & API**: latest stats are stored per agent on the agents table
+  (JSON column), backward-compatible migration (NULL for old agents). `GET
+  /api/v1/agents` includes a `stats` object (omitted when agent never reported).
+- **Web UI**: Agents page shows three columns — CPU %, memory (used/total in GiB),
+  and disk (used/total in GiB) — each marked stale if > 2 minutes old, with "—"
+  when unavailable (non-Linux platforms, or never reported).
+- **Metrics**: five new Prometheus gauges labeled by tenant/site/client:
+  `netlama_agent_cpu_percent`, `netlama_agent_memory_used_bytes`,
+  `netlama_agent_memory_total_bytes`, `netlama_agent_disk_used_bytes`,
+  `netlama_agent_disk_total_bytes`.
+- **Docs**: README updated with agent stats section (host-level semantics, 30s cadence),
+  agent stats listed on the Agents page description, metrics section updated
+  with the new gauges, ROADMAP checkbox completed with note about per-container
+  scoping as a later refinement.
+
 ## Live deployment
 
 - Running on `ataltpr06.lnxnet.org`: rootless podman + podman-compose,

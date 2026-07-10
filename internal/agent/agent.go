@@ -27,6 +27,9 @@ const logShipInterval = 2 * time.Second
 // disconnected; the oldest is dropped once full.
 const logBufferCapacity = 200
 
+// statsInterval is how often the agent collects and sends resource statistics.
+const statsInterval = 30 * time.Second
+
 // transportCredentials builds the gRPC transport security for the agent.
 func (a *Agent) transportCredentials() (credentials.TransportCredentials, error) {
 	if !a.TLS {
@@ -81,6 +84,9 @@ type Agent struct {
 	// loop can ship them to the server; it survives across reconnects so
 	// nothing logged while disconnected is lost (up to its capacity).
 	logBuf *logRingBuffer
+
+	// statsCollector gathers CPU, memory, and disk statistics.
+	statsCollector *probe.StatsCollector
 }
 
 // Run connects to the server and keeps the control stream alive,
@@ -93,6 +99,10 @@ func (a *Agent) Run(ctx context.Context) error {
 		a.Logger = slog.New(logtee.New(a.Logger.Handler(), func(e logtee.Entry) {
 			a.logBuf.Push(e)
 		}))
+	}
+
+	if a.statsCollector == nil {
+		a.statsCollector = probe.NewStatsCollector()
 	}
 
 	delay := reconnectMinDelay
@@ -214,8 +224,14 @@ func (a *Agent) runStream(ctx context.Context) error {
 	logTicker := time.NewTicker(logShipInterval)
 	defer logTicker.Stop()
 
-	// Send loop: single writer on the stream — results and buffered log
-	// lines both go through stream.Send here so they can never interleave.
+	// Send stats every 30 seconds
+	statsTicker := time.NewTicker(statsInterval)
+	defer statsTicker.Stop()
+	// Send stats shortly after registration
+	a.sendStats(stream)
+
+	// Send loop: single writer on the stream — results, log lines, and
+	// stats all go through stream.Send here so they can never interleave.
 	for {
 		select {
 		case result := <-results:
@@ -227,6 +243,8 @@ func (a *Agent) runStream(ctx context.Context) error {
 			if err := a.sendBufferedLogs(stream); err != nil {
 				return err
 			}
+		case <-statsTicker.C:
+			a.sendStats(stream)
 		case err := <-recvErr:
 			return fmt.Errorf("receiving: %w", err)
 		case <-streamCtx.Done():
@@ -251,4 +269,36 @@ func (a *Agent) sendBufferedLogs(stream pb.ControlService_ControlStreamClient) e
 		}
 	}
 	return nil
+}
+
+// sendStats collects and sends resource statistics on the stream.
+// It is only ever called from the single-writer send loop, so it
+// cannot interleave with result or log sends.
+func (a *Agent) sendStats(stream pb.ControlService_ControlStreamClient) {
+	cpu, memUsed, memTotal, diskUsed, diskTotal, ok, err := a.statsCollector.Collect()
+	if err != nil {
+		a.Logger.Debug("Failed to collect stats", slog.Any("error", err))
+		return
+	}
+	if !ok {
+		// Stats not available on this platform (e.g., not Linux)
+		return
+	}
+
+	msg := &pb.AgentMessage{
+		Payload: &pb.AgentMessage_Stats{
+			Stats: &pb.AgentStats{
+				Time:           timestamppb.New(time.Now()),
+				CpuPercent:     cpu,
+				MemUsedBytes:   memUsed,
+				MemTotalBytes:  memTotal,
+				DiskUsedBytes:  diskUsed,
+				DiskTotalBytes: diskTotal,
+			},
+		},
+	}
+	if err := stream.Send(msg); err != nil {
+		a.Logger.Debug("Failed to send stats", slog.Any("error", err))
+		return
+	}
 }

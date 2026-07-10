@@ -27,8 +27,9 @@ Planned work, roughly grouped. Not ordered by priority yet.
 
 - [ ] Perfmon tests **between agents of the same tenant** (agent-to-agent
       throughput/latency, e.g. iperf-style with one agent as reflector)
-- [ ] Agent resource monitoring: CPU, memory, storage — reported over the
-      stream and visible in the UI/metrics
+- [x] Agent resource monitoring: CPU, memory, storage — reported over the
+      stream and visible in the UI/metrics (host-level readings; per-cgroup /
+      container-scoped readings a possible later refinement)
 - [x] Alerting and thresholding: per-test rules (unhealthy, or latency/loss/
       throughput thresholds) with consecutive-breach counts, per-target alert
       state, webhook notification, Alerts UI + nav badge. Later: email/SMTP,

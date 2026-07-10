@@ -106,7 +106,8 @@ The Path and Results pages also have a **Run now** button to trigger a test on a
 specific agent immediately instead of waiting for its interval.
 * **Sites** — create sites and assign tests to them (pushed live to the site's agents)
 * **Agents** — create agents in a site; shows the one-time enrollment token with a
-  ready-to-run `podman` command, and the live connection status
+  ready-to-run `podman` command, the live connection status, and resource statistics
+  (CPU %, memory and disk usage from the agent's host, updated every 30s)
 * **Results** — recent results filterable by site, agent and test
 * **Tenants & Users** — admin only
 
@@ -170,6 +171,18 @@ container; the *host* must also allow it (`sysctl net.ipv4.ping_group_range` —
 open on Debian/RPi OS, needs `0 2147483647` in `/etc/sysctl.d/` on Ubuntu). For
 rootless podman, enable lingering once (`loginctl enable-linger`) so containers
 survive logout.
+
+### Agent resource statistics
+
+Agents report CPU, memory, and disk usage every 30 seconds over the control stream
+and the server stores the latest reading. These stats are visible in the web UI on the
+Agents page and exported as Prometheus metrics. Note that these are **host-level
+readings**: when the agent runs in a container, the stats reflect the container's view
+of its host (accessible via `/proc/stat`, `/proc/meminfo`, and the root filesystem),
+not per-container cgroup limits. In a containerized environment, memory used = MemTotal
+minus MemAvailable, and disk used = total blocks minus free blocks on the root
+filesystem (which may include the container image layers). Per-container / per-cgroup
+scoped readings are a potential future refinement.
 
 ### Agent capabilities and test dispatch
 
@@ -270,7 +283,7 @@ ACME/Let's Encrypt automation is on the roadmap.
 The server exposes on `:9090/metrics`, all labeled with `tenant`, `site`, `client`
 and `test` (plus `target` for ping, `server`+`query` for DNS):
 
-* `netlama_agent_connected`
+* `netlama_agent_connected`, `netlama_agent_cpu_percent`, `netlama_agent_memory_used_bytes`, `netlama_agent_memory_total_bytes`, `netlama_agent_disk_used_bytes`, `netlama_agent_disk_total_bytes`
 * `netlama_speedtest_download_mbps`, `netlama_speedtest_upload_mbps`, `netlama_speedtest_latency_ms`
 * `netlama_ping_rtt_min_ms`, `netlama_ping_rtt_avg_ms`, `netlama_ping_rtt_max_ms`, `netlama_ping_packet_loss_percent`
 * `netlama_dns_resolve_time_ms`, `netlama_dns_success`

@@ -211,6 +211,64 @@ function testName(id) {
 }
 
 // --- Agents ---
+function formatBytes(bytes) {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
+function statsText(stats) {
+  if (!stats) return "—";
+  let text = "";
+  if (stats.cpuPercent !== undefined && stats.cpuPercent > 0) {
+    text += stats.cpuPercent.toFixed(1) + "%";
+  } else if (stats.cpuPercent === undefined) {
+    text = "—";
+  } else {
+    text = "0%";
+  }
+
+  // Check staleness (> 2 minutes)
+  const statsTime = new Date(stats.time).getTime();
+  const now = Date.now();
+  const stalenessMs = now - statsTime;
+  if (stalenessMs > 2 * 60 * 1000) {
+    text += " (stale)";
+  }
+
+  return text;
+}
+
+function memoryText(stats) {
+  if (!stats || stats.memTotalBytes === 0) return "—";
+  const used = formatBytes(stats.memUsedBytes);
+  const total = formatBytes(stats.memTotalBytes);
+
+  // Check staleness (> 2 minutes)
+  const statsTime = new Date(stats.time).getTime();
+  const now = Date.now();
+  const stalenessMs = now - statsTime;
+  const stale = stalenessMs > 2 * 60 * 1000 ? " (stale)" : "";
+
+  return `${used} / ${total}${stale}`;
+}
+
+function diskText(stats) {
+  if (!stats || stats.diskTotalBytes === 0) return "—";
+  const used = formatBytes(stats.diskUsedBytes);
+  const total = formatBytes(stats.diskTotalBytes);
+
+  // Check staleness (> 2 minutes)
+  const statsTime = new Date(stats.time).getTime();
+  const now = Date.now();
+  const stalenessMs = now - statsTime;
+  const stale = stalenessMs > 2 * 60 * 1000 ? " (stale)" : "";
+
+  return `${used} / ${total}${stale}`;
+}
+
 async function loadAgents() {
   await fetchAgents();
   const tbody = $("#agents-table tbody");
@@ -227,6 +285,9 @@ async function loadAgents() {
       <td><strong>${esc(a.name)}</strong></td>
       <td>${esc(a.siteName)}</td>
       <td>${caps}</td>
+      <td class="muted">${statsText(a.stats)}</td>
+      <td class="muted">${memoryText(a.stats)}</td>
+      <td class="muted">${diskText(a.stats)}</td>
       <td class="muted">${new Date(a.createdAt).toLocaleString()}</td>
       <td style="text-align:right">
         <button class="ghost" data-edit>Edit</button>

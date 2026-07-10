@@ -17,6 +17,7 @@ type Agent struct {
 	WlanInterface      string          `json:"wlanInterface"`
 	WirelessInterfaces json.RawMessage `json:"wirelessInterfaces"`
 	Capabilities       json.RawMessage `json:"capabilities"`
+	Stats              json.RawMessage `json:"stats,omitempty"`
 	CreatedAt          time.Time       `json:"createdAt"`
 }
 
@@ -71,9 +72,9 @@ func (s *Store) CreateAgent(tenantID, siteID, name string) (*Agent, error) {
 
 func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	a := &Agent{}
-	var wlanIface, wireless, capabilities string
+	var wlanIface, wireless, capabilities, stats string
 	err := row.Scan(&a.ID, &a.TenantID, &a.SiteID, &a.SiteName, &a.Name, &a.Token,
-		&wlanIface, &wireless, &capabilities, &a.CreatedAt)
+		&wlanIface, &wireless, &capabilities, &stats, &a.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -89,11 +90,14 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 		capabilities = "[]"
 	}
 	a.Capabilities = json.RawMessage(capabilities)
+	if stats != "" {
+		a.Stats = json.RawMessage(stats)
+	}
 	return a, nil
 }
 
 const agentCols = `a.id, a.tenant_id, a.site_id, s.name, a.name, a.token,
-	COALESCE(a.wlan_interface, ''), COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), a.created_at`
+	COALESCE(a.wlan_interface, ''), COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.created_at`
 const agentFrom = ` FROM agents a JOIN sites s ON s.id = a.site_id `
 
 func (s *Store) GetAgent(id string) (*Agent, error) {
@@ -159,6 +163,16 @@ func (s *Store) SetAgentInterfaces(id string, interfaces json.RawMessage) error 
 // SetAgentCapabilities records the capabilities an agent reported.
 func (s *Store) SetAgentCapabilities(id string, capabilities json.RawMessage) error {
 	_, err := s.db.Exec(`UPDATE agents SET capabilities = ? WHERE id = ?`, string(capabilities), id)
+	return err
+}
+
+// SetAgentStats records the latest statistics reported by an agent.
+func (s *Store) SetAgentStats(id string, stats interface{}) error {
+	statsJSON, err := json.Marshal(stats)
+	if err != nil {
+		return fmt.Errorf("marshalling stats: %w", err)
+	}
+	_, err = s.db.Exec(`UPDATE agents SET stats = ? WHERE id = ?`, string(statsJSON), id)
 	return err
 }
 

@@ -11,6 +11,12 @@ type Metrics struct {
 	resultsTotal   *prometheus.CounterVec
 	errorsTotal    *prometheus.CounterVec
 
+	agentCpuPercent      *prometheus.GaugeVec
+	agentMemoryUsed      *prometheus.GaugeVec
+	agentMemoryTotal     *prometheus.GaugeVec
+	agentDiskUsed        *prometheus.GaugeVec
+	agentDiskTotal       *prometheus.GaugeVec
+
 	speedtestDownload *prometheus.GaugeVec
 	speedtestUpload   *prometheus.GaugeVec
 	speedtestLatency  *prometheus.GaugeVec
@@ -59,11 +65,18 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	}
 
 	base := []string{"tenant", "site", "client", "test"}
+	labels := []string{"tenant", "site", "client"}
 
 	return &Metrics{
 		agentConnected: newGauge("agent_connected", "1 while the agent has an open control stream", "tenant", "site", "client"),
 		resultsTotal:   newCounter("results_received_total", "Number of test results received", append(base, "type")...),
 		errorsTotal:    newCounter("test_errors_total", "Number of failed test executions reported", append(base, "type")...),
+
+		agentCpuPercent:  newGauge("agent_cpu_percent", "Agent CPU usage as a percentage", labels...),
+		agentMemoryUsed:  newGauge("agent_memory_used_bytes", "Agent memory used in bytes", labels...),
+		agentMemoryTotal: newGauge("agent_memory_total_bytes", "Agent total memory in bytes", labels...),
+		agentDiskUsed:    newGauge("agent_disk_used_bytes", "Agent disk used in bytes", labels...),
+		agentDiskTotal:   newGauge("agent_disk_total_bytes", "Agent total disk in bytes", labels...),
 
 		speedtestDownload: newGauge("speedtest_download_mbps", "Last measured download speed in Mbps", base...),
 		speedtestUpload:   newGauge("speedtest_upload_mbps", "Last measured upload speed in Mbps", base...),
@@ -99,6 +112,16 @@ func (m *Metrics) SetConnected(tenant, site, client string, connected bool) {
 		value = 1.0
 	}
 	m.agentConnected.WithLabelValues(tenant, site, client).Set(value)
+}
+
+// RecordAgentStats updates the agent resource metrics.
+func (m *Metrics) RecordAgentStats(tenant, site, client string, stats *pb.AgentStats) {
+	labels := []string{tenant, site, client}
+	m.agentCpuPercent.WithLabelValues(labels...).Set(stats.CpuPercent)
+	m.agentMemoryUsed.WithLabelValues(labels...).Set(float64(stats.MemUsedBytes))
+	m.agentMemoryTotal.WithLabelValues(labels...).Set(float64(stats.MemTotalBytes))
+	m.agentDiskUsed.WithLabelValues(labels...).Set(float64(stats.DiskUsedBytes))
+	m.agentDiskTotal.WithLabelValues(labels...).Set(float64(stats.DiskTotalBytes))
 }
 
 // Record updates the metrics for one received test result.

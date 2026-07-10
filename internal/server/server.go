@@ -268,6 +268,8 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 				s.handleResult(logger, conn, payload.Result)
 			case *pb.AgentMessage_Log:
 				s.handleAgentLog(logger, conn, payload.Log)
+			case *pb.AgentMessage_Stats:
+				s.handleAgentStats(logger, conn, payload.Stats)
 			}
 
 		case push, ok := <-conn.push:
@@ -480,4 +482,37 @@ func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result 
 		return
 	}
 	logger.Info("Result received", slog.String("test", result.TestName), slog.String("type", testType))
+}
+
+// handleAgentStats persists the latest agent stats and updates metrics.
+func (s *Server) handleAgentStats(logger *slog.Logger, conn *connectedAgent, stats *pb.AgentStats) {
+	if stats == nil {
+		return
+	}
+
+	// Store the latest stats as the JSON shape the API/UI consume —
+	// marshaling the proto struct directly would produce snake_case keys
+	// and a {seconds,nanos} timestamp object.
+	snapshot := struct {
+		Time           string  `json:"time"`
+		CPUPercent     float64 `json:"cpuPercent"`
+		MemUsedBytes   uint64  `json:"memUsedBytes"`
+		MemTotalBytes  uint64  `json:"memTotalBytes"`
+		DiskUsedBytes  uint64  `json:"diskUsedBytes"`
+		DiskTotalBytes uint64  `json:"diskTotalBytes"`
+	}{
+		Time:           stats.GetTime().AsTime().Format(time.RFC3339),
+		CPUPercent:     stats.GetCpuPercent(),
+		MemUsedBytes:   stats.GetMemUsedBytes(),
+		MemTotalBytes:  stats.GetMemTotalBytes(),
+		DiskUsedBytes:  stats.GetDiskUsedBytes(),
+		DiskTotalBytes: stats.GetDiskTotalBytes(),
+	}
+	if err := s.Store.SetAgentStats(conn.agent.ID, snapshot); err != nil {
+		logger.Warn("Storing agent stats failed", slog.Any("error", err))
+		return
+	}
+
+	// Update Prometheus metrics
+	s.Metrics.RecordAgentStats(conn.tenant, conn.agent.SiteName, conn.agent.Name, stats)
 }

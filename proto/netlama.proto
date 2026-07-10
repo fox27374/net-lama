@@ -18,6 +18,7 @@ message AgentMessage {
     Register register = 1;
     TestResult result = 2;
     LogEntry log = 3;
+    AgentStats stats = 4;
   }
 }
 
@@ -235,4 +236,13 @@ message LogEntry {
   google.protobuf.Timestamp time = 1;
   string level = 2;
   string message = 3;
+}
+
+message AgentStats {
+  google.protobuf.Timestamp time = 1;
+  double cpu_percent = 2;      // 0 when not yet measurable
+  uint64 mem_used_bytes = 3;
+  uint64 mem_total_bytes = 4;
+  uint64 disk_used_bytes = 5;
+  uint64 disk_total_bytes = 6;
 }

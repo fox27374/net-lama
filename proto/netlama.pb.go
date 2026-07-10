@@ -75,6 +75,7 @@ type AgentMessage struct {
 	//	*AgentMessage_Register
 	//	*AgentMessage_Result
 	//	*AgentMessage_Log
+	//	*AgentMessage_Stats
 	Payload       isAgentMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -144,6 +145,15 @@ func (x *AgentMessage) GetLog() *LogEntry {
 	return nil
 }
 
+func (x *AgentMessage) GetStats() *AgentStats {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentMessage_Stats); ok {
+			return x.Stats
+		}
+	}
+	return nil
+}
+
 type isAgentMessage_Payload interface {
 	isAgentMessage_Payload()
 }
@@ -160,11 +170,17 @@ type AgentMessage_Log struct {
 	Log *LogEntry `protobuf:"bytes,3,opt,name=log,proto3,oneof"`
 }
 
+type AgentMessage_Stats struct {
+	Stats *AgentStats `protobuf:"bytes,4,opt,name=stats,proto3,oneof"`
+}
+
 func (*AgentMessage_Register) isAgentMessage_Payload() {}
 
 func (*AgentMessage_Result) isAgentMessage_Payload() {}
 
 func (*AgentMessage_Log) isAgentMessage_Payload() {}
+
+func (*AgentMessage_Stats) isAgentMessage_Payload() {}
 
 type ServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -2112,16 +2128,101 @@ func (x *LogEntry) GetMessage() string {
 	return ""
 }
 
+type AgentStats struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Time           *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
+	CpuPercent     float64                `protobuf:"fixed64,2,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"` // 0 when not yet measurable
+	MemUsedBytes   uint64                 `protobuf:"varint,3,opt,name=mem_used_bytes,json=memUsedBytes,proto3" json:"mem_used_bytes,omitempty"`
+	MemTotalBytes  uint64                 `protobuf:"varint,4,opt,name=mem_total_bytes,json=memTotalBytes,proto3" json:"mem_total_bytes,omitempty"`
+	DiskUsedBytes  uint64                 `protobuf:"varint,5,opt,name=disk_used_bytes,json=diskUsedBytes,proto3" json:"disk_used_bytes,omitempty"`
+	DiskTotalBytes uint64                 `protobuf:"varint,6,opt,name=disk_total_bytes,json=diskTotalBytes,proto3" json:"disk_total_bytes,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AgentStats) Reset() {
+	*x = AgentStats{}
+	mi := &file_proto_netlama_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentStats) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentStats) ProtoMessage() {}
+
+func (x *AgentStats) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_netlama_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentStats.ProtoReflect.Descriptor instead.
+func (*AgentStats) Descriptor() ([]byte, []int) {
+	return file_proto_netlama_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *AgentStats) GetTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Time
+	}
+	return nil
+}
+
+func (x *AgentStats) GetCpuPercent() float64 {
+	if x != nil {
+		return x.CpuPercent
+	}
+	return 0
+}
+
+func (x *AgentStats) GetMemUsedBytes() uint64 {
+	if x != nil {
+		return x.MemUsedBytes
+	}
+	return 0
+}
+
+func (x *AgentStats) GetMemTotalBytes() uint64 {
+	if x != nil {
+		return x.MemTotalBytes
+	}
+	return 0
+}
+
+func (x *AgentStats) GetDiskUsedBytes() uint64 {
+	if x != nil {
+		return x.DiskUsedBytes
+	}
+	return 0
+}
+
+func (x *AgentStats) GetDiskTotalBytes() uint64 {
+	if x != nil {
+		return x.DiskTotalBytes
+	}
+	return 0
+}
+
 var File_proto_netlama_proto protoreflect.FileDescriptor
 
 const file_proto_netlama_proto_rawDesc = "" +
 	"\n" +
 	"\x13proto/netlama.proto\x12\n" +
-	"netlama.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa9\x01\n" +
+	"netlama.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd9\x01\n" +
 	"\fAgentMessage\x122\n" +
 	"\bregister\x18\x01 \x01(\v2\x14.netlama.v1.RegisterH\x00R\bregister\x120\n" +
 	"\x06result\x18\x02 \x01(\v2\x16.netlama.v1.TestResultH\x00R\x06result\x12(\n" +
-	"\x03log\x18\x03 \x01(\v2\x14.netlama.v1.LogEntryH\x00R\x03logB\t\n" +
+	"\x03log\x18\x03 \x01(\v2\x14.netlama.v1.LogEntryH\x00R\x03log\x12.\n" +
+	"\x05stats\x18\x04 \x01(\v2\x16.netlama.v1.AgentStatsH\x00R\x05statsB\t\n" +
 	"\apayload\"y\n" +
 	"\rServerMessage\x12,\n" +
 	"\x06config\x18\x01 \x01(\v2\x12.netlama.v1.ConfigH\x00R\x06config\x12/\n" +
@@ -2287,7 +2388,16 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bLogEntry\x12.\n" +
 	"\x04time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage2Z\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xfd\x01\n" +
+	"\n" +
+	"AgentStats\x12.\n" +
+	"\x04time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x1f\n" +
+	"\vcpu_percent\x18\x02 \x01(\x01R\n" +
+	"cpuPercent\x12$\n" +
+	"\x0emem_used_bytes\x18\x03 \x01(\x04R\fmemUsedBytes\x12&\n" +
+	"\x0fmem_total_bytes\x18\x04 \x01(\x04R\rmemTotalBytes\x12&\n" +
+	"\x0fdisk_used_bytes\x18\x05 \x01(\x04R\rdiskUsedBytes\x12(\n" +
+	"\x10disk_total_bytes\x18\x06 \x01(\x04R\x0ediskTotalBytes2Z\n" +
 	"\x0eControlService\x12H\n" +
 	"\rControlStream\x12\x18.netlama.v1.AgentMessage\x1a\x19.netlama.v1.ServerMessage(\x010\x01B.Z,github.com/fox27374/net-lama/proto;netlamapbb\x06proto3"
 
@@ -2304,7 +2414,7 @@ func file_proto_netlama_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_netlama_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_netlama_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_proto_netlama_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_proto_netlama_proto_goTypes = []any{
 	(Command_Type)(0),             // 0: netlama.v1.Command.Type
 	(*AgentMessage)(nil),          // 1: netlama.v1.AgentMessage
@@ -2332,42 +2442,45 @@ var file_proto_netlama_proto_goTypes = []any{
 	(*TracerouteResult)(nil),      // 23: netlama.v1.TracerouteResult
 	(*Hop)(nil),                   // 24: netlama.v1.Hop
 	(*LogEntry)(nil),              // 25: netlama.v1.LogEntry
-	(*timestamppb.Timestamp)(nil), // 26: google.protobuf.Timestamp
+	(*AgentStats)(nil),            // 26: netlama.v1.AgentStats
+	(*timestamppb.Timestamp)(nil), // 27: google.protobuf.Timestamp
 }
 var file_proto_netlama_proto_depIdxs = []int32{
 	3,  // 0: netlama.v1.AgentMessage.register:type_name -> netlama.v1.Register
 	15, // 1: netlama.v1.AgentMessage.result:type_name -> netlama.v1.TestResult
 	25, // 2: netlama.v1.AgentMessage.log:type_name -> netlama.v1.LogEntry
-	5,  // 3: netlama.v1.ServerMessage.config:type_name -> netlama.v1.Config
-	14, // 4: netlama.v1.ServerMessage.command:type_name -> netlama.v1.Command
-	4,  // 5: netlama.v1.Register.wireless_interfaces:type_name -> netlama.v1.WirelessInterface
-	6,  // 6: netlama.v1.Config.tests:type_name -> netlama.v1.TestSpec
-	7,  // 7: netlama.v1.TestSpec.speedtest:type_name -> netlama.v1.SpeedtestParams
-	8,  // 8: netlama.v1.TestSpec.ping:type_name -> netlama.v1.PingParams
-	9,  // 9: netlama.v1.TestSpec.dns:type_name -> netlama.v1.DnsParams
-	10, // 10: netlama.v1.TestSpec.http:type_name -> netlama.v1.HttpParams
-	11, // 11: netlama.v1.TestSpec.tcp:type_name -> netlama.v1.TcpParams
-	12, // 12: netlama.v1.TestSpec.wlan_scan:type_name -> netlama.v1.WlanScanParams
-	13, // 13: netlama.v1.TestSpec.traceroute:type_name -> netlama.v1.TracerouteParams
-	0,  // 14: netlama.v1.Command.type:type_name -> netlama.v1.Command.Type
-	26, // 15: netlama.v1.TestResult.time:type_name -> google.protobuf.Timestamp
-	16, // 16: netlama.v1.TestResult.speedtest:type_name -> netlama.v1.SpeedtestResult
-	17, // 17: netlama.v1.TestResult.ping:type_name -> netlama.v1.PingResult
-	18, // 18: netlama.v1.TestResult.dns:type_name -> netlama.v1.DnsResult
-	19, // 19: netlama.v1.TestResult.http:type_name -> netlama.v1.HttpResult
-	20, // 20: netlama.v1.TestResult.tcp:type_name -> netlama.v1.TcpResult
-	21, // 21: netlama.v1.TestResult.wlan_scan:type_name -> netlama.v1.WlanScanResult
-	23, // 22: netlama.v1.TestResult.traceroute:type_name -> netlama.v1.TracerouteResult
-	22, // 23: netlama.v1.WlanScanResult.access_points:type_name -> netlama.v1.AccessPoint
-	24, // 24: netlama.v1.TracerouteResult.hops:type_name -> netlama.v1.Hop
-	26, // 25: netlama.v1.LogEntry.time:type_name -> google.protobuf.Timestamp
-	1,  // 26: netlama.v1.ControlService.ControlStream:input_type -> netlama.v1.AgentMessage
-	2,  // 27: netlama.v1.ControlService.ControlStream:output_type -> netlama.v1.ServerMessage
-	27, // [27:28] is the sub-list for method output_type
-	26, // [26:27] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	26, // 3: netlama.v1.AgentMessage.stats:type_name -> netlama.v1.AgentStats
+	5,  // 4: netlama.v1.ServerMessage.config:type_name -> netlama.v1.Config
+	14, // 5: netlama.v1.ServerMessage.command:type_name -> netlama.v1.Command
+	4,  // 6: netlama.v1.Register.wireless_interfaces:type_name -> netlama.v1.WirelessInterface
+	6,  // 7: netlama.v1.Config.tests:type_name -> netlama.v1.TestSpec
+	7,  // 8: netlama.v1.TestSpec.speedtest:type_name -> netlama.v1.SpeedtestParams
+	8,  // 9: netlama.v1.TestSpec.ping:type_name -> netlama.v1.PingParams
+	9,  // 10: netlama.v1.TestSpec.dns:type_name -> netlama.v1.DnsParams
+	10, // 11: netlama.v1.TestSpec.http:type_name -> netlama.v1.HttpParams
+	11, // 12: netlama.v1.TestSpec.tcp:type_name -> netlama.v1.TcpParams
+	12, // 13: netlama.v1.TestSpec.wlan_scan:type_name -> netlama.v1.WlanScanParams
+	13, // 14: netlama.v1.TestSpec.traceroute:type_name -> netlama.v1.TracerouteParams
+	0,  // 15: netlama.v1.Command.type:type_name -> netlama.v1.Command.Type
+	27, // 16: netlama.v1.TestResult.time:type_name -> google.protobuf.Timestamp
+	16, // 17: netlama.v1.TestResult.speedtest:type_name -> netlama.v1.SpeedtestResult
+	17, // 18: netlama.v1.TestResult.ping:type_name -> netlama.v1.PingResult
+	18, // 19: netlama.v1.TestResult.dns:type_name -> netlama.v1.DnsResult
+	19, // 20: netlama.v1.TestResult.http:type_name -> netlama.v1.HttpResult
+	20, // 21: netlama.v1.TestResult.tcp:type_name -> netlama.v1.TcpResult
+	21, // 22: netlama.v1.TestResult.wlan_scan:type_name -> netlama.v1.WlanScanResult
+	23, // 23: netlama.v1.TestResult.traceroute:type_name -> netlama.v1.TracerouteResult
+	22, // 24: netlama.v1.WlanScanResult.access_points:type_name -> netlama.v1.AccessPoint
+	24, // 25: netlama.v1.TracerouteResult.hops:type_name -> netlama.v1.Hop
+	27, // 26: netlama.v1.LogEntry.time:type_name -> google.protobuf.Timestamp
+	27, // 27: netlama.v1.AgentStats.time:type_name -> google.protobuf.Timestamp
+	1,  // 28: netlama.v1.ControlService.ControlStream:input_type -> netlama.v1.AgentMessage
+	2,  // 29: netlama.v1.ControlService.ControlStream:output_type -> netlama.v1.ServerMessage
+	29, // [29:30] is the sub-list for method output_type
+	28, // [28:29] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_proto_netlama_proto_init() }
@@ -2379,6 +2492,7 @@ func file_proto_netlama_proto_init() {
 		(*AgentMessage_Register)(nil),
 		(*AgentMessage_Result)(nil),
 		(*AgentMessage_Log)(nil),
+		(*AgentMessage_Stats)(nil),
 	}
 	file_proto_netlama_proto_msgTypes[1].OneofWrappers = []any{
 		(*ServerMessage_Config)(nil),
@@ -2408,7 +2522,7 @@ func file_proto_netlama_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_netlama_proto_rawDesc), len(file_proto_netlama_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   25,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
