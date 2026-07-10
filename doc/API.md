@@ -301,13 +301,16 @@ one-time enrollment token used by `netlama-agent -token <token>`.
 
 Query: `tenantId` (admins: empty = all tenants; tenant users: forced to
 their own). Returns `Agent[]` with `token` always blanked out and
-`connected` added from the live gRPC registry:
+`connected` added from the live gRPC registry. `capabilities` is an array of
+test type strings the agent can run (empty if the agent has not yet reported
+capabilities, which is backward-compatible with old agent versions):
 
 ```json
 [{
   "id": "...", "tenantId": "...", "siteId": "...", "siteName": "hq",
   "name": "sensor1", "token": "", "wlanInterface": "",
-  "wirelessInterfaces": null, "createdAt": "...", "connected": false
+  "wirelessInterfaces": null, "capabilities": ["ping", "dns", "http", "tcp", "speedtest", "traceroute"],
+  "createdAt": "...", "connected": false
 }]
 ```
 

@@ -356,6 +356,14 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
 }
 .check-list label.check:hover { background: var(--surface-2); }
 
+/* Capability warnings under the site test-assignment checkboxes */
+.cap-warning {
+  color: #d98a00;
+  font-size: 0.85rem;
+  margin: 0.15rem 0;
+}
+.cap-warning::before { content: "\26A0\FE0E "; }
+
 /* Overview / stat tiles */
 .stat-row {
   display: grid;

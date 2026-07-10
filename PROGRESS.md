@@ -48,6 +48,24 @@ What has been done so far, in chronological order. Planned work lives in
   `netlama-server -issue-agent-cert <name>` mints per-agent certs; the cert
   CN must match the agent name the token resolves to.
 
+## 2026-07-10 — Capability detection and reporting
+
+- **Agent capabilities** — agents detect and report which test types they can run:
+  `ping`, `dns`, `http`, `tcp`, `speedtest` are always claimed; `traceroute` is
+  claimed if `mtr` is in PATH or `NETLAMA_TRACEROUTE_DEMO=1`; `wlan_scan` is
+  claimed if `iw` is in PATH and at least one wireless interface exists, or
+  `NETLAMA_WLAN_DEMO=1`. Capabilities are stored on the agent record and exposed
+  in the JSON API.
+- **Capability-aware test dispatch** — the server filters tests sent to agents,
+  excluding any whose type is not in the agent's capability list. Backward
+  compatible: agents with empty/unreported capabilities are assumed to support
+  all tests, and the fixed capability list hardcoded by pre-detection agent
+  binaries is recognized and treated as "unreported" so upgrading the server
+  before the agents cannot drop tests. The server logs filtered tests once per
+  agent connection.
+- **Web UI** — agents page shows capability badges; sites page shows inline
+  warnings when an assigned test won't run on some agents (client-side check).
+
 ## 2026-07-09 — Logs
 
 - **Web UI logs, Phase 1**: server and agent `log/slog` output (Info level and

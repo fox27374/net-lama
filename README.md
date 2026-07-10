@@ -171,6 +171,16 @@ open on Debian/RPi OS, needs `0 2147483647` in `/etc/sysctl.d/` on Ubuntu). For
 rootless podman, enable lingering once (`loginctl enable-linger`) so containers
 survive logout.
 
+### Agent capabilities and test dispatch
+
+Agents report which test types they can run: the slim agent (distroless) can run
+all built-in tests (ping, DNS, HTTP, TCP, speedtest); the sensor agent additionally
+supports WLAN scanning and traceroute if `iw` and `mtr` are available in the container
+or if their demo modes are enabled. The server uses this capability reporting to
+avoid pushing unsupported tests to agents—**an old agent that never re-registered
+still receives all tests (backward compatible)**. The web UI shows capability badges
+per agent, and warns when an assigned test won't run on some agents.
+
 ### Sensor agents (WLAN scan and traceroute)
 
 The WLAN scan and traceroute probes shell out to external tools (`iw`, `mtr`) that

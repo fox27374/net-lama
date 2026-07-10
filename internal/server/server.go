@@ -51,15 +51,40 @@ func New(st *store.Store, metrics *Metrics, logger *slog.Logger) *Server {
 }
 
 // ConfigForAgent builds the protobuf config from the tests assigned to
-// the agent's site.
-func (s *Server) ConfigForAgent(agent *store.Agent) (*pb.Config, error) {
+// the agent's site, filtering out tests whose type is not in the agent's
+// capabilities (if non-empty, for backward compatibility with old agents).
+// It also returns the names of the tests that were skipped as unsupported;
+// the caller decides whether/when to log them (once per connection, not
+// once per push).
+func (s *Server) ConfigForAgent(agent *store.Agent) (*pb.Config, []string, error) {
 	tests, err := s.Store.TestsForSite(agent.SiteID)
 	if err != nil {
-		return nil, fmt.Errorf("loading tests for site: %w", err)
+		return nil, nil, fmt.Errorf("loading tests for site: %w", err)
+	}
+
+	// Parse agent capabilities; empty list means unknown (old agent),
+	// so we push all tests.
+	var capabilities []string
+	if len(agent.Capabilities) > 0 {
+		if err := json.Unmarshal(agent.Capabilities, &capabilities); err != nil {
+			s.Logger.Warn("Invalid capabilities JSON", slog.Any("error", err))
+		}
+	}
+	capSet := make(map[string]bool)
+	for _, cap := range capabilities {
+		capSet[cap] = true
 	}
 
 	cfg := &pb.Config{WlanInterface: agent.WlanInterface}
+	var skipped []string
 	for _, t := range tests {
+		// If capabilities are known and non-empty, filter by capability.
+		// If empty, push all tests (backward compatibility).
+		if len(capabilities) > 0 && !capSet[t.Type] {
+			skipped = append(skipped, t.Name)
+			continue
+		}
+
 		spec, err := TestSpec(t)
 		if err != nil {
 			s.Logger.Warn("Skipping invalid test definition",
@@ -68,7 +93,32 @@ func (s *Server) ConfigForAgent(agent *store.Agent) (*pb.Config, error) {
 		}
 		cfg.Tests = append(cfg.Tests, spec)
 	}
-	return cfg, nil
+
+	return cfg, skipped, nil
+}
+
+// legacyCapabilities is the capability list hardcoded by pre-detection
+// agent binaries. Those agents claimed this fixed list regardless of what
+// they could actually run (note: no traceroute, even on sensor images).
+// The new detection-based agent always emits the ping,dns,http,tcp,
+// speedtest,... ordering, so this exact sequence in this exact order is an
+// unambiguous fingerprint of an old binary and must be treated as
+// "unreported" — otherwise upgrading the server before the agents would
+// silently drop traceroute tests from deployed sensor agents.
+var legacyCapabilities = []string{"speedtest", "ping", "dns", "http", "tcp", "wlan_scan"}
+
+// isLegacyCapabilities reports whether caps is exactly the hardcoded list
+// sent by old agent binaries (same values, same order).
+func isLegacyCapabilities(caps []string) bool {
+	if len(caps) != len(legacyCapabilities) {
+		return false
+	}
+	for i, c := range caps {
+		if c != legacyCapabilities[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // ControlStream handles one connected agent for the lifetime of its stream.
@@ -121,6 +171,19 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 		}
 	}
 
+	// Record the capabilities the agent reported. The hardcoded list sent
+	// by old (pre-detection) agent binaries is treated as "unreported":
+	// we skip the store update and keep whatever the store already has,
+	// so those agents keep receiving all tests (see isLegacyCapabilities).
+	if caps := register.Capabilities; len(caps) > 0 && !isLegacyCapabilities(caps) {
+		if data, err := json.Marshal(caps); err == nil {
+			if err := s.Store.SetAgentCapabilities(agent.ID, data); err != nil {
+				s.Logger.Warn("Storing agent capabilities failed", slog.Any("error", err))
+			}
+			agent.Capabilities = data
+		}
+	}
+
 	tenantName := agent.TenantID
 	if tenants, err := s.Store.ListTenants(); err == nil {
 		for _, t := range tenants {
@@ -165,10 +228,14 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 		logger.Info("Agent disconnected")
 	}()
 
-	// Push the agent's configuration
-	cfg, err := s.ConfigForAgent(agent)
+	// Push the agent's configuration. Tests skipped as unsupported are
+	// logged here, once per connection (not on every subsequent push).
+	cfg, skipped, err := s.ConfigForAgent(agent)
 	if err != nil {
 		return err
+	}
+	if len(skipped) > 0 {
+		logger.Info("Skipping unsupported tests", slog.Any("tests", skipped))
 	}
 	if err := stream.Send(&pb.ServerMessage{Payload: &pb.ServerMessage_Config{Config: cfg}}); err != nil {
 		return fmt.Errorf("sending config: %w", err)
@@ -236,7 +303,10 @@ func (s *Server) PushConfigs(agentIDs []string) int {
 			continue
 		}
 
-		cfg, err := s.ConfigForAgent(conn.agent)
+		// Skipped-test names are intentionally not logged here: the
+		// "Skipping unsupported tests" line is emitted once per
+		// connection in ControlStream, not on every push.
+		cfg, _, err := s.ConfigForAgent(conn.agent)
 		if err != nil {
 			s.Logger.Error("Building config for push failed",
 				slog.String("agent", conn.agent.Name), slog.Any("error", err))

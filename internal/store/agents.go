@@ -16,6 +16,7 @@ type Agent struct {
 	Token              string          `json:"token,omitempty"`
 	WlanInterface      string          `json:"wlanInterface"`
 	WirelessInterfaces json.RawMessage `json:"wirelessInterfaces"`
+	Capabilities       json.RawMessage `json:"capabilities"`
 	CreatedAt          time.Time       `json:"createdAt"`
 }
 
@@ -70,9 +71,9 @@ func (s *Store) CreateAgent(tenantID, siteID, name string) (*Agent, error) {
 
 func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	a := &Agent{}
-	var wlanIface, wireless string
+	var wlanIface, wireless, capabilities string
 	err := row.Scan(&a.ID, &a.TenantID, &a.SiteID, &a.SiteName, &a.Name, &a.Token,
-		&wlanIface, &wireless, &a.CreatedAt)
+		&wlanIface, &wireless, &capabilities, &a.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -84,11 +85,15 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 		wireless = "[]"
 	}
 	a.WirelessInterfaces = json.RawMessage(wireless)
+	if capabilities == "" {
+		capabilities = "[]"
+	}
+	a.Capabilities = json.RawMessage(capabilities)
 	return a, nil
 }
 
 const agentCols = `a.id, a.tenant_id, a.site_id, s.name, a.name, a.token,
-	COALESCE(a.wlan_interface, ''), COALESCE(a.wireless_interfaces, ''), a.created_at`
+	COALESCE(a.wlan_interface, ''), COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), a.created_at`
 const agentFrom = ` FROM agents a JOIN sites s ON s.id = a.site_id `
 
 func (s *Store) GetAgent(id string) (*Agent, error) {
@@ -148,6 +153,12 @@ func (s *Store) UpdateAgent(id, name, siteID, wlanInterface string) error {
 // SetAgentInterfaces records the wireless interfaces an agent reported.
 func (s *Store) SetAgentInterfaces(id string, interfaces json.RawMessage) error {
 	_, err := s.db.Exec(`UPDATE agents SET wireless_interfaces = ? WHERE id = ?`, string(interfaces), id)
+	return err
+}
+
+// SetAgentCapabilities records the capabilities an agent reported.
+func (s *Store) SetAgentCapabilities(id string, capabilities json.RawMessage) error {
+	_, err := s.db.Exec(`UPDATE agents SET capabilities = ? WHERE id = ?`, string(capabilities), id)
 	return err
 }
 

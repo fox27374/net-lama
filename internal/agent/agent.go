@@ -157,13 +157,15 @@ func (a *Agent) runStream(ctx context.Context) error {
 		})
 	}
 
+	capabilities := probe.DetectCapabilities(len(wifaces) > 0)
+
 	register := &pb.AgentMessage{
 		Payload: &pb.AgentMessage_Register{
 			Register: &pb.Register{
 				ClientId:           a.ClientID,
 				ClientType:         "networktest",
 				Version:            a.Version,
-				Capabilities:       []string{"speedtest", "ping", "dns", "http", "tcp", "wlan_scan"},
+				Capabilities:       capabilities,
 				Token:              a.Token,
 				WirelessInterfaces: wifaces,
 			},
@@ -175,6 +177,7 @@ func (a *Agent) runStream(ctx context.Context) error {
 	a.Logger.Info("Registered with server",
 		slog.String("server", a.ServerAddr),
 		slog.String("clientId", a.ClientID),
+		slog.Any("capabilities", capabilities),
 	)
 
 	cfgCh := make(chan *pb.Config, 1)

@@ -217,11 +217,16 @@ async function loadAgents() {
   tbody.innerHTML = "";
   $("#agents-empty").classList.toggle("hidden", agents.length > 0);
   for (const a of agents) {
+    // Capability badges; an empty/missing list (old agent that never
+    // reported capabilities) renders nothing.
+    const caps = (a.capabilities || [])
+      .map((c) => `<span class="chip type-${esc(c)}">${esc(c)}</span>`).join(" ");
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><span class="badge ${a.connected ? "on" : "off"}">${a.connected ? "connected" : "offline"}</span></td>
       <td><strong>${esc(a.name)}</strong></td>
       <td>${esc(a.siteName)}</td>
+      <td>${caps}</td>
       <td class="muted">${new Date(a.createdAt).toLocaleString()}</td>
       <td style="text-align:right">
         <button class="ghost" data-edit>Edit</button>
@@ -498,8 +503,29 @@ $("#form-new-site").addEventListener("submit", async (e) => {
 
 let assigningSite = null;
 
-function openSiteTestsDialog(site) {
+// capabilityWarnings lists, for the given site's agents, every selected
+// test whose type is missing from an agent's non-empty capability list.
+// Agents with an empty list (old versions that never reported
+// capabilities) are treated as able to run everything — no warning.
+function capabilityWarnings(site, selectedTestIds) {
+  const siteAgents = agents.filter((a) => a.siteId === site.id);
+  const warnings = [];
+  for (const id of selectedTestIds) {
+    const t = tests.find((t) => t.id === id);
+    if (!t) continue;
+    for (const a of siteAgents) {
+      const caps = a.capabilities || [];
+      if (caps.length && !caps.includes(t.type)) {
+        warnings.push(`${t.name} won't run on ${a.name} (no ${t.type} capability)`);
+      }
+    }
+  }
+  return warnings;
+}
+
+async function openSiteTestsDialog(site) {
   assigningSite = site;
+  await fetchAgents();
   $("#st-dlg-title").textContent = `Tests for "${site.name}"`;
   dialogError("#st-error", "");
   $("#st-hint").textContent = tests.length
@@ -511,6 +537,15 @@ function openSiteTestsDialog(site) {
       <strong>${esc(t.name)}</strong>&nbsp;<span class="chip type-${t.type}">${t.type}</span>
       <span class="muted">· ${t.intervalSeconds}s · ${esc(paramsSummary(t))}</span>
     </label>`).join("");
+  const updateWarnings = () => {
+    const selected = [...$("#st-checkboxes").querySelectorAll("input:checked")].map((i) => i.value);
+    $("#st-warnings").innerHTML = capabilityWarnings(site, selected)
+      .map((w) => `<p class="cap-warning">${esc(w)}</p>`).join("");
+  };
+  // Assignment (not addEventListener) so reopening the dialog never
+  // stacks duplicate handlers on the persistent container element.
+  $("#st-checkboxes").onchange = updateWarnings;
+  updateWarnings();
   $("#dlg-site-tests").showModal();
 }
 

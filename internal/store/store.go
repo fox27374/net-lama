@@ -160,6 +160,9 @@ func (s *Store) migrate() error {
 	if err := s.addColumnIfMissing("agents", "wireless_interfaces", "TEXT"); err != nil {
 		return err
 	}
+	if err := s.addColumnIfMissing("agents", "capabilities", "TEXT"); err != nil {
+		return err
+	}
 	return s.addColumnIfMissing("alerts", "subject", "TEXT NOT NULL DEFAULT ''")
 }
 

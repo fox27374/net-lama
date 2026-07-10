@@ -48,6 +48,11 @@ Planned work, roughly grouped. Not ordered by priority yet.
       (M-Lab's official Go client) or `cloudflare` (speed.cloudflare.com,
       stdlib-only) — so trustworthiness can be cross-checked across
       independently operated fleets
+- [x] Capability detection and reporting: agents report which test types they can
+      run (detection-based: available external tools like `mtr`, `iw`, or demo
+      mode enabled); server filters tests to agents' capabilities and surfaces
+      them in the UI; backward-compatible with agents that haven't reported
+      capabilities (pushed all tests)
 
 ## Server & UI
 
