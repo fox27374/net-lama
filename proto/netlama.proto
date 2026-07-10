@@ -73,7 +73,12 @@ message TestSpec {
   }
 }
 
-message SpeedtestParams {}
+message SpeedtestParams {
+  // provider selects the speedtest backend: "" or "ookla" (default,
+  // speedtest.net via the unofficial client), "ndt7" (M-Lab, official
+  // client), or "cloudflare" (speed.cloudflare.com, stdlib-only).
+  string provider = 1;
+}
 
 message PingParams {
   repeated string targets = 1;
@@ -144,6 +149,9 @@ message SpeedtestResult {
   double upload_mbps = 5;
   string user_ip = 6;
   string user_isp = 7;
+  // provider is the backend that produced this result: "ookla", "ndt7" or
+  // "cloudflare".
+  string provider = 8;
 }
 
 message PingResult {

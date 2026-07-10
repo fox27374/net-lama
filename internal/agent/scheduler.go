@@ -112,21 +112,46 @@ func newResult(spec *pb.TestSpec) *pb.TestResult {
 	}
 }
 
+// speedtestProviders maps the provider param to the probe function that
+// implements it. An empty provider means "ookla" (backward compatible with
+// every existing test row, which predates the provider field).
+var speedtestProviders = map[string]func(context.Context) (*probe.SpeedtestResult, error){
+	"":           probe.Speedtest,
+	"ookla":      probe.Speedtest,
+	"ndt7":       probe.NDT7,
+	"cloudflare": probe.Cloudflare,
+}
+
 func (a *Agent) runSpeedtest(ctx context.Context, spec *pb.TestSpec, results chan<- *pb.TestResult) {
-	a.Logger.Info("Running speedtest", slog.String("test", spec.Name))
-	res, err := probe.Speedtest(ctx)
+	params := spec.GetSpeedtest()
+	provider := params.GetProvider()
+	runner, ok := speedtestProviders[provider]
+	if !ok {
+		// Config validation on the server should prevent this, but fall
+		// back to ookla rather than dropping the test entirely.
+		runner = probe.Speedtest
+	}
+	reportedProvider := provider
+	if reportedProvider == "" {
+		reportedProvider = "ookla"
+	}
+
+	a.Logger.Info("Running speedtest", slog.String("test", spec.Name), slog.String("provider", reportedProvider))
+	res, err := runner(ctx)
 
 	result := newResult(spec)
 	if err != nil {
 		if ctx.Err() != nil {
 			return
 		}
-		a.Logger.Error("Speedtest failed", slog.String("test", spec.Name), slog.Any("error", err))
+		a.Logger.Error("Speedtest failed",
+			slog.String("test", spec.Name), slog.String("provider", reportedProvider), slog.Any("error", err))
 		result.Error = err.Error()
-		result.Result = &pb.TestResult_Speedtest{Speedtest: &pb.SpeedtestResult{}}
+		result.Result = &pb.TestResult_Speedtest{Speedtest: &pb.SpeedtestResult{Provider: reportedProvider}}
 	} else {
 		a.Logger.Info("Speedtest done",
 			slog.String("test", spec.Name),
+			slog.String("provider", reportedProvider),
 			slog.Float64("downloadMbps", res.DownloadMbps),
 			slog.Float64("uploadMbps", res.UploadMbps),
 			slog.Float64("latencyMs", res.LatencyMs),
@@ -139,6 +164,7 @@ func (a *Agent) runSpeedtest(ctx context.Context, spec *pb.TestSpec, results cha
 			UploadMbps:    res.UploadMbps,
 			UserIp:        res.UserIP,
 			UserIsp:       res.UserISP,
+			Provider:      reportedProvider,
 		}}
 	}
 	sendResult(ctx, results, result)

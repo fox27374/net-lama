@@ -641,7 +641,11 @@ func (*TestSpec_WlanScan) isTestSpec_Params() {}
 func (*TestSpec_Traceroute) isTestSpec_Params() {}
 
 type SpeedtestParams struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// provider selects the speedtest backend: "" or "ookla" (default,
+	// speedtest.net via the unofficial client), "ndt7" (M-Lab, official
+	// client), or "cloudflare" (speed.cloudflare.com, stdlib-only).
+	Provider      string `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -674,6 +678,13 @@ func (x *SpeedtestParams) ProtoReflect() protoreflect.Message {
 // Deprecated: Use SpeedtestParams.ProtoReflect.Descriptor instead.
 func (*SpeedtestParams) Descriptor() ([]byte, []int) {
 	return file_proto_netlama_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SpeedtestParams) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
 }
 
 type PingParams struct {
@@ -1264,6 +1275,9 @@ type SpeedtestResult struct {
 	UploadMbps    float64                `protobuf:"fixed64,5,opt,name=upload_mbps,json=uploadMbps,proto3" json:"upload_mbps,omitempty"`
 	UserIp        string                 `protobuf:"bytes,6,opt,name=user_ip,json=userIp,proto3" json:"user_ip,omitempty"`
 	UserIsp       string                 `protobuf:"bytes,7,opt,name=user_isp,json=userIsp,proto3" json:"user_isp,omitempty"`
+	// provider is the backend that produced this result: "ookla", "ndt7" or
+	// "cloudflare".
+	Provider      string `protobuf:"bytes,8,opt,name=provider,proto3" json:"provider,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1343,6 +1357,13 @@ func (x *SpeedtestResult) GetUserIp() string {
 func (x *SpeedtestResult) GetUserIsp() string {
 	if x != nil {
 		return x.UserIsp
+	}
+	return ""
+}
+
+func (x *SpeedtestResult) GetProvider() string {
+	if x != nil {
+		return x.Provider
 	}
 	return ""
 }
@@ -2135,8 +2156,9 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"traceroute\x18\n" +
 	" \x01(\v2\x1c.netlama.v1.TracerouteParamsH\x00R\n" +
 	"tracerouteB\b\n" +
-	"\x06params\"\x11\n" +
-	"\x0fSpeedtestParams\"<\n" +
+	"\x06params\"-\n" +
+	"\x0fSpeedtestParams\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\"<\n" +
 	"\n" +
 	"PingParams\x12\x18\n" +
 	"\atargets\x18\x01 \x03(\tR\atargets\x12\x14\n" +
@@ -2181,7 +2203,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\n" +
 	"traceroute\x18\v \x01(\v2\x1c.netlama.v1.TracerouteResultH\x00R\n" +
 	"tracerouteB\b\n" +
-	"\x06result\"\xf2\x01\n" +
+	"\x06result\"\x8e\x02\n" +
 	"\x0fSpeedtestResult\x12\x1f\n" +
 	"\vserver_name\x18\x01 \x01(\tR\n" +
 	"serverName\x12%\n" +
@@ -2192,7 +2214,8 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\vupload_mbps\x18\x05 \x01(\x01R\n" +
 	"uploadMbps\x12\x17\n" +
 	"\auser_ip\x18\x06 \x01(\tR\x06userIp\x12\x19\n" +
-	"\buser_isp\x18\a \x01(\tR\auserIsp\"\xef\x01\n" +
+	"\buser_isp\x18\a \x01(\tR\auserIsp\x12\x1a\n" +
+	"\bprovider\x18\b \x01(\tR\bprovider\"\xef\x01\n" +
 	"\n" +
 	"PingResult\x12\x16\n" +
 	"\x06target\x18\x01 \x01(\tR\x06target\x12!\n" +

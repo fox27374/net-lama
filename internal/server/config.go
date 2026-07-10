@@ -32,6 +32,13 @@ type TCPParams struct {
 	TimeoutSeconds uint32   `json:"timeoutSeconds"`
 }
 
+type SpeedtestParams struct {
+	// Provider selects the speedtest backend. Empty means "ookla" (the
+	// existing default), keeping every pre-existing speedtest test
+	// working unchanged.
+	Provider string `json:"provider"`
+}
+
 type TracerouteParams struct {
 	Target       string `json:"target"`
 	Protocol     string `json:"protocol"`
@@ -55,7 +62,19 @@ func ValidateTestDef(t *store.TestDef) error {
 		if t.IntervalSeconds < 60 {
 			return fmt.Errorf("speedtest interval must be at least 60 seconds")
 		}
-		t.Params = json.RawMessage(`{}`)
+		var p SpeedtestParams
+		if len(t.Params) > 0 {
+			if err := json.Unmarshal(t.Params, &p); err != nil {
+				return fmt.Errorf("invalid speedtest parameters: %w", err)
+			}
+		}
+		switch p.Provider {
+		case "", "ookla", "ndt7", "cloudflare":
+		default:
+			return fmt.Errorf("speedtest provider must be ookla, ndt7 or cloudflare")
+		}
+		normalized, _ := json.Marshal(p)
+		t.Params = normalized
 
 	case "ping":
 		var p PingParams
@@ -176,7 +195,13 @@ func TestSpec(t *store.TestDef) (*pb.TestSpec, error) {
 
 	switch t.Type {
 	case "speedtest":
-		spec.Params = &pb.TestSpec_Speedtest{Speedtest: &pb.SpeedtestParams{}}
+		var p SpeedtestParams
+		if len(t.Params) > 0 {
+			if err := json.Unmarshal(t.Params, &p); err != nil {
+				return nil, err
+			}
+		}
+		spec.Params = &pb.TestSpec_Speedtest{Speedtest: &pb.SpeedtestParams{Provider: p.Provider}}
 	case "ping":
 		var p PingParams
 		if err := json.Unmarshal(t.Params, &p); err != nil {
