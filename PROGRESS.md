@@ -167,6 +167,19 @@ What has been done so far, in chronological order. Planned work lives in
   with the new gauges, ROADMAP checkbox completed with note about per-container
   scoping as a later refinement.
 
+## 2026-07-11 — UI design tokens; zombie-reaping fix
+
+- **UI design-system pass**: strict token system (4px spacing scale, radius/
+  type/elevation scales, semantic ok/warn/bad colors, 8-hue categorical chip
+  ramp with per-theme WCAG-checked variants, focus-visible rings, tabular
+  numerals, reduced-motion support). No raw hex outside the theme blocks.
+- **Fix: agent containers must run with an init** (`init: true` in both
+  compose files, `--init` in the UI enrollment snippet). The agent is PID 1
+  and never reaped orphaned children of exec'd tools (mtr), so one zombie
+  per traceroute run accumulated until the container could not fork —
+  found on the rp02 Pi after ~25h uptime (759 PIDs, every traceroute
+  failing with "parsing mtr json: unexpected end of JSON input").
+
 ## Live deployment
 
 - Running on `ataltpr06.lnxnet.org`: rootless podman + podman-compose,

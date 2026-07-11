@@ -45,6 +45,9 @@ services:
     restart: unless-stopped
 
   agent:
+    # Reap zombie processes from exec'd tools (mtr, iw) — without an
+    # init, orphaned children pile up until the container cannot fork.
+    init: true
     image: ${NETLAMA_AGENT_IMAGE:-ghcr.io/fox27374/netlama-agent-sensor}:${NETLAMA_IMAGE_TAG:-latest}
     network_mode: host
     cap_add:

@@ -208,6 +208,12 @@ the ready-made [compose.sensor.yaml](compose.sensor.yaml), which runs the agent 
    would only ever see the destination and *none* of the intermediate routers. With
    host networking the probe packets traverse the real routing table.
 
+Run the agent container **with an init process** (`init: true` in the compose
+files, or `podman run --init`): the traceroute/WLAN probes exec external tools
+whose orphaned children must be reaped — without an init they accumulate as
+zombies until the container can no longer fork (symptom: `parsing mtr json:
+unexpected end of JSON input` after hours/days of uptime).
+
 This runs **rootless — no sudo/rootful needed** (verified with podman-compose). Keep
 `net.ipv4.ping_group_range` open on the host (as for ping), and `loginctl
 enable-linger` so the containers survive logout.

@@ -322,7 +322,7 @@ $("#form-new-agent").addEventListener("submit", async (e) => {
     $("#dlg-new-agent").close();
     $("#token-value").textContent = agent.token;
     $("#token-cmd").textContent =
-      `podman run -d --name netlama-agent \\\n` +
+      `podman run -d --init --name netlama-agent \\\n` +
       `  --sysctl net.ipv4.ping_group_range="0 65535" \\\n` +
       `  -e NETLAMA_SERVER=<server>:50051 \\\n` +
       `  -e NETLAMA_TOKEN=${agent.token} \\\n` +

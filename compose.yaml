@@ -42,6 +42,9 @@ services:
   # The agent needs a token that only exists after it was created in
   # the UI — start the server alone first (see header).
   agent:
+    # Reap zombie processes from exec'd tools (mtr, iw) — without an
+    # init, orphaned children pile up until the container cannot fork.
+    init: true
     image: ${NETLAMA_AGENT_IMAGE:-ghcr.io/fox27374/netlama-agent}:${NETLAMA_IMAGE_TAG:-latest}
     environment:
       NETLAMA_SERVER: ${NETLAMA_SERVER:-server:50051}
