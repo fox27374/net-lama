@@ -337,6 +337,19 @@ main {
   margin-bottom: var(--space-4);
 }
 .section-head h2, .section-head h3 { margin: 0; flex: 1; }
+.view-all-link {
+  color: var(--muted-solid);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  transition: color var(--transition);
+}
+.view-all-link:hover {
+  color: var(--accent);
+}
+.view-all-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* Columns layout removed for full-width cards */
 .columns {
@@ -456,6 +469,8 @@ th.num { text-align: right; }
 
 .clickable { cursor: pointer; }
 .clickable:hover { color: var(--accent); }
+tbody tr.clickable-row { cursor: pointer; }
+tbody tr.clickable-row:focus-visible td { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* Badges */
 .badge {
@@ -634,6 +649,22 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   padding: var(--space-4);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition), box-shadow var(--transition);
+}
+button.stat-tile {
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+}
+button.stat-tile:hover {
+  background: var(--surface-2);
+  box-shadow: var(--shadow-hover);
+}
+button.stat-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .stat-label {
   font-size: var(--text-xs);

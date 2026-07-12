@@ -87,7 +87,7 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] On-demand test runs (`RUN_TEST`) from the UI — "Run now" on the Path and
       Results pages
 - [ ] Optional result forwarding (e.g. Splunk HEC, port of `legacy/hec-forwarder`)
-- [ ] Dashboard deep-links: every dashboard block links to its page
+- [x] Dashboard deep-links: every dashboard block links to its page
       (e.g. clicking agents opens the Agents page, sites the Sites page)
 - [ ] Configurable dashboard with widgets (add/remove/reorder blocks)
 - [ ] Separate configure vs. view menus for sites, agents, tests, wireless

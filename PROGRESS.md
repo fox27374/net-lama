@@ -244,6 +244,19 @@ What has been done so far, in chronological order. Planned work lives in
 - **API.md updated** — overview endpoint now documents optional `siteId` param
   and new TestHealth fields (series, unit, current).
 
+## 2026-07-12 — Dashboard deep-links
+
+- **Dashboard deep-links**: every dashboard block is now clickable. Stat tiles
+  (Sites, Agents, Tests, Active alerts) navigate directly to their corresponding
+  pages. Block headers have "View all →" links for Sites, Alerts, Tests, and
+  Wireless blocks that navigate to those pages. Table rows on the dashboard are
+  clickable: Sites and Alerts rows navigate to their pages; Tests rows navigate
+  to Results with the test preselected; Wireless rows navigate to the Wireless
+  page. Accessibility: all interactive elements support keyboard navigation
+  (tabindex="0" on rows, Enter key triggers navigation). UI enhancements include
+  hover effects (surface shift on tiles, muted→accent color transition on
+  "View all" links) and focus-visible outlines.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

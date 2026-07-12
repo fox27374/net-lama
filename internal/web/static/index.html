@@ -76,29 +76,29 @@
       <!-- Stat tiles -->
       <div class="card">
         <div class="stat-row">
-          <div class="stat-tile">
+          <button class="stat-tile" id="db-sites-tile" data-nav="sites">
             <div class="stat-label">Sites</div>
             <div class="stat-value" id="db-sites">–</div>
-          </div>
-          <div class="stat-tile">
+          </button>
+          <button class="stat-tile" id="db-agents-tile" data-nav="agents">
             <div class="stat-label">Agents</div>
             <div class="stat-value" id="db-agents">–</div>
             <div class="stat-sub" id="db-agents-sub"></div>
-          </div>
-          <div class="stat-tile">
+          </button>
+          <button class="stat-tile" id="db-tests-tile" data-nav="tests">
             <div class="stat-label">Tests</div>
             <div class="stat-value" id="db-tests">–</div>
-          </div>
-          <div class="stat-tile">
+          </button>
+          <button class="stat-tile" id="db-alerts-tile" data-nav="alerts">
             <div class="stat-label">Active alerts</div>
             <div class="stat-value" id="db-alerts">–</div>
-          </div>
+          </button>
         </div>
       </div>
 
       <!-- Sites block -->
       <div class="card table-card">
-        <div class="section-head"><h3>Sites</h3></div>
+        <div class="section-head"><h3>Sites</h3><a href="#" class="view-all-link" data-nav="sites">View all →</a></div>
         <table id="db-sites-table">
           <thead><tr><th>Name</th><th>Agents</th><th>Health</th></tr></thead>
           <tbody></tbody>
@@ -108,7 +108,7 @@
 
       <!-- Alerts block -->
       <div class="card table-card">
-        <div class="section-head"><h3>Active &amp; recent alerts</h3></div>
+        <div class="section-head"><h3>Active &amp; recent alerts</h3><a href="#" class="view-all-link" data-nav="alerts">View all →</a></div>
         <table id="db-alerts-table">
           <thead><tr><th>State</th><th>Rule</th><th>Agent</th><th>Details</th><th>Since</th></tr></thead>
           <tbody></tbody>
@@ -118,7 +118,7 @@
 
       <!-- Tests block with sparklines -->
       <div class="card table-card">
-        <div class="section-head"><h3>Tests</h3></div>
+        <div class="section-head"><h3>Tests</h3><a href="#" class="view-all-link" data-nav="results">View all →</a></div>
         <table id="db-tests-table">
           <thead><tr><th>Status</th><th>Test</th><th>Type</th><th>Checks</th><th>Sparkline</th></tr></thead>
           <tbody></tbody>
@@ -128,7 +128,7 @@
 
       <!-- Wireless block -->
       <div class="card table-card">
-        <div class="section-head"><h3>Wireless</h3></div>
+        <div class="section-head"><h3>Wireless</h3><a href="#" class="view-all-link" data-nav="wireless">View all →</a></div>
         <table id="db-wireless-table">
           <thead><tr><th>Agent</th><th>SSID</th><th>BSSID</th><th>Band</th><th>Ch</th><th>RSSI (dBm)</th><th>Security</th></tr></thead>
           <tbody></tbody>

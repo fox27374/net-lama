@@ -112,9 +112,32 @@ function reloadSection(name) {
   if (name === "admin") loadAdmin();
 }
 
+// Navigation helper with optional filter presets
+function navTo(section, presets = {}) {
+  if (presets.testId !== undefined) pendingResultTest = presets.testId;
+  if (presets.siteId !== undefined) pendingResultSite = presets.siteId;
+  showSection(section);
+}
+
 document.querySelectorAll(".nav-item").forEach((b) => {
   b.addEventListener("click", () => {
     showSection(b.dataset.nav);
+  });
+});
+
+// Stat tile navigation
+document.querySelectorAll(".stat-tile").forEach((tile) => {
+  tile.addEventListener("click", (e) => {
+    e.preventDefault();
+    navTo(tile.dataset.nav);
+  });
+});
+
+// "View all" link navigation
+document.querySelectorAll(".view-all-link").forEach((link) => {
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    navTo(link.dataset.nav);
   });
 });
 
@@ -201,10 +224,16 @@ function renderDashboardSites(sitesData, testHealth) {
       .map((st) => `<span class="health ${st}">${counts[st]} ${HEALTH_LABEL[st].toLowerCase()}</span>`)
       .join(" ") || '<span class="muted">no tests</span>';
     const tr = document.createElement("tr");
+    tr.classList.add("clickable-row");
+    tr.tabIndex = 0;
     tr.innerHTML = `
       <td><strong>${esc(site.name)}</strong></td>
       <td>${site.agents}</td>
       <td>${chips}</td>`;
+    tr.addEventListener("click", () => navTo("sites"));
+    tr.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") navTo("sites");
+    });
     tbody.appendChild(tr);
   }
 }
@@ -222,6 +251,8 @@ async function renderDashboardAlerts(siteId) {
 
     for (const a of alerts.slice(0, 5)) { // Show recent 5
       const tr = document.createElement("tr");
+      tr.classList.add("clickable-row");
+      tr.tabIndex = 0;
       const since = a.startedAt ? new Date(a.startedAt).toLocaleString() : "—";
       tr.innerHTML = `
         <td><span class="health ${a.state === 'firing' ? 'failing' : 'healthy'}">${a.state === 'firing' ? 'Firing' : 'Resolved'}</span></td>
@@ -229,6 +260,10 @@ async function renderDashboardAlerts(siteId) {
         <td>${esc(a.agentName || '—')}</td>
         <td class="muted">${esc(a.message || a.subject)}</td>
         <td class="muted nowrap">${since}</td>`;
+      tr.addEventListener("click", () => navTo("alerts"));
+      tr.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") navTo("alerts");
+      });
       tbody.appendChild(tr);
     }
   } catch (err) {
@@ -243,6 +278,8 @@ function renderDashboardTests(health) {
 
   for (const h of health) {
     const tr = document.createElement("tr");
+    tr.classList.add("clickable-row");
+    tr.tabIndex = 0;
     const reporting = h.status === "nodata"
       ? "—"
       : `${h.ok}/${h.checks}`;
@@ -254,8 +291,10 @@ function renderDashboardTests(health) {
       <td class="muted">${reporting}</td>
       <td>${sparkline}</td>`;
     tr.addEventListener("click", () => {
-      pendingResultTest = h.testId;
-      showSection("results");
+      navTo("results", { testId: h.testId });
+    });
+    tr.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") navTo("results", { testId: h.testId });
     });
     tbody.appendChild(tr);
   }
@@ -331,6 +370,8 @@ async function renderDashboardWireless(siteId) {
         const aps = payload.APs || [];
         for (const ap of aps.slice(0, 3)) { // Show top 3 per agent
           const tr = document.createElement("tr");
+          tr.classList.add("clickable-row");
+          tr.tabIndex = 0;
           tr.innerHTML = `
             <td>${esc(result.agentName)}</td>
             <td>${esc(ap.SSID)}</td>
@@ -339,6 +380,10 @@ async function renderDashboardWireless(siteId) {
             <td class="num">${ap.Channel}</td>
             <td class="num sig-${ap.RSSI > -70 ? 'good' : (ap.RSSI > -80 ? 'ok' : 'weak')}">${ap.RSSI}</td>
             <td>${esc(ap.Security)}</td>`;
+          tr.addEventListener("click", () => navTo("wireless"));
+          tr.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") navTo("wireless");
+          });
           tbody.appendChild(tr);
         }
       } catch (e) {
@@ -804,6 +849,7 @@ $("#form-site-tests").addEventListener("submit", async (e) => {
 
 // --- Results ---
 let pendingResultTest = null; // set when jumping in from the overview
+let pendingResultSite = null; // set when jumping in from the overview or deep link
 
 async function initResults() {
   await Promise.all([fetchSites(), fetchTests(), fetchAgents()]);
@@ -813,6 +859,10 @@ async function initResults() {
   if (pendingResultTest) {
     $("#flt-test").value = pendingResultTest;
     pendingResultTest = null;
+  }
+  if (pendingResultSite) {
+    $("#flt-site").value = pendingResultSite;
+    pendingResultSite = null;
   }
   updateRunNowBtn();
   loadResults();
