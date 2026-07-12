@@ -48,9 +48,8 @@
     <div class="sidebar-divider"></div>
     <nav class="sidebar-nav">
       <div class="nav-group-label">Manage</div>
-      <button data-nav="admin" class="nav-item" id="nav-admin-btn">Tenants</button>
-      <button data-nav="admin" class="nav-item" id="nav-users-btn">Users</button>
-      <button data-nav="admin" class="nav-item" id="nav-apikeys-btn">API Keys</button>
+      <button data-nav="admin" class="nav-item" id="nav-admin-btn">Tenants &amp; Users</button>
+      <button data-nav="apikeys" class="nav-item" id="nav-apikeys-btn">API Keys</button>
     </nav>
     <div class="sidebar-footer">
       <select id="tenant-context" class="compact hidden" title="Tenant"></select>
@@ -146,7 +145,7 @@
       </div>
       <div class="card table-card">
         <table id="agents-table">
-          <thead><tr><th>Status</th><th>Name</th><th>Site</th><th>Capabilities</th><th>CPU</th><th>Memory</th><th>Disk</th><th>Created</th><th></th></tr></thead>
+          <thead><tr><th>Status</th><th>Name</th><th>Site</th><th>Health</th><th>Capabilities</th><th>CPU</th><th>Memory</th><th>Disk</th><th>Created</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
         <p id="agents-empty" class="empty hidden">No agents yet. Create a site first, then add an agent to it.</p>

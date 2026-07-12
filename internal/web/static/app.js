@@ -71,10 +71,7 @@ async function showApp() {
   $("#login-view").classList.add("hidden");
   $("#app-view").classList.remove("hidden");
   $("#whoami").textContent = me.username + (me.isAdmin ? " · admin" : "");
-  ["nav-admin-btn", "nav-users-btn", "nav-apikeys-btn"].forEach(id => {
-    const el = $("#" + id);
-    if (el) el.classList.toggle("hidden", !me.isAdmin);
-  });
+  $("#nav-admin-btn").classList.toggle("hidden", !me.isAdmin);
   if (me.isAdmin) {
     tenants = await api("GET", "/api/v1/tenants");
     const sel = $("#tenant-context");
@@ -92,8 +89,7 @@ function showSection(name) {
   for (const sec of sections) $("#section-" + sec).classList.add("hidden");
   $("#section-" + name).classList.remove("hidden");
   document.querySelectorAll(".nav-item").forEach((b) => {
-    const target = b.dataset.nav || (b.id === "nav-admin-btn" || b.id === "nav-users-btn" || b.id === "nav-apikeys-btn" ? "admin" : "");
-    b.classList.toggle("active", target === name);
+    b.classList.toggle("active", b.dataset.nav === name);
   });
   reloadSection(name);
 }
@@ -118,8 +114,7 @@ function reloadSection(name) {
 
 document.querySelectorAll(".nav-item").forEach((b) => {
   b.addEventListener("click", () => {
-    const target = b.dataset.nav || (b.id === "nav-admin-btn" || b.id === "nav-users-btn" || b.id === "nav-apikeys-btn" ? "admin" : "dashboard");
-    showSection(target);
+    showSection(b.dataset.nav);
   });
 });
 
@@ -174,7 +169,7 @@ async function loadDashboard() {
 
   // Render sites table (filtered if needed)
   const sitesData = siteId ? sites.filter(s => s.id === siteId) : sites;
-  renderDashboardSites(sitesData);
+  renderDashboardSites(sitesData, ov.testHealth || []);
 
   // Render alerts table
   await renderDashboardAlerts(siteId);
@@ -191,19 +186,25 @@ $("#db-site-filter").addEventListener("change", () => {
   loadDashboard();
 });
 
-function renderDashboardSites(sitesData) {
+function renderDashboardSites(sitesData, testHealth) {
   const tbody = $("#db-sites-table tbody");
   tbody.innerHTML = "";
   $("#db-sites-empty").classList.toggle("hidden", sitesData.length > 0);
 
   for (const site of sitesData) {
+    // Health rollup: statuses of the tests assigned to this site.
+    const statuses = (testHealth || []).filter((h) => (site.testIds || []).includes(h.testId));
+    const counts = {};
+    for (const h of statuses) counts[h.status] = (counts[h.status] || 0) + 1;
+    const chips = ["healthy", "degraded", "failing", "nodata"]
+      .filter((st) => counts[st])
+      .map((st) => `<span class="health ${st}">${counts[st]} ${HEALTH_LABEL[st].toLowerCase()}</span>`)
+      .join(" ") || '<span class="muted">no tests</span>';
     const tr = document.createElement("tr");
-    // Calculate health summary from site's agents' test results
-    // For now, show agent count; full health calculation would require fetching test results
     tr.innerHTML = `
       <td><strong>${esc(site.name)}</strong></td>
       <td>${site.agents}</td>
-      <td class="muted">—</td>`;
+      <td>${chips}</td>`;
     tbody.appendChild(tr);
   }
 }
@@ -427,6 +428,24 @@ function diskText(stats) {
   return `${used} / ${total}${stale}`;
 }
 
+// agentHealthBadge renders the agent self-health status with the firing
+// reasons on hover and the agent process uptime; unknown (old agent or no
+// self-metrics yet) renders muted.
+const AGENT_HEALTH_CLASS = { healthy: "healthy", degraded: "degraded", unhealthy: "failing" };
+function agentHealthBadge(h) {
+  if (!h || !h.status || h.status === "unknown") return '<span class="health nodata">unknown</span>';
+  const cls = AGENT_HEALTH_CLASS[h.status] || "nodata";
+  const title = (h.reasons || []).join("; ");
+  const up = h.uptimeSeconds ? ` <span class="muted">${humanUptime(h.uptimeSeconds)}</span>` : "";
+  return `<span class="health ${cls}" title="${esc(title)}">${esc(h.status)}</span>${up}`;
+}
+function humanUptime(sec) {
+  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 async function loadAgents() {
   await fetchAgents();
   const tbody = $("#agents-table tbody");
@@ -442,6 +461,7 @@ async function loadAgents() {
       <td><span class="badge ${a.connected ? "on" : "off"}">${a.connected ? "connected" : "offline"}</span></td>
       <td><strong>${esc(a.name)}</strong></td>
       <td>${esc(a.siteName)}</td>
+      <td>${agentHealthBadge(a.health)}</td>
       <td>${caps}</td>
       <td class="muted">${statsText(a.stats)}</td>
       <td class="muted">${memoryText(a.stats)}</td>
