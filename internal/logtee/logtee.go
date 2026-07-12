@@ -18,6 +18,7 @@ type Entry struct {
 	Time    time.Time
 	Level   string
 	Message string
+	Scope   string // "test" or "agent"
 }
 
 // Sink receives one Entry per qualifying record. It is called
@@ -48,10 +49,28 @@ func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
 
 func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	if h.sink != nil && r.Level >= slog.LevelInfo {
+		// Determine scope: "test" if the record (or bound attrs) contains a test attribute
+		scope := "agent"
+		for _, a := range h.attrs {
+			if a.Key == "test" {
+				scope = "test"
+				break
+			}
+		}
+		if scope == "agent" {
+			r.Attrs(func(a slog.Attr) bool {
+				if a.Key == "test" {
+					scope = "test"
+				}
+				return scope == "agent"
+			})
+		}
+
 		h.sink(Entry{
 			Time:    r.Time,
 			Level:   r.Level.String(),
 			Message: formatMessage(h.attrs, r),
+			Scope:   scope,
 		})
 	}
 	return h.next.Handle(ctx, r)

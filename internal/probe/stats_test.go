@@ -102,10 +102,10 @@ func TestStatsCollectorCPUDelta(t *testing.T) {
 
 	// The actual Collect will try to read /proc/stat - this will succeed on Linux,
 	// fail gracefully on other systems. We'll just verify the structure here.
-	cpu, memUsed, memTotal, diskUsed, diskTotal, ok, err := collector.Collect()
+	cpu, memUsed, memTotal, diskUsed, diskTotal, agentCpu, agentMem, pidCount, uptime, ok, err := collector.Collect()
 
-	t.Logf("First collect: cpu=%.1f%%, memUsed=%d, memTotal=%d, diskUsed=%d, diskTotal=%d, ok=%v, err=%v",
-		cpu, memUsed, memTotal, diskUsed, diskTotal, ok, err)
+	t.Logf("First collect: cpu=%.1f%%, memUsed=%d, memTotal=%d, diskUsed=%d, diskTotal=%d, agentCpu=%.1f%%, agentMem=%d, pidCount=%d, uptime=%d, ok=%v, err=%v",
+		cpu, memUsed, memTotal, diskUsed, diskTotal, agentCpu, agentMem, pidCount, uptime, ok, err)
 
 	if !ok {
 		// Expected on non-Linux systems
@@ -135,8 +135,8 @@ func TestStatsCollectorCPUDelta(t *testing.T) {
 	}
 
 	// Second collect - should have CPU percentage
-	cpu2, _, _, _, _, ok2, err2 := collector.Collect()
-	t.Logf("Second collect: cpu=%.1f%%, ok=%v, err=%v", cpu2, ok2, err2)
+	cpu2, _, _, _, _, agentCpu2, _, _, _, ok2, err2 := collector.Collect()
+	t.Logf("Second collect: cpu=%.1f%%, agentCpu=%.1f%%, ok=%v, err=%v", cpu2, agentCpu2, ok2, err2)
 
 	if ok2 {
 		if err2 != nil {

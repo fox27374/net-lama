@@ -77,6 +77,20 @@ What has been done so far, in chronological order. Planned work lives in
   (`AgentMessage.log`, already defined in the proto but previously unused).
   History is bounded per scope (server, or each agent) via
   `NETLAMA_LOG_HISTORY` (default 1000), pruned the same way results are.
+
+## 2026-07-12 — Agent self-health
+
+- **Agent self-health**: explainable health status (healthy/degraded/unhealthy/
+  unknown) computed server-side from agent self-metrics (CPU share, process count,
+  uptime), connection stability (reconnect flapping in a 15-minute sliding window),
+  and agent-scoped error logs. Health shown as a badge in the Agents UI page,
+  included in `/api/v1/agents` responses with reasons and uptime, and exported
+  as the Prometheus gauge `netlama_agent_health` (0=healthy, 1=degraded,
+  2=unhealthy, -1=unknown). Agents that never send stats show "unknown" status
+  (backward-compatible, same as capabilities). Thresholds: CPU > 20% (degraded),
+  processes > 500 (degraded) / > 1500 (unhealthy), stats stale > 2min (degraded) /
+  > 5min (unhealthy), reconnects ≥3 in 15m (degraded) / ≥6 (unhealthy), errors
+  ≥2 in 15m (degraded) / ≥10 (unhealthy).
   `GET /api/v1/logs` scopes tenant users to their own agents (never server
   logs) and lets admins filter by tenant/source/agent/level.
 

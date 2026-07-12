@@ -236,6 +236,7 @@ message LogEntry {
   google.protobuf.Timestamp time = 1;
   string level = 2;
   string message = 3;
+  string scope = 4;
 }
 
 message AgentStats {
@@ -245,4 +246,8 @@ message AgentStats {
   uint64 mem_total_bytes = 4;
   uint64 disk_used_bytes = 5;
   uint64 disk_total_bytes = 6;
+  double agent_cpu_percent = 7;  // agent process share of host CPU
+  uint64 agent_mem_bytes = 8;    // agent process RSS
+  uint32 pid_count = 9;          // processes in the agent's container
+  uint64 uptime_seconds = 10;    // agent process uptime
 }

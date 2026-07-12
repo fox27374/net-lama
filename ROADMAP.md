@@ -30,6 +30,9 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] Agent resource monitoring: CPU, memory, storage — reported over the
       stream and visible in the UI/metrics (host-level readings; per-cgroup /
       container-scoped readings a possible later refinement)
+- [x] Agent self-health: explainable health status (healthy/degraded/unhealthy/
+      unknown) computed server-side from agent self-metrics, connection stability,
+      and error logs; badge in UI; Prometheus gauge; `/api/v1/agents` health field
 - [x] Alerting and thresholding: per-test rules (unhealthy, or latency/loss/
       throughput thresholds) with consecutive-breach counts, per-target alert
       state, webhook notification, Alerts UI + nav badge. Later: email/SMTP,

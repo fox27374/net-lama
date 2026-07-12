@@ -2073,6 +2073,7 @@ type LogEntry struct {
 	Time          *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
 	Level         string                 `protobuf:"bytes,2,opt,name=level,proto3" json:"level,omitempty"`
 	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	Scope         string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2128,16 +2129,27 @@ func (x *LogEntry) GetMessage() string {
 	return ""
 }
 
+func (x *LogEntry) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
 type AgentStats struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Time           *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
-	CpuPercent     float64                `protobuf:"fixed64,2,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"` // 0 when not yet measurable
-	MemUsedBytes   uint64                 `protobuf:"varint,3,opt,name=mem_used_bytes,json=memUsedBytes,proto3" json:"mem_used_bytes,omitempty"`
-	MemTotalBytes  uint64                 `protobuf:"varint,4,opt,name=mem_total_bytes,json=memTotalBytes,proto3" json:"mem_total_bytes,omitempty"`
-	DiskUsedBytes  uint64                 `protobuf:"varint,5,opt,name=disk_used_bytes,json=diskUsedBytes,proto3" json:"disk_used_bytes,omitempty"`
-	DiskTotalBytes uint64                 `protobuf:"varint,6,opt,name=disk_total_bytes,json=diskTotalBytes,proto3" json:"disk_total_bytes,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Time            *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
+	CpuPercent      float64                `protobuf:"fixed64,2,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"` // 0 when not yet measurable
+	MemUsedBytes    uint64                 `protobuf:"varint,3,opt,name=mem_used_bytes,json=memUsedBytes,proto3" json:"mem_used_bytes,omitempty"`
+	MemTotalBytes   uint64                 `protobuf:"varint,4,opt,name=mem_total_bytes,json=memTotalBytes,proto3" json:"mem_total_bytes,omitempty"`
+	DiskUsedBytes   uint64                 `protobuf:"varint,5,opt,name=disk_used_bytes,json=diskUsedBytes,proto3" json:"disk_used_bytes,omitempty"`
+	DiskTotalBytes  uint64                 `protobuf:"varint,6,opt,name=disk_total_bytes,json=diskTotalBytes,proto3" json:"disk_total_bytes,omitempty"`
+	AgentCpuPercent float64                `protobuf:"fixed64,7,opt,name=agent_cpu_percent,json=agentCpuPercent,proto3" json:"agent_cpu_percent,omitempty"` // agent process share of host CPU
+	AgentMemBytes   uint64                 `protobuf:"varint,8,opt,name=agent_mem_bytes,json=agentMemBytes,proto3" json:"agent_mem_bytes,omitempty"`        // agent process RSS
+	PidCount        uint32                 `protobuf:"varint,9,opt,name=pid_count,json=pidCount,proto3" json:"pid_count,omitempty"`                         // processes in the agent's container
+	UptimeSeconds   uint64                 `protobuf:"varint,10,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`         // agent process uptime
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *AgentStats) Reset() {
@@ -2208,6 +2220,34 @@ func (x *AgentStats) GetDiskUsedBytes() uint64 {
 func (x *AgentStats) GetDiskTotalBytes() uint64 {
 	if x != nil {
 		return x.DiskTotalBytes
+	}
+	return 0
+}
+
+func (x *AgentStats) GetAgentCpuPercent() float64 {
+	if x != nil {
+		return x.AgentCpuPercent
+	}
+	return 0
+}
+
+func (x *AgentStats) GetAgentMemBytes() uint64 {
+	if x != nil {
+		return x.AgentMemBytes
+	}
+	return 0
+}
+
+func (x *AgentStats) GetPidCount() uint32 {
+	if x != nil {
+		return x.PidCount
+	}
+	return 0
+}
+
+func (x *AgentStats) GetUptimeSeconds() uint64 {
+	if x != nil {
+		return x.UptimeSeconds
 	}
 	return 0
 }
@@ -2384,11 +2424,12 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\vbest_rtt_ms\x18\x05 \x01(\x01R\tbestRttMs\x12 \n" +
 	"\fworst_rtt_ms\x18\x06 \x01(\x01R\n" +
 	"worstRttMs\x12\x12\n" +
-	"\x04sent\x18\a \x01(\rR\x04sent\"j\n" +
+	"\x04sent\x18\a \x01(\rR\x04sent\"\x80\x01\n" +
 	"\bLogEntry\x12.\n" +
 	"\x04time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"\xfd\x01\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\"\x95\x03\n" +
 	"\n" +
 	"AgentStats\x12.\n" +
 	"\x04time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x1f\n" +
@@ -2397,7 +2438,12 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\x0emem_used_bytes\x18\x03 \x01(\x04R\fmemUsedBytes\x12&\n" +
 	"\x0fmem_total_bytes\x18\x04 \x01(\x04R\rmemTotalBytes\x12&\n" +
 	"\x0fdisk_used_bytes\x18\x05 \x01(\x04R\rdiskUsedBytes\x12(\n" +
-	"\x10disk_total_bytes\x18\x06 \x01(\x04R\x0ediskTotalBytes2Z\n" +
+	"\x10disk_total_bytes\x18\x06 \x01(\x04R\x0ediskTotalBytes\x12*\n" +
+	"\x11agent_cpu_percent\x18\a \x01(\x01R\x0fagentCpuPercent\x12&\n" +
+	"\x0fagent_mem_bytes\x18\b \x01(\x04R\ragentMemBytes\x12\x1b\n" +
+	"\tpid_count\x18\t \x01(\rR\bpidCount\x12%\n" +
+	"\x0euptime_seconds\x18\n" +
+	" \x01(\x04R\ruptimeSeconds2Z\n" +
 	"\x0eControlService\x12H\n" +
 	"\rControlStream\x12\x18.netlama.v1.AgentMessage\x1a\x19.netlama.v1.ServerMessage(\x010\x01B.Z,github.com/fox27374/net-lama/proto;netlamapbb\x06proto3"
 

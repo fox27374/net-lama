@@ -300,9 +300,10 @@ one-time enrollment token used by `netlama-agent -token <token>`.
 ### `GET /api/v1/agents`
 
 Query: `tenantId` (admins: empty = all tenants; tenant users: forced to
-their own). Returns `Agent[]` with `token` always blanked out and
-`connected` added from the live gRPC registry. `capabilities` is an array of
-test type strings the agent can run (empty if the agent has not yet reported
+their own). Returns `Agent[]` with `token` always blanked out, `connected`
+added from the live gRPC registry, and `health` computed from agent
+self-metrics and connection stability. `capabilities` is an array of test
+type strings the agent can run (empty if the agent has not yet reported
 capabilities, which is backward-compatible with old agent versions):
 
 ```json
@@ -310,9 +311,19 @@ capabilities, which is backward-compatible with old agent versions):
   "id": "...", "tenantId": "...", "siteId": "...", "siteName": "hq",
   "name": "sensor1", "token": "", "wlanInterface": "",
   "wirelessInterfaces": null, "capabilities": ["ping", "dns", "http", "tcp", "speedtest", "traceroute"],
-  "createdAt": "...", "connected": false
+  "createdAt": "...", "connected": false,
+  "health": {
+    "status": "healthy",
+    "reasons": [],
+    "uptimeSeconds": 3600
+  }
 }]
 ```
+
+The `health` object contains:
+- `status`: "healthy" | "degraded" | "unhealthy" | "unknown" (see [Agent self-health](../README.md#agent-self-health))
+- `reasons`: array of human-readable strings explaining the status (empty when "healthy" or "unknown")
+- `uptimeSeconds`: uptime of the agent process (omitted when "unknown")
 
 ### `POST /api/v1/agents`
 

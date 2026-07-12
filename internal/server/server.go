@@ -38,15 +38,21 @@ type Server struct {
 
 	breachMu    sync.Mutex
 	breachCount map[string]int // consecutive alert-rule breaches, keyed by rule|agent
+
+	reconnectMu    sync.Mutex
+	reconnectCount map[string]int // count of "connected" transitions in 15m window, keyed by agent ID
+	reconnectTimes map[string][]time.Time // timestamps of recent reconnects per agent
 }
 
 func New(st *store.Store, metrics *Metrics, logger *slog.Logger) *Server {
 	return &Server{
-		Store:       st,
-		Metrics:     metrics,
-		Logger:      logger,
-		connected:   make(map[string]*connectedAgent),
-		breachCount: make(map[string]int),
+		Store:          st,
+		Metrics:        metrics,
+		Logger:         logger,
+		connected:      make(map[string]*connectedAgent),
+		breachCount:    make(map[string]int),
+		reconnectCount: make(map[string]int),
+		reconnectTimes: make(map[string][]time.Time),
 	}
 }
 
@@ -206,6 +212,10 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 	}
 	s.connected[agent.ID] = conn
 	s.mu.Unlock()
+
+	// Track reconnect for flapping detection
+	s.recordReconnect(agent.ID)
+
 	s.Metrics.SetConnected(tenantName, agent.SiteName, agent.Name, true)
 
 	logger := s.Logger.With(
@@ -417,6 +427,7 @@ func (s *Server) handleAgentLog(logger *slog.Logger, conn *connectedAgent, log *
 		TenantID: conn.agent.TenantID,
 		AgentID:  conn.agent.ID,
 		Source:   "agent",
+		Scope:    log.Scope,
 		Level:    log.Level,
 		Message:  log.Message,
 	})
@@ -494,19 +505,27 @@ func (s *Server) handleAgentStats(logger *slog.Logger, conn *connectedAgent, sta
 	// marshaling the proto struct directly would produce snake_case keys
 	// and a {seconds,nanos} timestamp object.
 	snapshot := struct {
-		Time           string  `json:"time"`
-		CPUPercent     float64 `json:"cpuPercent"`
-		MemUsedBytes   uint64  `json:"memUsedBytes"`
-		MemTotalBytes  uint64  `json:"memTotalBytes"`
-		DiskUsedBytes  uint64  `json:"diskUsedBytes"`
-		DiskTotalBytes uint64  `json:"diskTotalBytes"`
+		Time              string  `json:"time"`
+		CPUPercent        float64 `json:"cpuPercent"`
+		MemUsedBytes      uint64  `json:"memUsedBytes"`
+		MemTotalBytes     uint64  `json:"memTotalBytes"`
+		DiskUsedBytes     uint64  `json:"diskUsedBytes"`
+		DiskTotalBytes    uint64  `json:"diskTotalBytes"`
+		AgentCpuPercent   float64 `json:"agentCpuPercent"`
+		AgentMemBytes     uint64  `json:"agentMemBytes"`
+		PidCount          uint32  `json:"pidCount"`
+		UptimeSeconds     uint64  `json:"uptimeSeconds"`
 	}{
-		Time:           stats.GetTime().AsTime().Format(time.RFC3339),
-		CPUPercent:     stats.GetCpuPercent(),
-		MemUsedBytes:   stats.GetMemUsedBytes(),
-		MemTotalBytes:  stats.GetMemTotalBytes(),
-		DiskUsedBytes:  stats.GetDiskUsedBytes(),
-		DiskTotalBytes: stats.GetDiskTotalBytes(),
+		Time:              stats.GetTime().AsTime().Format(time.RFC3339),
+		CPUPercent:        stats.GetCpuPercent(),
+		MemUsedBytes:      stats.GetMemUsedBytes(),
+		MemTotalBytes:     stats.GetMemTotalBytes(),
+		DiskUsedBytes:     stats.GetDiskUsedBytes(),
+		DiskTotalBytes:    stats.GetDiskTotalBytes(),
+		AgentCpuPercent:   stats.GetAgentCpuPercent(),
+		AgentMemBytes:     stats.GetAgentMemBytes(),
+		PidCount:          stats.GetPidCount(),
+		UptimeSeconds:     stats.GetUptimeSeconds(),
 	}
 	if err := s.Store.SetAgentStats(conn.agent.ID, snapshot); err != nil {
 		logger.Warn("Storing agent stats failed", slog.Any("error", err))
@@ -515,4 +534,8 @@ func (s *Server) handleAgentStats(logger *slog.Logger, conn *connectedAgent, sta
 
 	// Update Prometheus metrics
 	s.Metrics.RecordAgentStats(conn.tenant, conn.agent.SiteName, conn.agent.Name, stats)
+
+	// Evaluate and update health status
+	health := s.EvaluateAgentHealth(conn.agent)
+	s.Metrics.SetAgentHealth(conn.tenant, conn.agent.SiteName, conn.agent.Name, string(health.Status))
 }

@@ -185,6 +185,27 @@ minus MemAvailable, and disk used = total blocks minus free blocks on the root
 filesystem (which may include the container image layers). Per-container / per-cgroup
 scoped readings are a potential future refinement.
 
+### Agent self-health
+
+The server computes an explicit health status for each agent — **healthy**, **degraded**,
+**unhealthy**, or **unknown** — from the agent's self-reported metrics and connection
+stability:
+
+- **healthy**: all indicators are normal (agent CPU < 20%, fewer than 500 processes, stats
+  fresh within the last 2 minutes, no reconnect flapping, fewer than 2 agent errors in
+  the last 15 minutes).
+- **degraded**: one or more non-critical thresholds crossed (CPU 20–100%, 500–1500 processes,
+  stats older than 2 minutes, 3+ reconnects in 15 minutes, 2–9 errors in 15 minutes).
+- **unhealthy**: critical thresholds exceeded (> 1500 processes, no stats for 5+ minutes,
+  6+ reconnects in 15 minutes, 10+ errors in 15 minutes).
+- **unknown**: the agent has never sent stats (old versions, non-Linux systems, or early
+  connection before first stats arrive).
+
+Health is shown as a badge in the Agents page, updated live from the `/api/v1/agents`
+endpoint (every request evaluates health from stored stats and recent logs), and
+exported as the Prometheus gauge `netlama_agent_health` (values: 0=healthy, 1=degraded,
+2=unhealthy, -1=unknown).
+
 ### Agent capabilities and test dispatch
 
 Agents report which test types they can run: the slim agent (distroless) can run

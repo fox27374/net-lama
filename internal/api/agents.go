@@ -9,11 +9,19 @@ import (
 	"github.com/fox27374/net-lama/internal/store"
 )
 
+// Health represents the agent health status.
+type Health struct {
+	Status        string   `json:"status"` // "healthy" | "degraded" | "unhealthy" | "unknown"
+	Reasons       []string `json:"reasons,omitempty"`
+	UptimeSeconds uint64   `json:"uptimeSeconds,omitempty"`
+}
+
 // agentView is the API representation of an agent. The enrollment token
 // is only included directly after creation.
 type agentView struct {
 	*store.Agent
-	Connected bool `json:"connected"`
+	Connected bool   `json:"connected"`
+	Health    *Health `json:"health,omitempty"`
 }
 
 func (a *API) handleListAgents(w http.ResponseWriter, r *http.Request, user *store.User) {
@@ -31,7 +39,23 @@ func (a *API) handleListAgents(w http.ResponseWriter, r *http.Request, user *sto
 	views := make([]*agentView, 0, len(agents))
 	for _, agent := range agents {
 		agent.Token = "" // never expose tokens in listings
-		views = append(views, &agentView{Agent: agent, Connected: a.Server.AgentConnected(agent.ID)})
+		connected := a.Server.AgentConnected(agent.ID)
+
+		// Evaluate health
+		healthEval := a.Server.EvaluateAgentHealth(agent)
+		health := &Health{
+			Status: string(healthEval.Status),
+		}
+		if healthEval.Status != "unknown" {
+			health.Reasons = healthEval.Reasons
+			health.UptimeSeconds = healthEval.UptimeSeconds
+		}
+
+		views = append(views, &agentView{
+			Agent:     agent,
+			Connected: connected,
+			Health:    health,
+		})
 	}
 	writeJSON(w, http.StatusOK, views)
 }

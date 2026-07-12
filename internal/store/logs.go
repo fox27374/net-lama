@@ -10,6 +10,7 @@ type LogEntry struct {
 	AgentID   string    `json:"agentId,omitempty"`
 	AgentName string    `json:"agentName,omitempty"`
 	Source    string    `json:"source"` // "server" | "agent"
+	Scope     string    `json:"scope"`  // "test" | "agent" | ""
 	Level     string    `json:"level"`
 	Message   string    `json:"message"`
 }
@@ -34,8 +35,8 @@ func (s *Store) SetLogHistory(n int) {
 // AddResult.
 func (s *Store) InsertLog(e *LogEntry) error {
 	_, err := s.db.Exec(
-		`INSERT INTO logs (time, tenant_id, agent_id, source, level, message) VALUES (?, ?, ?, ?, ?, ?)`,
-		e.Time.UTC(), e.TenantID, e.AgentID, e.Source, e.Level, e.Message,
+		`INSERT INTO logs (time, tenant_id, agent_id, source, scope, level, message) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		e.Time.UTC(), e.TenantID, e.AgentID, e.Source, e.Scope, e.Level, e.Message,
 	)
 	if err != nil {
 		return err
@@ -78,7 +79,7 @@ func (s *Store) ListLogs(f LogFilter) ([]*LogEntry, error) {
 	}
 
 	query := `
-		SELECT l.id, l.time, l.tenant_id, l.agent_id, COALESCE(a.name, ''), l.source, l.level, l.message
+		SELECT l.id, l.time, l.tenant_id, l.agent_id, COALESCE(a.name, ''), l.source, COALESCE(l.scope, ''), l.level, l.message
 		FROM logs l
 		LEFT JOIN agents a ON a.id = l.agent_id
 		WHERE 1 = 1`
@@ -112,10 +113,22 @@ func (s *Store) ListLogs(f LogFilter) ([]*LogEntry, error) {
 	logs := []*LogEntry{}
 	for rows.Next() {
 		e := &LogEntry{}
-		if err := rows.Scan(&e.ID, &e.Time, &e.TenantID, &e.AgentID, &e.AgentName, &e.Source, &e.Level, &e.Message); err != nil {
+		if err := rows.Scan(&e.ID, &e.Time, &e.TenantID, &e.AgentID, &e.AgentName, &e.Source, &e.Scope, &e.Level, &e.Message); err != nil {
 			return nil, err
 		}
 		logs = append(logs, e)
 	}
 	return logs, rows.Err()
+}
+
+// CountAgentErrors counts the number of WARN and ERROR logs from an agent
+// in the given time cutoff, with scope != "test".
+func (s *Store) CountAgentErrors(agentID string, since time.Time) (int, error) {
+	var count int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM logs
+		WHERE agent_id = ? AND time >= ? AND (level = 'WARN' OR level = 'ERROR') AND scope != 'test'
+	`, agentID, since).Scan(&count)
+	return count, err
 }

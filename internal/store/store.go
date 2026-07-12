@@ -166,7 +166,7 @@ func (s *Store) migrate() error {
 	if err := s.addColumnIfMissing("agents", "stats", "TEXT"); err != nil {
 		return err
 	}
-	return s.addColumnIfMissing("alerts", "subject", "TEXT NOT NULL DEFAULT ''")
+	return s.addColumnIfMissing("logs", "scope", "TEXT NOT NULL DEFAULT ''")
 }
 
 // addColumnIfMissing adds a column to a table if it is not already present.

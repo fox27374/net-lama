@@ -263,6 +263,7 @@ func (a *Agent) sendBufferedLogs(stream pb.ControlService_ControlStreamClient) e
 			Time:    timestamppb.New(e.Time),
 			Level:   e.Level,
 			Message: e.Message,
+			Scope:   e.Scope,
 		}}}
 		if err := stream.Send(msg); err != nil {
 			return fmt.Errorf("sending log: %w", err)
@@ -275,7 +276,7 @@ func (a *Agent) sendBufferedLogs(stream pb.ControlService_ControlStreamClient) e
 // It is only ever called from the single-writer send loop, so it
 // cannot interleave with result or log sends.
 func (a *Agent) sendStats(stream pb.ControlService_ControlStreamClient) {
-	cpu, memUsed, memTotal, diskUsed, diskTotal, ok, err := a.statsCollector.Collect()
+	cpu, memUsed, memTotal, diskUsed, diskTotal, agentCpu, agentMem, pidCount, uptime, ok, err := a.statsCollector.Collect()
 	if err != nil {
 		a.Logger.Debug("Failed to collect stats", slog.Any("error", err))
 		return
@@ -288,12 +289,16 @@ func (a *Agent) sendStats(stream pb.ControlService_ControlStreamClient) {
 	msg := &pb.AgentMessage{
 		Payload: &pb.AgentMessage_Stats{
 			Stats: &pb.AgentStats{
-				Time:           timestamppb.New(time.Now()),
-				CpuPercent:     cpu,
-				MemUsedBytes:   memUsed,
-				MemTotalBytes:  memTotal,
-				DiskUsedBytes:  diskUsed,
-				DiskTotalBytes: diskTotal,
+				Time:            timestamppb.New(time.Now()),
+				CpuPercent:      cpu,
+				MemUsedBytes:    memUsed,
+				MemTotalBytes:   memTotal,
+				DiskUsedBytes:   diskUsed,
+				DiskTotalBytes:  diskTotal,
+				AgentCpuPercent: agentCpu,
+				AgentMemBytes:   agentMem,
+				PidCount:        pidCount,
+				UptimeSeconds:   uptime,
 			},
 		},
 	}

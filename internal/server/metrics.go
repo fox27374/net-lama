@@ -8,6 +8,7 @@ import (
 
 type Metrics struct {
 	agentConnected *prometheus.GaugeVec
+	agentHealth    *prometheus.GaugeVec
 	resultsTotal   *prometheus.CounterVec
 	errorsTotal    *prometheus.CounterVec
 
@@ -69,6 +70,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 
 	return &Metrics{
 		agentConnected: newGauge("agent_connected", "1 while the agent has an open control stream", "tenant", "site", "client"),
+		agentHealth:    newGauge("agent_health", "Agent health status: 0=healthy, 1=degraded, 2=unhealthy, -1=unknown", "tenant", "site", "client"),
 		resultsTotal:   newCounter("results_received_total", "Number of test results received", append(base, "type")...),
 		errorsTotal:    newCounter("test_errors_total", "Number of failed test executions reported", append(base, "type")...),
 
@@ -112,6 +114,20 @@ func (m *Metrics) SetConnected(tenant, site, client string, connected bool) {
 		value = 1.0
 	}
 	m.agentConnected.WithLabelValues(tenant, site, client).Set(value)
+}
+
+// SetAgentHealth sets the health status metric for an agent.
+func (m *Metrics) SetAgentHealth(tenant, site, client string, status string) {
+	value := -1.0 // unknown
+	switch status {
+	case "healthy":
+		value = 0.0
+	case "degraded":
+		value = 1.0
+	case "unhealthy":
+		value = 2.0
+	}
+	m.agentHealth.WithLabelValues(tenant, site, client).Set(value)
 }
 
 // RecordAgentStats updates the agent resource metrics.
