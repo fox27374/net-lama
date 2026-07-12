@@ -532,6 +532,15 @@ func (s *Server) handleAgentStats(logger *slog.Logger, conn *connectedAgent, sta
 		return
 	}
 
+	// Refresh the in-memory copy too — the health evaluator reads
+	// conn.agent.Stats, which is otherwise only loaded at connect time
+	// and would grow stale for the lifetime of the connection.
+	if data, err := json.Marshal(snapshot); err == nil {
+		s.mu.Lock()
+		conn.agent.Stats = data
+		s.mu.Unlock()
+	}
+
 	// Update Prometheus metrics
 	s.Metrics.RecordAgentStats(conn.tenant, conn.agent.SiteName, conn.agent.Name, stats)
 
