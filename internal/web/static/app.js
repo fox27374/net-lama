@@ -224,7 +224,7 @@ async function renderDashboardAlerts(siteId) {
       const tr = document.createElement("tr");
       const since = a.startedAt ? new Date(a.startedAt).toLocaleString() : "—";
       tr.innerHTML = `
-        <td><span class="badge ${a.state === 'firing' ? 'on' : 'off'}">${a.state === 'firing' ? 'Firing' : 'Resolved'}</span></td>
+        <td><span class="health ${a.state === 'firing' ? 'failing' : 'healthy'}">${a.state === 'firing' ? 'Firing' : 'Resolved'}</span></td>
         <td>${esc(a.ruleName)}</td>
         <td>${esc(a.agentName || '—')}</td>
         <td class="muted">${esc(a.message || a.subject)}</td>
