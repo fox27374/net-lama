@@ -44,6 +44,14 @@ Planned work, roughly grouped. Not ordered by priority yet.
       network + NET_ADMIN/NET_RAW; capture via gopacket/afpacket + radiotap/Dot11
 - [x] Traceroute / path analysis Phase 1: mtr-based path test (TCP/ICMP/UDP),
       per-hop RTT and loss, failure localization, hop-chain Path visualization
+- [ ] SaaS / cloud service tests: reachability and quality checks for online
+      services (MS Teams, Webex, social networks) and cloud platforms
+      (AWS, Azure, GCP) — curated endpoint sets per service
+- [ ] Host logs from the agent: fetch/tail selected log files or journald
+      from the sensor host, viewable on the server
+- [ ] Packet capture (wireshark-style) on the agent: start a filtered
+      capture from the UI, display a summary or download the pcap from
+      the server
 - [ ] Traceroute Phase 2: native-Go engine (precise SYN-ACK/RST/filtered
       classification at the destination), Paris/Dublin stable paths for ECMP,
       hop enrichment (rDNS + ASN/owner + geo), path-change/history detection
@@ -79,6 +87,8 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] On-demand test runs (`RUN_TEST`) from the UI — "Run now" on the Path and
       Results pages
 - [ ] Optional result forwarding (e.g. Splunk HEC, port of `legacy/hec-forwarder`)
+- [ ] Dashboard deep-links: every dashboard block links to its page
+      (e.g. clicking agents opens the Agents page, sites the Sites page)
 - [ ] Configurable dashboard with widgets (add/remove/reorder blocks)
 - [ ] Separate configure vs. view menus for sites, agents, tests, wireless
       and logs
