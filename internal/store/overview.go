@@ -255,15 +255,19 @@ func extractPingMetric(payloads []string) ([]float64, *float64) {
 	return series, &last
 }
 
-func extractDNSMetric(payloads []string) ([]float64, *float64) {
+// extractNested pulls payload[section][key] as the metric for each result.
+func extractNested(payloads []string, section, key string) ([]float64, *float64) {
 	var series []float64
 	for _, p := range payloads {
 		var data map[string]interface{}
 		if err := json.Unmarshal([]byte(p), &data); err != nil {
 			continue
 		}
-		// Extract DurationMs from DNS result
-		if val, ok := data["DurationMs"].(float64); ok && val > 0 {
+		sec, ok := data[section].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if val, ok := sec[key].(float64); ok && val > 0 {
 			series = append(series, val)
 		}
 	}
@@ -272,65 +276,25 @@ func extractDNSMetric(payloads []string) ([]float64, *float64) {
 	}
 	last := series[len(series)-1]
 	return series, &last
+}
+
+func extractDNSMetric(payloads []string) ([]float64, *float64) {
+	return extractNested(payloads, "dns", "resolveTimeMs")
 }
 
 func extractHTTPMetric(payloads []string) ([]float64, *float64) {
-	var series []float64
-	for _, p := range payloads {
-		var data map[string]interface{}
-		if err := json.Unmarshal([]byte(p), &data); err != nil {
-			continue
-		}
-		// Extract TotalMs from HTTP result
-		if val, ok := data["TotalMs"].(float64); ok && val > 0 {
-			series = append(series, val)
-		}
-	}
-	if len(series) == 0 {
-		return series, nil
-	}
-	last := series[len(series)-1]
-	return series, &last
+	return extractNested(payloads, "http", "totalMs")
 }
 
 func extractTCPMetric(payloads []string) ([]float64, *float64) {
-	var series []float64
-	for _, p := range payloads {
-		var data map[string]interface{}
-		if err := json.Unmarshal([]byte(p), &data); err != nil {
-			continue
-		}
-		// Extract DurationMs from TCP result
-		if val, ok := data["DurationMs"].(float64); ok && val > 0 {
-			series = append(series, val)
-		}
-	}
-	if len(series) == 0 {
-		return series, nil
-	}
-	last := series[len(series)-1]
-	return series, &last
+	return extractNested(payloads, "tcp", "connectMs")
 }
 
 func extractSpeedtestMetric(payloads []string) ([]float64, *float64) {
-	var series []float64
-	for _, p := range payloads {
-		var data map[string]interface{}
-		if err := json.Unmarshal([]byte(p), &data); err != nil {
-			continue
-		}
-		// Extract DownloadMbps from speedtest result
-		if val, ok := data["DownloadMbps"].(float64); ok && val > 0 {
-			series = append(series, val)
-		}
-	}
-	if len(series) == 0 {
-		return series, nil
-	}
-	last := series[len(series)-1]
-	return series, &last
+	return extractNested(payloads, "speedtest", "downloadMbps")
 }
 
+// extractTracerouteMetric uses the hop count of each run.
 func extractTracerouteMetric(payloads []string) ([]float64, *float64) {
 	var series []float64
 	for _, p := range payloads {
@@ -338,15 +302,12 @@ func extractTracerouteMetric(payloads []string) ([]float64, *float64) {
 		if err := json.Unmarshal([]byte(p), &data); err != nil {
 			continue
 		}
-		// Extract TotalHops (hop count) or RTT of final hop
-		var val float64
-		if v, ok := data["TotalHops"].(float64); ok && v > 0 {
-			val = v
-		} else if hops, ok := data["Hops"].([]interface{}); ok && len(hops) > 0 {
-			val = float64(len(hops))
+		tr, ok := data["traceroute"].(map[string]interface{})
+		if !ok {
+			continue
 		}
-		if val > 0 {
-			series = append(series, val)
+		if hops, ok := tr["hops"].([]interface{}); ok && len(hops) > 0 {
+			series = append(series, float64(len(hops)))
 		}
 	}
 	if len(series) == 0 {
@@ -356,6 +317,7 @@ func extractTracerouteMetric(payloads []string) ([]float64, *float64) {
 	return series, &last
 }
 
+// extractWLANMetric uses the number of access points seen per scan.
 func extractWLANMetric(payloads []string) ([]float64, *float64) {
 	var series []float64
 	for _, p := range payloads {
@@ -363,9 +325,12 @@ func extractWLANMetric(payloads []string) ([]float64, *float64) {
 		if err := json.Unmarshal([]byte(p), &data); err != nil {
 			continue
 		}
-		// Extract APCount (number of APs) from WLAN scan result
-		if val, ok := data["APCount"].(float64); ok && val >= 0 {
-			series = append(series, val)
+		ws, ok := data["wlanScan"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if aps, ok := ws["accessPoints"].([]interface{}); ok {
+			series = append(series, float64(len(aps)))
 		}
 	}
 	if len(series) == 0 {

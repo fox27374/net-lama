@@ -461,12 +461,11 @@ async function loadAgents() {
       <td><span class="badge ${a.connected ? "on" : "off"}">${a.connected ? "connected" : "offline"}</span></td>
       <td><strong>${esc(a.name)}</strong></td>
       <td>${esc(a.siteName)}</td>
-      <td>${agentHealthBadge(a.health)}</td>
       <td>${caps}</td>
       <td class="muted">${statsText(a.stats)}</td>
       <td class="muted">${memoryText(a.stats)}</td>
       <td class="muted">${diskText(a.stats)}</td>
-      <td class="muted">${new Date(a.createdAt).toLocaleString()}</td>
+      <td>${agentHealthBadge(a.health)}</td>
       <td style="text-align:right">
         <button class="ghost" data-edit>Edit</button>
         <button class="danger" data-del>Delete</button>

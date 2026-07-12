@@ -674,9 +674,9 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
 .health.healthy { color: var(--ok); }
 .health.healthy::before { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .health.degraded { color: var(--warn); }
-.health.degraded::before { background: var(--warn); }
+.health.degraded::before { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
 .health.failing { color: var(--bad); }
-.health.failing::before { background: var(--bad); }
+.health.failing::before { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
 .health.nodata { color: var(--muted-solid); }
 .health.nodata::before { background: var(--muted-solid); opacity: 0.5; }
 
