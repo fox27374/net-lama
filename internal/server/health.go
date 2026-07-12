@@ -35,8 +35,11 @@ func (s *Server) EvaluateAgentHealth(agent *store.Agent) *HealthEvaluation {
 
 	// Get latest stats from the store
 	stats := s.getLatestAgentStats(agent.ID)
-	if stats == nil {
-		// No stats ever received
+	if stats == nil || stats.UptimeSeconds == 0 {
+		// No stats ever received, or an older agent build that reports
+		// host stats but no self-metrics (uptime is always > 0 once an
+		// agent that knows about self-health has sent one sample) —
+		// don't judge what wasn't measured.
 		return eval
 	}
 
