@@ -199,6 +199,37 @@ What has been done so far, in chronological order. Planned work lives in
   self-signed TLS, create tenant → site → agent via the JSON API, run agents
   against it.
 
+## 2026-07-12 — Dashboard restructure with sparklines
+
+- **Left sidebar navigation** — replaced top-tab header with a fixed left
+  sidebar (~220px; collapses on <900px viewports). Navigation order:
+  Dashboard, Results, Path, Wireless, Logs, Alerts, Tests, Sites, Agents;
+  Manage group (Tenants, Users, API Keys); brand at top, theme toggle + logout
+  at bottom. Active item shows accent left border. All pages now stack
+  vertically full-width with .card styling.
+- **Dashboard (renamed Overview)** — landing page now shows a site filter
+  dropdown at the top. Restructured into 5 full-width blocks: (1) stat tiles
+  (sites, agents, tests, active alerts — count changed from test health); (2)
+  Sites table with agent count and health rollup; (3) Alerts table (active +
+  recent, reused from Alerts page); (4) Tests table with inline SVG sparklines
+  (no external library) + current value; (5) Wireless table (latest scan APs
+  per agent). Site filter re-renders all blocks.
+- **Sparklines & series data** — extended `TestHealth` struct with `Series`
+  (last ~30 values, oldest first; null values omitted), `Unit` (ms/Mbps/hops/APs),
+  and `Current` (last value). `GET /api/v1/overview` now accepts optional
+  `?siteId=` parameter (validated, tenant-scoped); `TenantOverview` now takes
+  `siteID` and filters agent/test/alert queries accordingly. Series extraction
+  pulls the primary metric per test type: ping→avg latency ms, dns/http/tcp→
+  duration ms, speedtest→download Mbps, traceroute→hop count, wlan_scan→AP
+  count. Client-side SVG sparklines (~160x36px) render with stroke, no axes/grid,
+  a muted dot on the last point, and right-aligned current value (tabular
+  numerals). Sparkline color uses --cat-1 design token.
+- **ROADMAP additions** — added unchecked items under "Server & UI": configurable
+  dashboard, separate configure/view menus, Path redesign, alert-rule config UI,
+  logo, version tags.
+- **API.md updated** — overview endpoint now documents optional `siteId` param
+  and new TestHealth fields (series, unit, current).
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

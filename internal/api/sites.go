@@ -21,6 +21,7 @@ func tenantScope(user *store.User, requested string) (string, bool) {
 }
 
 // handleOverview returns the tenant dashboard: counts and per-test health.
+// Optional siteId parameter filters to a specific site.
 func (a *API) handleOverview(w http.ResponseWriter, r *http.Request, user *store.User) {
 	tenantID, ok := tenantScope(user, r.URL.Query().Get("tenantId"))
 	if !ok {
@@ -28,7 +29,17 @@ func (a *API) handleOverview(w http.ResponseWriter, r *http.Request, user *store
 		return
 	}
 
-	ov, err := a.Store.TenantOverview(tenantID)
+	siteID := r.URL.Query().Get("siteId")
+	// If siteId is provided, validate it belongs to the tenant
+	if siteID != "" {
+		site, err := a.Store.GetSite(siteID)
+		if err != nil || site.TenantID != tenantID {
+			writeError(w, http.StatusBadRequest, "invalid siteId")
+			return
+		}
+	}
+
+	ov, err := a.Store.TenantOverview(tenantID, siteID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -38,6 +49,9 @@ func (a *API) handleOverview(w http.ResponseWriter, r *http.Request, user *store
 	agents, err := a.Store.ListAgents(tenantID)
 	if err == nil {
 		for _, agent := range agents {
+			if siteID != "" && agent.SiteID != siteID {
+				continue
+			}
 			if a.Server.AgentConnected(agent.ID) {
 				ov.AgentsConnected++
 			}

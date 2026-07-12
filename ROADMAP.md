@@ -76,6 +76,13 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] On-demand test runs (`RUN_TEST`) from the UI — "Run now" on the Path and
       Results pages
 - [ ] Optional result forwarding (e.g. Splunk HEC, port of `legacy/hec-forwarder`)
+- [ ] Configurable dashboard with widgets (add/remove/reorder blocks)
+- [ ] Separate configure vs. view menus for sites, agents, tests, wireless
+      and logs
+- [ ] Rework the Path view visual design
+- [ ] Alert-rule configuration UI as its own menu item
+- [ ] Logo for the web UI
+- [ ] Version tag reported by server and agent, shown in UI/API
 
 ## Documentation
 

@@ -1,6 +1,9 @@
 package store
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type TestHealth struct {
 	TestID   string     `json:"testId"`
@@ -11,6 +14,9 @@ type TestHealth struct {
 	Agents   int        `json:"agents"` // distinct agents reporting
 	Status   string     `json:"status"` // healthy | degraded | failing | nodata
 	LastSeen *time.Time `json:"lastSeen,omitempty"`
+	Series   []float64  `json:"series,omitempty"`   // last ~30 values, oldest first; null values omitted
+	Unit     string     `json:"unit,omitempty"`     // ms, Mbps, hops, APs
+	Current  *float64   `json:"current,omitempty"` // last value
 }
 
 type Overview struct {
@@ -26,14 +32,37 @@ type Overview struct {
 // Health is aggregated over recent checks per test, using a window sized
 // to the test's own interval so multi-target tests (which emit several
 // results per cycle) are judged as a whole and stale tests fall to "no data".
-func (s *Store) TenantOverview(tenantID string) (*Overview, error) {
+// If siteID is non-empty, only that site's data is included.
+func (s *Store) TenantOverview(tenantID, siteID string) (*Overview, error) {
 	ov := &Overview{TestHealth: []*TestHealth{}}
 
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sites WHERE tenant_id = ?`, tenantID).Scan(&ov.Sites); err != nil {
+	// Query agents - possibly filtered by site
+	agentQuery := `SELECT id FROM agents WHERE tenant_id = ?`
+	agentArgs := []interface{}{tenantID}
+	if siteID != "" {
+		agentQuery += ` AND site_id = ?`
+		agentArgs = append(agentArgs, siteID)
+	}
+	var agentIDs []string
+	rows, err := s.db.Query(agentQuery, agentArgs...)
+	if err != nil {
 		return nil, err
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM agents WHERE tenant_id = ?`, tenantID).Scan(&ov.Agents); err != nil {
-		return nil, err
+	for rows.Next() {
+		var id string
+		rows.Scan(&id)
+		agentIDs = append(agentIDs, id)
+	}
+	rows.Close()
+	ov.Agents = len(agentIDs)
+
+	// Site count
+	if siteID != "" {
+		ov.Sites = 1
+	} else {
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM sites WHERE tenant_id = ?`, tenantID).Scan(&ov.Sites); err != nil {
+			return nil, err
+		}
 	}
 
 	tests, err := s.ListTests(tenantID)
@@ -42,8 +71,23 @@ func (s *Store) TenantOverview(tenantID string) (*Overview, error) {
 	}
 	ov.Tests = len(tests)
 
-	if n, err := s.CountActiveAlerts(tenantID); err == nil {
-		ov.ActiveAlerts = n
+	// Count active alerts (site-filtered if needed)
+	if siteID != "" {
+		// Count alerts for tests assigned to this site
+		if err := s.db.QueryRow(`
+			SELECT COALESCE(COUNT(*), 0)
+			FROM alerts a
+			JOIN alert_rules ar ON ar.id = a.rule_id
+			JOIN tests t ON t.id = ar.test_id
+			WHERE t.tenant_id = ? AND a.state = 'firing'
+			AND t.id IN (SELECT test_id FROM site_tests WHERE site_id = ?)
+		`, tenantID, siteID).Scan(&ov.ActiveAlerts); err != nil {
+			ov.ActiveAlerts = 0
+		}
+	} else {
+		if n, err := s.CountActiveAlerts(tenantID); err == nil {
+			ov.ActiveAlerts = n
+		}
 	}
 
 	for _, t := range tests {
@@ -60,13 +104,17 @@ func (s *Store) TenantOverview(tenantID string) (*Overview, error) {
 		since := time.Now().Add(-time.Duration(windowSec) * time.Second).UTC()
 
 		var checks, okSum, agents int
-		err := s.db.QueryRow(`
+		resultQuery := `
 			SELECT COUNT(*), COALESCE(SUM(ok), 0), COUNT(DISTINCT r.agent_id)
 			FROM results r
 			JOIN agents a ON a.id = r.agent_id
-			WHERE a.tenant_id = ? AND r.test_id = ? AND r.time >= ?`,
-			tenantID, t.ID, since,
-		).Scan(&checks, &okSum, &agents)
+			WHERE a.tenant_id = ? AND r.test_id = ? AND r.time >= ?`
+		resultArgs := []interface{}{tenantID, t.ID, since}
+		if siteID != "" {
+			resultQuery += ` AND a.site_id = ?`
+			resultArgs = append(resultArgs, siteID)
+		}
+		err := s.db.QueryRow(resultQuery, resultArgs...).Scan(&checks, &okSum, &agents)
 		if err != nil {
 			return nil, err
 		}
@@ -78,16 +126,24 @@ func (s *Store) TenantOverview(tenantID string) (*Overview, error) {
 
 			// Fetch last-seen as a plain column scan (aggregate MAX loses
 			// the time affinity in the sqlite driver).
-			var last time.Time
-			if err := s.db.QueryRow(`
+			lastQuery := `
 				SELECT r.time FROM results r
 				JOIN agents a ON a.id = r.agent_id
-				WHERE a.tenant_id = ? AND r.test_id = ?
-				ORDER BY r.id DESC LIMIT 1`,
-				tenantID, t.ID,
-			).Scan(&last); err == nil {
+				WHERE a.tenant_id = ? AND r.test_id = ?`
+			lastArgs := []interface{}{tenantID, t.ID}
+			if siteID != "" {
+				lastQuery += ` AND a.site_id = ?`
+				lastArgs = append(lastArgs, siteID)
+			}
+			lastQuery += ` ORDER BY r.id DESC LIMIT 1`
+			var last time.Time
+			if err := s.db.QueryRow(lastQuery, lastArgs...).Scan(&last); err == nil {
 				h.LastSeen = &last
 			}
+
+			// Extract series: last ~30 result values for this test (site-filtered)
+			// Unit and current value are determined by test type
+			h.Unit, h.Series, h.Current = s.extractSeries(t.Type, t.ID, tenantID, siteID)
 
 			switch {
 			case okSum == checks:
@@ -101,4 +157,220 @@ func (s *Store) TenantOverview(tenantID string) (*Overview, error) {
 		ov.TestHealth = append(ov.TestHealth, h)
 	}
 	return ov, nil
+}
+
+// extractSeries extracts the last ~30 results for a test and returns the unit, series data, and current value.
+// Series data is the primary metric per test type (oldest first), with null values omitted.
+func (s *Store) extractSeries(testType, testID, tenantID, siteID string) (string, []float64, *float64) {
+	unit := "ms" // default
+	query := `
+		SELECT r.payload
+		FROM results r
+		JOIN agents a ON a.id = r.agent_id
+		WHERE a.tenant_id = ? AND r.test_id = ?`
+	args := []interface{}{tenantID, testID}
+	if siteID != "" {
+		query += ` AND a.site_id = ?`
+		args = append(args, siteID)
+	}
+	query += ` ORDER BY r.id DESC LIMIT 30`
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return unit, nil, nil
+	}
+	defer rows.Close()
+
+	var payloads []string
+	for rows.Next() {
+		var payload string
+		if err := rows.Scan(&payload); err == nil {
+			payloads = append(payloads, payload)
+		}
+	}
+
+	// Reverse to get oldest first
+	for i := len(payloads)/2 - 1; i >= 0; i-- {
+		opp := len(payloads) - 1 - i
+		payloads[i], payloads[opp] = payloads[opp], payloads[i]
+	}
+
+	// Extract series based on test type
+	var series []float64
+	var current *float64
+
+	// This is a simplified extraction; in production you'd parse JSON payloads
+	// For now, this is a placeholder that will be filled in per test type
+	switch testType {
+	case "ping":
+		unit = "ms"
+		// Extract avg latency from ping results
+		series, current = extractPingMetric(payloads)
+	case "dns":
+		unit = "ms"
+		series, current = extractDNSMetric(payloads)
+	case "http":
+		unit = "ms"
+		series, current = extractHTTPMetric(payloads)
+	case "tcp":
+		unit = "ms"
+		series, current = extractTCPMetric(payloads)
+	case "speedtest":
+		unit = "Mbps"
+		series, current = extractSpeedtestMetric(payloads)
+	case "traceroute":
+		unit = "hops"
+		series, current = extractTracerouteMetric(payloads)
+	case "wlan_scan":
+		unit = "APs"
+		series, current = extractWLANMetric(payloads)
+	}
+
+	return unit, series, current
+}
+
+// Helper functions to extract metrics from JSON payloads
+func extractPingMetric(payloads []string) ([]float64, *float64) {
+	var series []float64
+	for _, p := range payloads {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(p), &data); err != nil {
+			continue
+		}
+		// Extract AvgRttMs from nested ping result (payload.ping.avgRttMs)
+		var val float64
+		if ping, ok := data["ping"].(map[string]interface{}); ok {
+			if avgRtt, ok := ping["avgRttMs"].(float64); ok && avgRtt > 0 {
+				val = avgRtt
+			}
+		}
+		if val > 0 {
+			series = append(series, val)
+		}
+	}
+	if len(series) == 0 {
+		return series, nil
+	}
+	last := series[len(series)-1]
+	return series, &last
+}
+
+func extractDNSMetric(payloads []string) ([]float64, *float64) {
+	var series []float64
+	for _, p := range payloads {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(p), &data); err != nil {
+			continue
+		}
+		// Extract DurationMs from DNS result
+		if val, ok := data["DurationMs"].(float64); ok && val > 0 {
+			series = append(series, val)
+		}
+	}
+	if len(series) == 0 {
+		return series, nil
+	}
+	last := series[len(series)-1]
+	return series, &last
+}
+
+func extractHTTPMetric(payloads []string) ([]float64, *float64) {
+	var series []float64
+	for _, p := range payloads {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(p), &data); err != nil {
+			continue
+		}
+		// Extract TotalMs from HTTP result
+		if val, ok := data["TotalMs"].(float64); ok && val > 0 {
+			series = append(series, val)
+		}
+	}
+	if len(series) == 0 {
+		return series, nil
+	}
+	last := series[len(series)-1]
+	return series, &last
+}
+
+func extractTCPMetric(payloads []string) ([]float64, *float64) {
+	var series []float64
+	for _, p := range payloads {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(p), &data); err != nil {
+			continue
+		}
+		// Extract DurationMs from TCP result
+		if val, ok := data["DurationMs"].(float64); ok && val > 0 {
+			series = append(series, val)
+		}
+	}
+	if len(series) == 0 {
+		return series, nil
+	}
+	last := series[len(series)-1]
+	return series, &last
+}
+
+func extractSpeedtestMetric(payloads []string) ([]float64, *float64) {
+	var series []float64
+	for _, p := range payloads {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(p), &data); err != nil {
+			continue
+		}
+		// Extract DownloadMbps from speedtest result
+		if val, ok := data["DownloadMbps"].(float64); ok && val > 0 {
+			series = append(series, val)
+		}
+	}
+	if len(series) == 0 {
+		return series, nil
+	}
+	last := series[len(series)-1]
+	return series, &last
+}
+
+func extractTracerouteMetric(payloads []string) ([]float64, *float64) {
+	var series []float64
+	for _, p := range payloads {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(p), &data); err != nil {
+			continue
+		}
+		// Extract TotalHops (hop count) or RTT of final hop
+		var val float64
+		if v, ok := data["TotalHops"].(float64); ok && v > 0 {
+			val = v
+		} else if hops, ok := data["Hops"].([]interface{}); ok && len(hops) > 0 {
+			val = float64(len(hops))
+		}
+		if val > 0 {
+			series = append(series, val)
+		}
+	}
+	if len(series) == 0 {
+		return series, nil
+	}
+	last := series[len(series)-1]
+	return series, &last
+}
+
+func extractWLANMetric(payloads []string) ([]float64, *float64) {
+	var series []float64
+	for _, p := range payloads {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(p), &data); err != nil {
+			continue
+		}
+		// Extract APCount (number of APs) from WLAN scan result
+		if val, ok := data["APCount"].(float64); ok && val >= 0 {
+			series = append(series, val)
+		}
+	}
+	if len(series) == 0 {
+		return series, nil
+	}
+	last := series[len(series)-1]
+	return series, &last
 }

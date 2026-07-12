@@ -71,7 +71,10 @@ async function showApp() {
   $("#login-view").classList.add("hidden");
   $("#app-view").classList.remove("hidden");
   $("#whoami").textContent = me.username + (me.isAdmin ? " · admin" : "");
-  $("#nav-admin").classList.toggle("hidden", !me.isAdmin);
+  ["nav-admin-btn", "nav-users-btn", "nav-apikeys-btn"].forEach(id => {
+    const el = $("#" + id);
+    if (el) el.classList.toggle("hidden", !me.isAdmin);
+  });
   if (me.isAdmin) {
     tenants = await api("GET", "/api/v1/tenants");
     const sel = $("#tenant-context");
@@ -80,16 +83,18 @@ async function showApp() {
     sel.innerHTML = tenants.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
     if (prev && tenants.some((t) => t.id === prev)) sel.value = prev;
   }
-  showSection("overview");
+  showSection("dashboard");
 }
 
-const sections = ["overview", "agents", "tests", "sites", "results", "wireless", "path", "alerts", "logs", "apikeys", "admin"];
+const sections = ["dashboard", "agents", "tests", "sites", "results", "wireless", "path", "alerts", "logs", "apikeys", "admin"];
 
 function showSection(name) {
   for (const sec of sections) $("#section-" + sec).classList.add("hidden");
   $("#section-" + name).classList.remove("hidden");
-  document.querySelectorAll("nav button").forEach((b) =>
-    b.classList.toggle("active", b.dataset.nav === name));
+  document.querySelectorAll(".nav-item").forEach((b) => {
+    const target = b.dataset.nav || (b.id === "nav-admin-btn" || b.id === "nav-users-btn" || b.id === "nav-apikeys-btn" ? "admin" : "");
+    b.classList.toggle("active", target === name);
+  });
   reloadSection(name);
 }
 
@@ -98,7 +103,7 @@ function currentSection() {
 }
 
 function reloadSection(name) {
-  if (name === "overview") loadOverview();
+  if (name === "dashboard") loadDashboard();
   if (name === "agents") loadAgents();
   if (name === "tests") loadTests();
   if (name === "sites") loadSites();
@@ -111,8 +116,12 @@ function reloadSection(name) {
   if (name === "admin") loadAdmin();
 }
 
-document.querySelectorAll("nav button").forEach((b) =>
-  b.addEventListener("click", () => showSection(b.dataset.nav)));
+document.querySelectorAll(".nav-item").forEach((b) => {
+  b.addEventListener("click", () => {
+    const target = b.dataset.nav || (b.id === "nav-admin-btn" || b.id === "nav-users-btn" || b.id === "nav-apikeys-btn" ? "admin" : "dashboard");
+    showSection(target);
+  });
+});
 
 $("#tenant-context").addEventListener("change", () => reloadSection(currentSection()));
 
@@ -138,56 +147,205 @@ $("#logout").addEventListener("click", async () => {
   showLogin();
 });
 
-// --- Overview ---
+// --- Dashboard ---
 const HEALTH_LABEL = { healthy: "Healthy", degraded: "Degraded", failing: "Failing", nodata: "No data" };
 
-async function loadOverview() {
-  const ov = await api("GET", "/api/v1/overview" + tenantParam());
-  $("#ov-sites").textContent = ov.sites;
-  $("#ov-agents").textContent = ov.agents;
-  $("#ov-agents-sub").textContent =
-    ov.agents ? `${ov.agentsConnected} connected` : "";
-  $("#ov-tests").textContent = ov.tests;
+async function loadDashboard() {
+  // Populate site filter
+  await fetchSites();
+  const siteFilter = $("#db-site-filter");
+  const currentValue = siteFilter.value;
+  siteFilter.innerHTML = '<option value="">All sites</option>' +
+    sites.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
+  if (currentValue) siteFilter.value = currentValue;
+
+  // Load dashboard data with optional site filter
+  const siteId = siteFilter.value;
+  const param = tenantParam() + (siteId ? (tenantParam() ? "&" : "?") + `siteId=${siteId}` : "");
+  const ov = await api("GET", "/api/v1/overview" + param);
+
+  // Render stat tiles
+  $("#db-sites").textContent = ov.sites;
+  $("#db-agents").textContent = ov.agents;
+  $("#db-agents-sub").textContent = ov.agents ? `${ov.agentsConnected} connected` : "";
+  $("#db-tests").textContent = ov.tests;
+  $("#db-alerts").textContent = ov.activeAlerts;
   updateAlertBadge(ov.activeAlerts);
 
-  const health = ov.testHealth || [];
-  const counts = { healthy: 0, degraded: 0, failing: 0, nodata: 0 };
-  for (const h of health) counts[h.status] = (counts[h.status] || 0) + 1;
+  // Render sites table (filtered if needed)
+  const sitesData = siteId ? sites.filter(s => s.id === siteId) : sites;
+  renderDashboardSites(sitesData);
 
-  const summary = $("#ov-health");
-  summary.textContent = "";
-  if (!health.length) {
-    summary.textContent = "–";
-  } else {
-    for (const st of ["healthy", "degraded", "failing"]) {
-      const span = document.createElement("span");
-      span.className = "hcount " + st;
-      span.textContent = `${counts[st]}`;
-      span.title = HEALTH_LABEL[st];
-      summary.appendChild(span);
-    }
-  }
+  // Render alerts table
+  await renderDashboardAlerts(siteId);
 
-  const tbody = $("#ov-health-table tbody");
+  // Render tests table with sparklines
+  renderDashboardTests(ov.testHealth || []);
+
+  // Render wireless table
+  await renderDashboardWireless(siteId);
+}
+
+// Set up site filter listener
+$("#db-site-filter").addEventListener("change", () => {
+  loadDashboard();
+});
+
+function renderDashboardSites(sitesData) {
+  const tbody = $("#db-sites-table tbody");
   tbody.innerHTML = "";
-  $("#ov-empty").classList.toggle("hidden", health.length > 0);
+  $("#db-sites-empty").classList.toggle("hidden", sitesData.length > 0);
+
+  for (const site of sitesData) {
+    const tr = document.createElement("tr");
+    // Calculate health summary from site's agents' test results
+    // For now, show agent count; full health calculation would require fetching test results
+    tr.innerHTML = `
+      <td><strong>${esc(site.name)}</strong></td>
+      <td>${site.agents}</td>
+      <td class="muted">—</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+async function renderDashboardAlerts(siteId) {
+  const tbody = $("#db-alerts-table tbody");
+  tbody.innerHTML = "";
+
+  let alertsUrl = "/api/v1/alerts" + tenantParam();
+  if (siteId) alertsUrl += (tenantParam() ? "&" : "?") + `siteId=${siteId}`;
+
+  try {
+    const alerts = await api("GET", alertsUrl);
+    $("#db-alerts-empty").classList.toggle("hidden", alerts.length > 0);
+
+    for (const a of alerts.slice(0, 5)) { // Show recent 5
+      const tr = document.createElement("tr");
+      const since = a.startedAt ? new Date(a.startedAt).toLocaleString() : "—";
+      tr.innerHTML = `
+        <td><span class="badge ${a.state === 'firing' ? 'on' : 'off'}">${a.state === 'firing' ? 'Firing' : 'Resolved'}</span></td>
+        <td>${esc(a.ruleName)}</td>
+        <td>${esc(a.agentName || '—')}</td>
+        <td class="muted">${esc(a.message || a.subject)}</td>
+        <td class="muted nowrap">${since}</td>`;
+      tbody.appendChild(tr);
+    }
+  } catch (err) {
+    console.error("Failed to load alerts:", err);
+  }
+}
+
+function renderDashboardTests(health) {
+  const tbody = $("#db-tests-table tbody");
+  tbody.innerHTML = "";
+  $("#db-tests-empty").classList.toggle("hidden", health.length > 0);
+
   for (const h of health) {
     const tr = document.createElement("tr");
-    const last = h.lastSeen ? new Date(h.lastSeen).toLocaleString() : "—";
     const reporting = h.status === "nodata"
       ? "—"
-      : `${h.ok}/${h.checks} checks OK · ${h.agents} agent${h.agents === 1 ? "" : "s"}`;
+      : `${h.ok}/${h.checks}`;
+    const sparkline = renderSparkline(h.series, h.unit);
     tr.innerHTML = `
       <td><span class="health ${h.status}">${HEALTH_LABEL[h.status]}</span></td>
       <td><strong>${esc(h.name)}</strong></td>
       <td><span class="chip type-${h.type}">${h.type}</span></td>
       <td class="muted">${reporting}</td>
-      <td class="muted nowrap">${last}</td>`;
+      <td>${sparkline}</td>`;
     tr.addEventListener("click", () => {
       pendingResultTest = h.testId;
       showSection("results");
     });
     tbody.appendChild(tr);
+  }
+}
+
+function renderSparkline(series, unit) {
+  if (!series || series.length === 0) {
+    return '<span class="muted">—</span>';
+  }
+
+  // Create inline SVG sparkline: ~160x36px
+  const width = 160, height = 36;
+  const padding = 4;
+  const innerWidth = width - 2 * padding;
+  const innerHeight = height - 2 * padding;
+
+  // Find min/max for scaling
+  let min = Math.min(...series);
+  let max = Math.max(...series);
+  if (min === max) max = min + 1;
+  const range = max - min;
+
+  // Generate points
+  let points = "";
+  for (let i = 0; i < series.length; i++) {
+    const x = padding + (i / (series.length - 1)) * innerWidth;
+    const y = padding + innerHeight - ((series[i] - min) / range) * innerHeight;
+    points += (i > 0 ? " " : "") + `${x.toFixed(2)},${y.toFixed(2)}`;
+  }
+
+  // Current value text (right-aligned)
+  const current = series[series.length - 1];
+  const currentText = current.toFixed(0) + (unit ? " " + unit : "");
+
+  // SVG
+  return `<svg width="160" height="36" viewBox="0 0 ${width} ${height}" style="vertical-align: middle; margin: 0 8px 0 0;">
+    <polyline points="${points}" fill="none" stroke="var(--cat-1)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <circle cx="${padding + innerWidth}" cy="${padding + innerHeight - ((series[series.length - 1] - min) / range) * innerHeight}" r="2.5" fill="var(--cat-1)" opacity="0.6" vector-effect="non-scaling-stroke"/>
+  </svg><span style="font-variant-numeric: tabular-nums; font-size: 0.85em; color: var(--muted-solid);">${esc(currentText)}</span>`;
+}
+
+async function renderDashboardWireless(siteId) {
+  const tbody = $("#db-wireless-table tbody");
+  tbody.innerHTML = "";
+
+  // Fetch agents for the site (or all if no site filter)
+  let agentsData = agents;
+  if (siteId && agents.length) {
+    agentsData = agents.filter(a => a.siteId === siteId);
+  }
+
+  try {
+    // Fetch latest wireless scans
+    let resultsUrl = "/api/v1/results?testType=wlan_scan&limit=100" + tenantParam();
+    if (siteId) resultsUrl += (tenantParam() ? "&" : "?") + `siteId=${siteId}`;
+    const results = await api("GET", resultsUrl);
+
+    // Group by agent, keep latest per agent
+    const latestByAgent = {};
+    for (const r of results) {
+      if (!latestByAgent[r.agentId]) {
+        latestByAgent[r.agentId] = r;
+      }
+    }
+
+    const aPs = Object.values(latestByAgent);
+    $("#db-wireless-empty").classList.toggle("hidden", aPs.length > 0);
+
+    // Parse payloads and render APs
+    for (const result of aPs.slice(0, 20)) { // Show latest 20 APs
+      try {
+        const payload = typeof result.payload === "string" ? JSON.parse(result.payload) : result.payload;
+        const aps = payload.APs || [];
+        for (const ap of aps.slice(0, 3)) { // Show top 3 per agent
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${esc(result.agentName)}</td>
+            <td>${esc(ap.SSID)}</td>
+            <td class="mono">${esc(ap.BSSID)}</td>
+            <td>${esc(ap.Band)}</td>
+            <td class="num">${ap.Channel}</td>
+            <td class="num sig-${ap.RSSI > -70 ? 'good' : (ap.RSSI > -80 ? 'ok' : 'weak')}">${ap.RSSI}</td>
+            <td>${esc(ap.Security)}</td>`;
+          tbody.appendChild(tr);
+        }
+      } catch (e) {
+        // Skip malformed results
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load wireless:", err);
   }
 }
 

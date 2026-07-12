@@ -30,57 +30,111 @@
 </div>
 
 <div id="app-view" class="hidden">
-  <header>
-    <span class="brand"><span class="brand-dot"></span>Net-Lama</span>
-    <nav>
-      <button data-nav="overview" class="active">Overview</button>
-      <button data-nav="agents">Agents</button>
-      <button data-nav="tests">Tests</button>
-      <button data-nav="sites">Sites</button>
-      <button data-nav="results">Results</button>
-      <button data-nav="wireless">Wireless</button>
-      <button data-nav="path">Path</button>
-      <button data-nav="alerts">Alerts <span id="nav-alert-badge" class="nav-badge hidden"></span></button>
-      <button data-nav="logs">Logs</button>
-      <button data-nav="apikeys">API Keys</button>
-      <button data-nav="admin" id="nav-admin" class="hidden">Tenants &amp; Users</button>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand"><span class="brand-dot"></span>Net-Lama</span>
+    </div>
+    <nav class="sidebar-nav">
+      <button data-nav="dashboard" class="nav-item active">Dashboard</button>
+      <button data-nav="results" class="nav-item">Results</button>
+      <button data-nav="path" class="nav-item">Path</button>
+      <button data-nav="wireless" class="nav-item">Wireless</button>
+      <button data-nav="logs" class="nav-item">Logs</button>
+      <button data-nav="alerts" class="nav-item">Alerts <span id="nav-alert-badge" class="nav-badge hidden"></span></button>
+      <button data-nav="tests" class="nav-item">Tests</button>
+      <button data-nav="sites" class="nav-item">Sites</button>
+      <button data-nav="agents" class="nav-item">Agents</button>
     </nav>
-    <span class="spacer"></span>
-    <select id="tenant-context" class="compact hidden" title="Tenant"></select>
-    <span id="whoami" class="muted"></span>
-    <button id="theme-toggle" class="icon" title="Toggle dark mode" aria-label="Toggle dark mode"></button>
-    <button id="logout" class="ghost">Sign out</button>
-  </header>
+    <div class="sidebar-divider"></div>
+    <nav class="sidebar-nav">
+      <div class="nav-group-label">Manage</div>
+      <button data-nav="admin" class="nav-item" id="nav-admin-btn">Tenants</button>
+      <button data-nav="admin" class="nav-item" id="nav-users-btn">Users</button>
+      <button data-nav="admin" class="nav-item" id="nav-apikeys-btn">API Keys</button>
+    </nav>
+    <div class="sidebar-footer">
+      <select id="tenant-context" class="compact hidden" title="Tenant"></select>
+      <span id="whoami" class="muted"></span>
+      <div class="sidebar-actions">
+        <button id="theme-toggle" class="icon" title="Toggle dark mode" aria-label="Toggle dark mode"></button>
+        <button id="logout" class="ghost">Sign out</button>
+      </div>
+    </div>
+  </aside>
 
   <main>
-    <!-- Overview -->
-    <section id="section-overview">
-      <div class="section-head"><h2>Overview</h2></div>
-      <div class="stat-row">
-        <div class="stat-tile">
-          <div class="stat-label">Sites</div>
-          <div class="stat-value" id="ov-sites">–</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-label">Agents</div>
-          <div class="stat-value" id="ov-agents">–</div>
-          <div class="stat-sub" id="ov-agents-sub"></div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-label">Tests</div>
-          <div class="stat-value" id="ov-tests">–</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-label">Test health</div>
-          <div class="stat-value health-summary" id="ov-health">–</div>
+    <!-- Dashboard -->
+    <section id="section-dashboard">
+      <div class="section-head">
+        <h2>Dashboard</h2>
+        <label class="compact-label">Site filter
+          <select id="db-site-filter" class="compact">
+            <option value="">All sites</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- Stat tiles -->
+      <div class="card">
+        <div class="stat-row">
+          <div class="stat-tile">
+            <div class="stat-label">Sites</div>
+            <div class="stat-value" id="db-sites">–</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Agents</div>
+            <div class="stat-value" id="db-agents">–</div>
+            <div class="stat-sub" id="db-agents-sub"></div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Tests</div>
+            <div class="stat-value" id="db-tests">–</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Active alerts</div>
+            <div class="stat-value" id="db-alerts">–</div>
+          </div>
         </div>
       </div>
+
+      <!-- Sites block -->
       <div class="card table-card">
-        <table id="ov-health-table">
-          <thead><tr><th>Status</th><th>Test</th><th>Type</th><th>Recent checks</th><th>Last result</th></tr></thead>
+        <div class="section-head"><h3>Sites</h3></div>
+        <table id="db-sites-table">
+          <thead><tr><th>Name</th><th>Agents</th><th>Health</th></tr></thead>
           <tbody></tbody>
         </table>
-        <p id="ov-empty" class="empty hidden">No tests defined yet. Create tests and assign them to sites.</p>
+        <p id="db-sites-empty" class="empty hidden">No sites yet.</p>
+      </div>
+
+      <!-- Alerts block -->
+      <div class="card table-card">
+        <div class="section-head"><h3>Active &amp; recent alerts</h3></div>
+        <table id="db-alerts-table">
+          <thead><tr><th>State</th><th>Rule</th><th>Agent</th><th>Details</th><th>Since</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="db-alerts-empty" class="empty hidden">No alerts.</p>
+      </div>
+
+      <!-- Tests block with sparklines -->
+      <div class="card table-card">
+        <div class="section-head"><h3>Tests</h3></div>
+        <table id="db-tests-table">
+          <thead><tr><th>Status</th><th>Test</th><th>Type</th><th>Checks</th><th>Sparkline</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="db-tests-empty" class="empty hidden">No tests defined yet.</p>
+      </div>
+
+      <!-- Wireless block -->
+      <div class="card table-card">
+        <div class="section-head"><h3>Wireless</h3></div>
+        <table id="db-wireless-table">
+          <thead><tr><th>Agent</th><th>SSID</th><th>BSSID</th><th>Band</th><th>Ch</th><th>RSSI (dBm)</th><th>Security</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="db-wireless-empty" class="empty hidden">No wireless scans yet.</p>
       </div>
     </section>
 

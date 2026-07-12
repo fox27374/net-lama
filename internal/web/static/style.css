@@ -200,49 +200,134 @@ h3 { font-size: var(--text-lg); letter-spacing: -0.01em; margin: 0 0 var(--space
 .login-box .muted { margin-top: var(--space-1); }
 .login-box form { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-5); }
 
-/* Header */
-header {
-  position: sticky;
+/* Sidebar layout */
+#app-view {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  position: fixed;
+  left: 0;
   top: 0;
-  z-index: 10;
+  bottom: 0;
+  width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: var(--space-2) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.nav-item {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  background: color-mix(in srgb, var(--surface) 85%, transparent);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
-  padding: var(--space-2) var(--space-4);
-}
-nav { display: flex; gap: var(--space-1); }
-nav button {
+  gap: var(--space-2);
   background: transparent;
   color: var(--muted-solid);
-  font-weight: 550;
   border: none;
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
+  text-align: left;
   cursor: pointer;
+  font-weight: 550;
   transition: color var(--transition), background var(--transition);
+  font-size: var(--text-md);
 }
-nav button:hover {
+
+.nav-item:hover {
   color: var(--fg);
   background: var(--surface-2);
 }
-nav button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-nav button.active {
+
+.nav-item.active {
   background: var(--surface-2);
   color: var(--fg);
   border-left: 3px solid var(--accent);
   padding-left: calc(var(--space-3) - 3px);
 }
 
+.nav-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.nav-group-label {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-solid);
+  font-weight: 700;
+  margin-top: var(--space-2);
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-2) 0;
+}
+
+.sidebar-footer {
+  padding: var(--space-3) var(--space-2);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sidebar-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
 main {
+  margin-left: 220px;
   padding: var(--space-5) var(--space-4) var(--space-6);
-  max-width: 1200px;
-  margin: 0 auto;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Main content becomes full-width with cards */
+.card {
+  width: 100%;
+  margin-bottom: var(--space-5);
+}
+
+.card:last-child {
+  margin-bottom: 0;
+}
+
+/* Responsive: collapse sidebar on small screens */
+@media (max-width: 900px) {
+  .sidebar {
+    position: fixed;
+    left: -220px;
+    transition: left var(--transition);
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+
+  main {
+    margin-left: 0;
+  }
 }
 
 .section-head {
@@ -253,10 +338,12 @@ main {
 }
 .section-head h2, .section-head h3 { margin: 0; flex: 1; }
 
+/* Columns layout removed for full-width cards */
 .columns {
   display: flex;
+  flex-direction: column;
   gap: var(--space-4);
-  align-items: flex-start;
+  align-items: stretch;
   flex-wrap: wrap;
   margin-bottom: var(--space-4);
 }
@@ -521,12 +608,25 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
 }
 .cap-warning::before { content: "\26A0\FE0E "; }
 
+/* Section head with filter */
+.compact-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--muted-solid);
+  margin: 0;
+}
+
+.compact-label select {
+  min-width: 150px;
+}
+
 /* Overview / stat tiles */
 .stat-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: var(--space-4);
-  margin-bottom: var(--space-5);
 }
 .stat-tile {
   background: var(--surface);
@@ -729,6 +829,14 @@ pre.token { color: var(--accent); font-weight: 600; word-break: break-all; white
 }
 .chart-tip .tip-row .val { font-weight: 650; color: var(--fg); }
 .chart-tip .tip-row .name { color: var(--muted-solid); font-variant-numeric: normal; }
+
+/* Sparklines */
+svg { display: inline-block; }
+
+/* Signal quality indicators */
+.sig-good { color: var(--ok); font-weight: 650; }
+.sig-ok { color: var(--warn); font-weight: 650; }
+.sig-weak { color: var(--bad); font-weight: 650; }
 
 /* Logs page */
 .chip.type-agent {

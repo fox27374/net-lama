@@ -71,10 +71,11 @@ Set `DEBUG=1` for debug logging. Cross-compile the agent for a Raspberry Pi with
 
 ## Web UI and API
 
-The UI (login with username/password, dark/light theme) has pages for:
+The UI (login with username/password, dark/light theme) has a fixed left sidebar with:
 
-* **Overview** — the tenant landing page: site/agent/test counts and per-test health
-  (healthy / degraded / failing / no data); click a test to jump to its results
+* **Dashboard** — the tenant landing page with a site filter; shows stat tiles (sites,
+  agents, tests, active alerts), a sites table, active & recent alerts, tests with
+  inline sparklines showing metric trends, and the latest wireless scans
 * **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_scan/speedtest) with interval and parameters
   * `speedtest` tests pick a **provider**: `ookla` (default, speedtest.net via the
     unofficial `showwin/speedtest-go` client against volunteer-run servers — the

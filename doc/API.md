@@ -376,9 +376,9 @@ E.g. for `testType: "speedtest"` the payload is
 
 ### `GET /api/v1/overview`
 
-Query: `tenantId` (required for admins). The tenant dashboard: counts plus
-per-test health computed over a recent window (≈3 test cycles, clamped to
-90s–1h):
+Query: `tenantId` (required for admins), optionally `siteId` (filters to a single
+site; must belong to the tenant). The tenant dashboard: counts plus per-test
+health computed over a recent window (≈3 test cycles, clamped to 90s–1h):
 
 ```json
 {
@@ -386,13 +386,20 @@ per-test health computed over a recent window (≈3 test cycles, clamped to
   "testHealth": [{
     "testId": "...", "name": "ping-gw", "type": "ping",
     "checks": 15, "ok": 15, "agents": 1, "status": "healthy",
-    "lastSeen": "2026-07-09T..."
+    "lastSeen": "2026-07-09T...",
+    "series": [12.3, 14.1, 13.8, ...], "unit": "ms", "current": 13.8
   }]
 }
 ```
 
 `status` is one of `healthy` (all checks ok), `degraded` (some failed),
 `failing` (all failed), `nodata` (no checks in the window).
+
+`series` contains the last ~30 numeric values (oldest first), extracted as the
+primary metric per test type: ping→avg latency (ms), dns/http/tcp→duration (ms),
+speedtest→download (Mbps), traceroute→hop count, wlan_scan→AP count. `unit`
+is one of `ms`, `Mbps`, `hops`, `APs`. `current` is the last value in the
+series. Both are omitted if no data is available.
 
 ---
 
