@@ -7,7 +7,9 @@ let tenants = [];
 let sites = [];
 let tests = [];
 let agents = [];
+let alertRules = [];
 let editingTest = null;
+let pendingTestForRule = null; // set when jumping to alertcfg with a test preselected
 
 // --- Theme ---
 function applyTheme(theme) {
@@ -421,6 +423,10 @@ async function fetchTests() {
   tests = await api("GET", "/api/v1/tests" + tenantParam());
   return tests;
 }
+async function fetchAlertRules() {
+  alertRules = await api("GET", "/api/v1/alert-rules" + tenantParam());
+  return alertRules;
+}
 async function fetchAgents() {
   agents = await api("GET", "/api/v1/agents" + tenantParam());
   return agents;
@@ -632,17 +638,22 @@ function speedtestProviderLabel(provider) {
 }
 
 async function loadTests() {
-  await fetchTests();
+  await Promise.all([fetchTests(), fetchAlertRules()]);
   const tbody = $("#tests-table tbody");
   tbody.innerHTML = "";
   $("#tests-empty").classList.toggle("hidden", tests.length > 0);
   for (const t of tests) {
+    const rulesForTest = alertRules.filter((r) => r.testId === t.id);
+    const ruleNames = rulesForTest.length > 0
+      ? esc(rulesForTest.map((r) => r.name).join(", "))
+      : '<span class="muted">—</span>';
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><strong>${esc(t.name)}</strong></td>
       <td><span class="chip type-${t.type}">${t.type}</span></td>
       <td class="muted">${t.intervalSeconds}s</td>
       <td class="muted">${esc(paramsSummary(t))}</td>
+      <td class="muted">${ruleNames}</td>
       <td style="text-align:right">
         <button class="ghost" data-edit>Edit</button>
         <button class="danger" data-del>Delete</button>
@@ -666,8 +677,30 @@ function updateTestParamFields() {
   $("#t-params-wlan").classList.toggle("hidden", type !== "wlan_scan");
   $("#t-params-traceroute").classList.toggle("hidden", type !== "traceroute");
   $("#t-params-speedtest").classList.toggle("hidden", type !== "speedtest");
+  // Re-filter alert rules when test type changes
+  populateAlertRuleSelect(type);
 }
 $("#t-type").addEventListener("change", updateTestParamFields);
+
+function populateAlertRuleSelect(testType) {
+  const applicableRules = getApplicableRules(testType);
+  const select = $("#t-alert-rule");
+  const label = $("#t-alert-rule-label");
+  const createBtn = $("#t-create-alert-rule");
+  const section = $("#t-alert-rule-section");
+
+  if (alertRules.length === 0) {
+    // No rules exist: show create button
+    select.parentElement.style.display = "none";
+    createBtn.style.display = "inline-block";
+  } else {
+    // Rules exist: populate select with applicable rules
+    select.parentElement.style.display = "block";
+    createBtn.style.display = "none";
+    select.innerHTML = '<option value="">— none —</option>' +
+      applicableRules.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
+  }
+}
 
 function openTestDialog(test) {
   editingTest = test || null;
@@ -677,7 +710,8 @@ function openTestDialog(test) {
   dialogError("#t-error", "");
 
   $("#t-name").value = test ? test.name : "";
-  $("#t-type").value = test ? test.type : "ping";
+  const testType = test ? test.type : "ping";
+  $("#t-type").value = testType;
   $("#t-interval").value = test ? test.intervalSeconds : 60;
   const p = (test && test.params) || {};
   $("#t-ping-count").value = p.count || 5;
@@ -696,10 +730,31 @@ function openTestDialog(test) {
   $("#t-tr-probes").value = (test && test.type === "traceroute" && p.probesPerHop) || 5;
   $("#t-st-provider").value = (test && test.type === "speedtest" && p.provider) || "ookla";
   updateTestParamFields();
+
+  // Populate alert rule selection
+  populateAlertRuleSelect(testType);
+  if (test) {
+    const rulesForTest = alertRules.filter((r) => r.testId === test.id);
+    if (rulesForTest.length > 0) {
+      $("#t-alert-rule").value = rulesForTest[0].id;
+    }
+  }
+
   $("#dlg-test").showModal();
 }
 
 $("#btn-new-test").addEventListener("click", () => openTestDialog(null));
+
+$("#t-create-alert-rule").addEventListener("click", async () => {
+  // Close the test dialog
+  $("#dlg-test").close();
+  // If editing an existing test, preselect it in the rule dialog
+  if (editingTest) {
+    pendingTestForRule = editingTest.id;
+  }
+  // Navigate to alertcfg and open the new rule dialog
+  navTo("alertcfg");
+});
 
 function lines(v) {
   return v.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -735,13 +790,39 @@ $("#form-test").addEventListener("submit", async (e) => {
     params,
   };
   try {
+    let testId;
     if (editingTest) {
       await api("PUT", `/api/v1/tests/${editingTest.id}`, body);
+      testId = editingTest.id;
     } else {
       const tid = tenantParam("");
       if (tid) body.tenantId = tid.split("=")[1];
-      await api("POST", "/api/v1/tests", body);
+      const res = await api("POST", "/api/v1/tests", body);
+      testId = res.id;
     }
+
+    // Handle alert rule reassignment
+    const selectedRuleId = $("#t-alert-rule").value;
+    if (selectedRuleId) {
+      const rule = alertRules.find((r) => r.id === selectedRuleId);
+      if (rule && rule.testId !== testId) {
+        // Re-point the rule to this test
+        const ruleUpdate = {
+          name: rule.name,
+          testId,
+          metric: rule.metric,
+          operator: rule.operator,
+          threshold: rule.threshold,
+          forCount: rule.forCount,
+          clearThreshold: rule.clearThreshold,
+          clearCount: rule.clearCount,
+          targetIds: rule.targetIds,
+          webhookUrl: rule.webhookUrl,
+        };
+        await api("PUT", `/api/v1/alert-rules/${selectedRuleId}`, ruleUpdate);
+      }
+    }
+
     $("#dlg-test").close();
     loadTests();
   } catch (err) {
@@ -2212,6 +2293,26 @@ const METRIC_LABEL = {
   download_mbps: "download (Mbps)", upload_mbps: "upload (Mbps)",
 };
 
+// Metric applicability map: which test types can use which metrics
+const METRIC_APPLICABILITY = {
+  unhealthy: ["ping", "dns", "http", "tcp", "traceroute", "wlan_scan", "speedtest"],
+  latency_ms: ["ping", "dns", "http", "tcp", "traceroute", "speedtest"],
+  loss_percent: ["ping"],
+  download_mbps: ["speedtest"],
+  upload_mbps: ["speedtest"],
+};
+
+// Get rules applicable to a test type
+function getApplicableRules(testType) {
+  if (!testType) return [];
+  return alertRules.filter((r) => {
+    const applicableMetrics = Object.entries(METRIC_APPLICABILITY)
+      .filter(([_, types]) => types.includes(testType))
+      .map(([metric, _]) => metric);
+    return applicableMetrics.includes(r.metric);
+  });
+}
+
 function updateAlertBadge(count) {
   const badge = $("#nav-alert-badge");
   badge.textContent = count > 0 ? count : "";
@@ -2257,6 +2358,11 @@ $("#btn-new-rule").addEventListener("click", async () => {
   $("#dlg-rule-title").textContent = "New alert rule";
   $("#ar-name").value = "";
   $("#ar-test").innerHTML = tests.map((t) => `<option value="${t.id}">${esc(t.name)} (${t.type})</option>`).join("");
+  // Preselect the pending test if available
+  if (pendingTestForRule) {
+    $("#ar-test").value = pendingTestForRule;
+    pendingTestForRule = null;
+  }
   $("#ar-metric").value = "unhealthy";
   $("#ar-threshold-wrap").classList.add("hidden");
   $("#ar-threshold").value = 0;
@@ -2311,6 +2417,8 @@ async function loadAlertCfg() {
     api("GET", "/api/v1/alert-targets" + tenantParam()),
     api("GET", "/api/v1/alert-rules" + tenantParam()),
   ]);
+  // Update the cached alertRules
+  alertRules = rules;
 
   // Render targets table
   const tt = $("#targets-table tbody");
@@ -2381,6 +2489,12 @@ async function loadAlertCfg() {
     rt.appendChild(tr);
   }
   $("#rules-empty").classList.toggle("hidden", rules.length > 0);
+
+  // Open the new rule dialog if pendingTestForRule is set
+  if (pendingTestForRule) {
+    // Trigger the "New rule" button click to open the dialog
+    $("#btn-new-rule").click();
+  }
 }
 
 async function editAlertRule(rule, targets) {

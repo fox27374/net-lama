@@ -457,6 +457,45 @@ What has been done so far, in chronological order. Planned work lives in
   targets, clear hysteresis, and SMTP env vars — no changes needed there (already
   documented).
 
+## 2026-07-13 — Tests moved into Configuration; alert-rule assignment in test dialog
+
+- **Tests sidebar reorganization**: moved the "Tests" nav button from the main
+  group into the new "Configuration" sidebar group (below "Alerts & Alert Rules").
+  No functionality change; hash navigation (`#tests`) continues to work.
+- **Alert Rule column in Tests table**: added a new "Alert Rule" column showing
+  comma-separated names of alert rules whose `testId` matches the test, or a
+  muted "—" when no rules are assigned. Fetches `/api/v1/alert-rules` in
+  parallel with tests to populate the column.
+- **Alert-rule assignment in test dialog**: when editing or creating a test,
+  a new "Alert Rule" control appears at the bottom of the form:
+  - If at least one alert rule exists: a labeled select with "— none —" plus
+    every rule whose metric applies to the current test type (applicability
+    map: unhealthy→all types; latency_ms→ping/dns/http/tcp/traceroute/speedtest;
+    loss_percent→ping; download_mbps/upload_mbps→speedtest). Rules are
+    re-filtered on test-type change. When editing a test with attached rules,
+    the first one is preselected.
+  - If no rules exist: a ghost "Create alert rule →" button that closes the
+    test dialog, navigates to the alertcfg page, and opens the new-rule dialog
+    with the test preselected (via `pendingTestForRule` module variable, same
+    pattern as `pendingResultTest`).
+  - On save: after test create/update succeeds, if a rule is selected and its
+    `testId` differs from the test's id, a `PUT /api/v1/alert-rules/{ruleId}`
+    call re-points the rule to the test (sends all existing rule fields unchanged).
+    The tests list is reloaded afterward, so the new Alert Rule column reflects
+    the change. Selecting "— none —" does nothing (no detach semantics).
+  - Hint text below the control: "Assigning moves the rule to this test".
+- **No Go/API changes**: backend rules already belonged to a test (`alert_rules.test_id`);
+  "assigning a rule to a test" is a PUT of that field alone, using the existing
+  endpoint.
+- **Verification**: `make build`, `go vet ./...`, `go test ./...` all pass. The
+  HTML thead now includes `<th>Alert Rule</th>` in the tests table. The app.js
+  file contains the `METRIC_APPLICABILITY` map (unhealthy→all types, latency_ms→
+  ping/dns/http/tcp/traceroute/speedtest, loss_percent→ping, download_mbps/
+  upload_mbps→speedtest), the `populateAlertRuleSelect()` function with metric
+  filtering and re-filtering on type change, and the PUT call in the form
+  submission: `await api("PUT", `/api/v1/alert-rules/${selectedRuleId}`, ruleUpdate)`
+  with all rule fields preserved. Evidence in the report below.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

@@ -41,13 +41,13 @@
       <button data-nav="wireless" class="nav-item">Wireless</button>
       <button data-nav="logs" class="nav-item">Logs</button>
       <button data-nav="alerts" class="nav-item">Alerts <span id="nav-alert-badge" class="nav-badge hidden"></span></button>
-      <button data-nav="tests" class="nav-item">Tests</button>
       <button data-nav="sites" class="nav-item">Sites</button>
       <button data-nav="agents" class="nav-item">Agents</button>
     </nav>
     <div class="sidebar-divider"></div>
     <nav class="sidebar-nav">
       <div class="nav-group-label">Configuration</div>
+      <button data-nav="tests" class="nav-item">Tests</button>
       <button data-nav="alertcfg" class="nav-item">Alerts &amp; Alert Rules</button>
     </nav>
     <div class="sidebar-divider"></div>
@@ -165,7 +165,7 @@
       </div>
       <div class="card table-card">
         <table id="tests-table">
-          <thead><tr><th>Name</th><th>Type</th><th>Interval</th><th>Parameters</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Type</th><th>Interval</th><th>Parameters</th><th>Alert Rule</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
         <p id="tests-empty" class="empty hidden">No tests defined yet. Create tests here, then assign them to sites.</p>
@@ -509,6 +509,13 @@
         <label>Max hops <input type="number" id="t-tr-maxhops" min="1" max="64" value="30"></label>
         <label>Probes per hop <input type="number" id="t-tr-probes" min="1" max="20" value="5"></label>
       </div>
+    </div>
+    <div id="t-alert-rule-section">
+      <label id="t-alert-rule-label">Alert Rule
+        <select id="t-alert-rule"></select>
+      </label>
+      <button type="button" id="t-create-alert-rule" class="ghost hidden">Create alert rule →</button>
+      <p class="muted" id="t-alert-rule-hint">Assigning moves the rule to this test</p>
     </div>
     <p class="error hidden" id="t-error"></p>
     <div class="row end">
