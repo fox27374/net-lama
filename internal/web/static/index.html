@@ -257,6 +257,10 @@
         <select id="pa-agent" class="compact"></select>
         <select id="pa-test" class="compact"></select>
         <span class="spacer"></span>
+        <div class="seg-control">
+          <button class="seg-btn active" data-metric="latency">Latency</button>
+          <button class="seg-btn" data-metric="loss">Loss</button>
+        </div>
         <button id="pa-run" class="primary">Run now</button>
         <button id="pa-refresh" class="ghost" title="Refresh">&#8635; Refresh</button>
       </div>
@@ -274,11 +278,11 @@
           </table>
         </div>
         <div class="card">
-          <div class="section-head"><h3>Latency contribution by hop</h3></div>
+          <div class="section-head"><h3 id="pa-waterfall-title">Latency contribution by hop</h3></div>
           <div id="pa-waterfall"></div>
         </div>
         <div class="card">
-          <div class="section-head"><h3>Path history</h3></div>
+          <div class="section-head"><h3 id="pa-history-title">Path history — avg RTT</h3></div>
           <div id="pa-history"></div>
         </div>
       </div>

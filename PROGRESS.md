@@ -322,6 +322,49 @@ What has been done so far, in chronological order. Planned work lives in
   color logic at the data mapping step, checking `i === largestDeltaIndex &&
   waterfallData[i].delta > 0 ? badColor : ...`.
 
+## 2026-07-13 — Path horizontal waterfall (APM-style) + latency/loss metric toggle
+
+- **Horizontal APM-trace waterfall**: reworked renderPathWaterfall to display as
+  horizontal bars (one row per hop) instead of vertical columns. yAxis is now a
+  category axis with hop labels (TTL + host, truncated to ~24 chars, monoish small
+  font in --muted-solid color); xAxis is value (ms) at the top with grid lines on.
+  Floating-bar stacking transposed: invisible "base" series positions each bar to
+  start at its previous hop's cumulative RTT; visible "delta" series shows the
+  hop's latency contribution. Bar height ~16px (barWidth), rows scale chart height
+  to `Math.max(180, rows*28 + 70)` px with dynamic resize. Same color scheme and
+  tooltips as before (largest positive delta → --bad, positive → --accent, negative
+  → --border).
+- **Latency/Loss segmented control**: new pill-button toggle in the Path section
+  header with two states ("Latency" / "Loss"). Active button styled with --accent
+  background. Module variable `paMetric` tracks the selected metric. Card h3 titles
+  given IDs (pa-waterfall-title, pa-history-title) and updated dynamically when
+  metric changes.
+- **Loss mode — waterfall**: plain (non-cumulative) horizontal bars showing loss %
+  from 0 to 100 on the xAxis. Bar color by loss thresholds: ≥60% → --bad, ≥20% →
+  --warn, else → --ok. Tooltip shows host, loss %, and avg RTT for context. Title
+  becomes "Packet loss by hop".
+- **Loss mode — heatmap**: heatmap cells now display lossPercent instead of avgRttMs.
+  visualMap fixed to 0–100 % with --ok → --warn → --bad ramp. Title becomes
+  "Path history — loss". Tooltip updated to show loss % as primary value. All
+  heatmap interactions (click-to-inspect, zoom) and theme toggle work in both modes.
+- **No API changes**: all data is re-rendered from cached paDisplayedResult and
+  paHistoryResults; no refetch on metric toggle. Theme toggle respects paMetric
+  (re-renders via existing renderPathWaterfall/Heatmap calls). Backward compatible:
+  paMetric defaults to "latency".
+- **Styling**: new .seg-control, .seg-btn, .seg-btn.active CSS classes added to
+  style.css after the button styles. Segmented control uses existing design tokens
+  for consistent light/dark theme support.
+- **Verification**: make build, go vet, go test all pass. Serve check confirms
+  /app.js contains `paMetric = "latency"`, segmented-control event handlers for
+  metric toggle, yAxis category/inverse and xAxis position top configuration; /
+  contains two segment buttons with data-metric and the two h3 id attributes;
+  both cards have functioning loss-mode bars and cells. Evidence from modified
+  files: axis-swap configuration at lines yAxis: { type: "category", data: labels,
+  inverse: true } and xAxis: { type: "value", position: "top", ... }; dynamic
+  height at `const chartHeight = Math.max(180, respondingHops.length * 28 + 70)`;
+  loss-mode visualMap at `{ min: 0, max: 100, ..., inRange: { color: [okColor,
+  warnColor, badColor] } }`.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

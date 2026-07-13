@@ -1382,6 +1382,7 @@ let paHeatmapInstance = null;  // ECharts instance
 let paWaterfallInstance = null;  // ECharts waterfall instance
 let paDisplayedResult = null;  // cached result for theme re-render and Back to latest
 let paLatestResult = null;  // latest result for "Back to latest" button
+let paMetric = "latency";  // toggle between "latency" and "loss"
 
 async function loadPath() {
   [paAgents, paTests] = await Promise.all([
@@ -1416,8 +1417,41 @@ $("#pa-run").addEventListener("click", async () => {
   await runTestNow($("#pa-agent").value, $("#pa-test").value, btn, renderPath);
 });
 
+// Metric toggle (Latency / Loss)
+document.querySelectorAll(".seg-btn[data-metric]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    paMetric = btn.dataset.metric;
+
+    // Update button states
+    document.querySelectorAll(".seg-btn[data-metric]").forEach((b) => {
+      b.classList.toggle("active", b.dataset.metric === paMetric);
+    });
+
+    // Update card titles
+    const waterfallTitle = $("#pa-waterfall-title");
+    const historyTitle = $("#pa-history-title");
+    if (paMetric === "loss") {
+      waterfallTitle.textContent = "Packet loss by hop";
+      historyTitle.textContent = "Path history — loss";
+    } else {
+      waterfallTitle.textContent = "Latency contribution by hop";
+      historyTitle.textContent = "Path history — avg RTT";
+    }
+
+    // Re-render both charts from cached data
+    if (paDisplayedResult) {
+      const t = paDisplayedResult.payload && paDisplayedResult.payload.traceroute;
+      if (t) {
+        renderPathWaterfall(t.hops || []);
+      }
+    }
+    if (paHistoryResults) {
+      renderPathHeatmap(paHistoryResults);
+    }
+  });
+});
+
 // Add theme toggle handler for path heatmap and waterfall
-const originalThemeToggleHandler = $("#theme-toggle")._listener || null;
 $("#theme-toggle").addEventListener("click", () => {
   if (currentSection() === "path") {
     if (paHistoryResults) {
@@ -1622,7 +1656,7 @@ function renderPathSubway(agent, hops, t) {
   }
 }
 
-// Render waterfall chart showing latency contribution by hop
+// Render waterfall chart showing latency contribution by hop (horizontal APM-style)
 function renderPathWaterfall(hops) {
   const container = $("#pa-waterfall");
 
@@ -1634,142 +1668,218 @@ function renderPathWaterfall(hops) {
       paWaterfallInstance = null;
       container.style.height = "";
     }
-    container.innerHTML = '<p class="empty">Need at least 2 responding hops to show latency contribution.</p>';
+    container.innerHTML = '<p class="empty">Need at least 2 responding hops to show per-hop breakdown.</p>';
     return;
-  }
-
-  // Calculate latency contributions
-  // RTTs are cumulative, so contribution = current avgRtt - previous avgRtt
-  const waterfallData = [];
-  let prevCumulative = 0;
-  let maxDelta = 0;
-  let largestDeltaIndex = -1;
-
-  for (let i = 0; i < hops.length; i++) {
-    const h = hops[i];
-    if (!h.host) {
-      // No-reply hops: skip but continue tracking cumulative
-      continue;
-    }
-
-    const currentCumulative = h.avgRttMs || 0;
-    const delta = currentCumulative - prevCumulative;
-
-    if (delta > maxDelta) {
-      maxDelta = delta;
-      largestDeltaIndex = waterfallData.length;  // index in waterfallData
-    }
-
-    waterfallData.push({
-      ttl: h.ttl,
-      host: h.host,
-      cumulative: currentCumulative,
-      delta: delta,
-      prevCumulative: prevCumulative,
-    });
-
-    prevCumulative = currentCumulative;
   }
 
   const style = getComputedStyle(document.documentElement);
   const accentColor = style.getPropertyValue("--accent").trim();
   const badColor = style.getPropertyValue("--bad").trim();
+  const okColor = style.getPropertyValue("--ok").trim();
+  const warnColor = style.getPropertyValue("--warn").trim();
   const borderColor = style.getPropertyValue("--border").trim();
   const textColor = style.getPropertyValue("--fg").trim();
   const mutedColor = style.getPropertyValue("--muted-solid").trim();
 
-  // Prepare data for stacked bar chart (waterfall effect)
-  const baseData = [];  // invisible base for stacking
-  const deltaData = [];  // visible bars
+  let option = {};
 
-  for (let i = 0; i < waterfallData.length; i++) {
-    const d = waterfallData[i];
-    const isLargestPositive = i === largestDeltaIndex && d.delta > 0;
+  if (paMetric === "latency") {
+    // Calculate latency contributions (cumulative RTT deltas)
+    const waterfallData = [];
+    let prevCumulative = 0;
+    let maxDelta = 0;
+    let largestDeltaIndex = -1;
 
-    // Base series: start of the visible bar (invisible, for stacking)
-    baseData.push(Math.min(d.prevCumulative, d.cumulative));
+    for (let i = 0; i < hops.length; i++) {
+      const h = hops[i];
+      if (!h.host) continue;
 
-    // Delta series: the height of the visible bar
-    const barHeight = Math.abs(d.delta);
-    deltaData.push(barHeight);
+      const currentCumulative = h.avgRttMs || 0;
+      const delta = currentCumulative - prevCumulative;
+
+      if (delta > maxDelta) {
+        maxDelta = delta;
+        largestDeltaIndex = waterfallData.length;
+      }
+
+      waterfallData.push({
+        ttl: h.ttl,
+        host: h.host,
+        cumulative: currentCumulative,
+        delta: delta,
+        prevCumulative: prevCumulative,
+      });
+
+      prevCumulative = currentCumulative;
+    }
+
+    // Prepare data for horizontal stacked bars (waterfall effect)
+    const baseData = [];
+    const deltaData = [];
+
+    for (let i = 0; i < waterfallData.length; i++) {
+      const d = waterfallData[i];
+      // Base: invisible bar to position the visible bar
+      baseData.push(Math.min(d.prevCumulative, d.cumulative));
+      // Delta: visible portion
+      const barHeight = Math.abs(d.delta);
+      deltaData.push(barHeight);
+    }
+
+    const maxCum = Math.max(...waterfallData.map((d) => d.cumulative));
+    const maxNice = niceMax(maxCum * 1.1);
+
+    // Truncate host label to ~24 chars
+    const labels = waterfallData.map((d) => {
+      const label = `${d.ttl}  ${d.host}`;
+      return label.length > 24 ? label.substring(0, 21) + "…" : label;
+    });
+
+    option = {
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        formatter: function (params) {
+          if (!params || !params[0]) return "";
+          const seriesName = params[0].seriesName;
+          if (seriesName === "base") return "";
+
+          const dataIndex = params[0].dataIndex;
+          const d = waterfallData[dataIndex];
+          const sign = d.delta >= 0 ? "+" : "";
+          const label = d.delta < 0 ? "faster than previous hop (jitter)" : `added latency`;
+          return `<strong>${esc(d.host)}</strong> (TTL ${d.ttl})<br/>` +
+            `${label}: ${sign}${fmt(d.delta)} ms<br/>` +
+            `Cumulative: ${fmt(d.cumulative)} ms`;
+        }
+      },
+      grid: { height: "70%", top: 10, bottom: 60, left: 140, right: 20 },
+      xAxis: {
+        type: "value",
+        position: "top",
+        min: 0,
+        max: maxNice,
+        name: "Latency (ms)",
+        nameTextStyle: { color: mutedColor, fontSize: 11 },
+        axisLabel: { color: mutedColor, fontSize: 11 },
+        axisLine: { lineStyle: { color: mutedColor } },
+        splitLine: { lineStyle: { color: mutedColor, opacity: 0.2 } },
+      },
+      yAxis: {
+        type: "category",
+        data: labels,
+        inverse: true,
+        axisLabel: { color: mutedColor, fontSize: 11, formatter: (val) => val.length > 24 ? val.substring(0, 21) + "…" : val },
+        axisLine: { lineStyle: { color: mutedColor } },
+      },
+      series: [
+        {
+          name: "base",
+          type: "bar",
+          stack: "waterfall",
+          data: baseData,
+          itemStyle: { color: "transparent" },
+          tooltip: { show: false },
+        },
+        {
+          name: "Latency",
+          type: "bar",
+          stack: "waterfall",
+          barWidth: 16,
+          data: deltaData.map((val, i) => ({
+            value: val,
+            itemStyle: {
+              color: i === largestDeltaIndex && waterfallData[i].delta > 0 ? badColor : waterfallData[i].delta < 0 ? borderColor : accentColor,
+            }
+          })),
+          itemStyle: { borderWidth: 0 },
+        }
+      ],
+      textStyle: { color: textColor },
+    };
+  } else {
+    // Loss mode: plain horizontal bars, not cumulative
+    const lossData = respondingHops.map((h) => ({
+      ttl: h.ttl,
+      host: h.host,
+      loss: h.lossPercent || 0,
+      avgRtt: h.avgRttMs || 0,
+    }));
+
+    // Truncate host label to ~24 chars
+    const labels = lossData.map((d) => {
+      const label = `${d.ttl}  ${d.host}`;
+      return label.length > 24 ? label.substring(0, 21) + "…" : label;
+    });
+
+    const lossValues = lossData.map((d) => ({
+      value: d.loss,
+      itemStyle: {
+        color: d.loss >= 60 ? badColor : d.loss >= 20 ? warnColor : okColor,
+      }
+    }));
+
+    option = {
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        formatter: function (params) {
+          if (!params || !params[0]) return "";
+          const dataIndex = params[0].dataIndex;
+          const d = lossData[dataIndex];
+          return `<strong>${esc(d.host)}</strong> (TTL ${d.ttl})<br/>` +
+            `Loss: ${fmt(d.loss, 0)}%<br/>` +
+            `Avg RTT: ${fmt(d.avgRtt)} ms`;
+        }
+      },
+      grid: { height: "70%", top: 10, bottom: 60, left: 140, right: 20 },
+      xAxis: {
+        type: "value",
+        position: "top",
+        min: 0,
+        max: 100,
+        name: "Loss (%)",
+        nameTextStyle: { color: mutedColor, fontSize: 11 },
+        axisLabel: { color: mutedColor, fontSize: 11 },
+        axisLine: { lineStyle: { color: mutedColor } },
+        splitLine: { lineStyle: { color: mutedColor, opacity: 0.2 } },
+      },
+      yAxis: {
+        type: "category",
+        data: labels,
+        inverse: true,
+        axisLabel: { color: mutedColor, fontSize: 11, formatter: (val) => val.length > 24 ? val.substring(0, 21) + "…" : val },
+        axisLine: { lineStyle: { color: mutedColor } },
+      },
+      series: [
+        {
+          name: "Loss",
+          type: "bar",
+          barWidth: 16,
+          data: lossValues,
+          itemStyle: { borderWidth: 0 },
+        }
+      ],
+      textStyle: { color: textColor },
+    };
   }
 
-  // Compute y-axis max
-  const maxCum = Math.max(...waterfallData.map((d) => d.cumulative));
-  const maxNice = niceMax(maxCum * 1.1);
-
-  const option = {
-    tooltip: {
-      trigger: "axis",
-      axisPointer: { type: "shadow" },
-      formatter: function (params) {
-        if (!params || !params[0]) return "";
-        const seriesName = params[0].seriesName;
-        if (seriesName === "base") return "";  // hide tooltip for base series
-
-        const dataIndex = params[0].dataIndex;
-        const d = waterfallData[dataIndex];
-        const sign = d.delta >= 0 ? "+" : "";
-        const label = d.delta < 0 ? "faster than previous hop (jitter)" : `added latency`;
-        return `<strong>${esc(d.host)}</strong> (TTL ${d.ttl})<br/>` +
-          `${label}: ${sign}${fmt(d.delta)} ms<br/>` +
-          `Cumulative: ${fmt(d.cumulative)} ms`;
-      }
-    },
-    grid: { height: "70%", top: 40, bottom: 60, left: 50, right: 20 },
-    xAxis: {
-      type: "category",
-      data: waterfallData.map((d) => `Hop ${d.ttl}`),
-      axisLabel: { color: mutedColor, fontSize: 11 },
-      axisLine: { lineStyle: { color: mutedColor } },
-    },
-    yAxis: {
-      type: "value",
-      min: 0,
-      max: maxNice,
-      name: "Latency (ms)",
-      nameTextStyle: { color: mutedColor, fontSize: 11 },
-      axisLabel: { color: mutedColor, fontSize: 11 },
-      axisLine: { lineStyle: { color: mutedColor } },
-      splitLine: { lineStyle: { color: mutedColor, opacity: 0.2 } },
-    },
-    series: [
-      {
-        name: "base",
-        type: "bar",
-        stack: "waterfall",
-        data: baseData,
-        itemStyle: {
-          color: "transparent",
-        },
-        tooltip: { show: false },
-      },
-      {
-        name: "Latency",
-        type: "bar",
-        stack: "waterfall",
-        data: deltaData.map((val, i) => ({
-          value: val,
-          itemStyle: {
-            color: i === largestDeltaIndex && waterfallData[i].delta > 0 ? badColor : waterfallData[i].delta < 0 ? borderColor : accentColor,
-          }
-        })),
-        itemStyle: { borderWidth: 0 },
-      }
-    ],
-    textStyle: { color: textColor },
-  };
+  // Set chart height based on number of rows
+  const chartHeight = Math.max(180, respondingHops.length * 28 + 70);
 
   // Init chart if needed
   if (!paWaterfallInstance) {
     container.innerHTML = "";
-    container.style.height = "260px";
+    container.style.height = chartHeight + "px";
     paWaterfallInstance = window.echarts.init(container);
     window.addEventListener("resize", () => {
       if (paWaterfallInstance && currentSection() === "path") {
         paWaterfallInstance.resize();
       }
     });
+  } else {
+    container.style.height = chartHeight + "px";
+    paWaterfallInstance.resize();
   }
 
   paWaterfallInstance.setOption(option, true);
@@ -1792,7 +1902,7 @@ function renderLatencyBar(best, avg, worst, maxWorst, loss) {
   </div>`;
 }
 
-// Render path history heatmap using ECharts
+// Render path history heatmap using ECharts (supports latency and loss modes)
 async function renderPathHeatmap(results) {
   const container = $("#pa-history");
 
@@ -1821,12 +1931,15 @@ async function renderPathHeatmap(results) {
     for (const h of t.hops) {
       if (h.host) {
         allHops.add(h.ttl);
+        const value = paMetric === "loss" ? h.lossPercent : h.avgRttMs;
         heatmapData.push([
           r.time,  // raw r.time as category key
           h.ttl,
-          h.avgRttMs,
+          value,
         ]);
-        maxAvgRtt = Math.max(maxAvgRtt, h.avgRttMs || 0);
+        if (paMetric === "latency") {
+          maxAvgRtt = Math.max(maxAvgRtt, h.avgRttMs || 0);
+        }
       }
     }
   }
@@ -1836,11 +1949,35 @@ async function renderPathHeatmap(results) {
 
   const style = getComputedStyle(document.documentElement);
   const okColor = style.getPropertyValue("--ok").trim();
+  const warnColor = style.getPropertyValue("--warn").trim();
   const badColor = style.getPropertyValue("--bad").trim();
   const textColor = style.getPropertyValue("--fg").trim();
   const mutedColor = style.getPropertyValue("--muted-solid").trim();
 
-  const maxNice = niceMax(maxAvgRtt * 1.1);
+  let visualMapConfig = {};
+  if (paMetric === "loss") {
+    visualMapConfig = {
+      min: 0,
+      max: 100,
+      orient: "horizontal",
+      bottom: 10,
+      left: "center",
+      inRange: { color: [okColor, warnColor, badColor] },
+      textStyle: { color: mutedColor, fontSize: 11 },
+    };
+  } else {
+    const maxNice = niceMax(maxAvgRtt * 1.1);
+    visualMapConfig = {
+      min: 0,
+      max: maxNice,
+      orient: "horizontal",
+      bottom: 10,
+      left: "center",
+      inRange: { color: [okColor, "#ffd000", badColor] },
+      textStyle: { color: mutedColor, fontSize: 11 },
+    };
+  }
+
   const option = {
     tooltip: {
       position: "top",
@@ -1855,7 +1992,11 @@ async function renderPathHeatmap(results) {
           const t = result.payload.traceroute;
           const hop = (t.hops || []).find((h) => h.ttl === ttl);
           if (hop && hop.host) {
-            hopInfo = `<br/>Host: ${hop.host}<br/>Best: ${fmt(hop.bestRttMs)} ms<br/>Worst: ${fmt(hop.worstRttMs)} ms<br/>Loss: ${fmt(hop.lossPercent, 0)}%`;
+            if (paMetric === "loss") {
+              hopInfo = `<br/>Host: ${hop.host}<br/>Loss: ${fmt(hop.lossPercent, 0)}%<br/>Avg RTT: ${fmt(hop.avgRttMs)} ms`;
+            } else {
+              hopInfo = `<br/>Host: ${hop.host}<br/>Best: ${fmt(hop.bestRttMs)} ms<br/>Worst: ${fmt(hop.worstRttMs)} ms<br/>Loss: ${fmt(hop.lossPercent, 0)}%`;
+            }
           }
         }
         const displayTime = new Date(timeStr).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -1883,18 +2024,10 @@ async function renderPathHeatmap(results) {
       axisLabel: { color: mutedColor, fontSize: 11 },
       axisLine: { lineStyle: { color: mutedColor } },
     },
-    visualMap: {
-      min: 0,
-      max: maxNice,
-      orient: "horizontal",
-      bottom: 10,
-      left: "center",
-      inRange: { color: [okColor, "#ffd000", badColor] },
-      textStyle: { color: mutedColor, fontSize: 11 },
-    },
+    visualMap: visualMapConfig,
     series: [
       {
-        name: "Avg RTT (ms)",
+        name: paMetric === "loss" ? "Loss (%)" : "Avg RTT (ms)",
         type: "heatmap",
         data: heatmapData,
         itemStyle: { borderWidth: 0 },
