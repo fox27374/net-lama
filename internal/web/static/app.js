@@ -1379,6 +1379,9 @@ let paAgents = [];
 let paTests = [];
 let paHistoryResults = null;  // cached for theme re-render
 let paHeatmapInstance = null;  // ECharts instance
+let paWaterfallInstance = null;  // ECharts waterfall instance
+let paDisplayedResult = null;  // cached result for theme re-render and Back to latest
+let paLatestResult = null;  // latest result for "Back to latest" button
 
 async function loadPath() {
   [paAgents, paTests] = await Promise.all([
@@ -1413,11 +1416,19 @@ $("#pa-run").addEventListener("click", async () => {
   await runTestNow($("#pa-agent").value, $("#pa-test").value, btn, renderPath);
 });
 
-// Add theme toggle handler for path heatmap
+// Add theme toggle handler for path heatmap and waterfall
 const originalThemeToggleHandler = $("#theme-toggle")._listener || null;
 $("#theme-toggle").addEventListener("click", () => {
-  if (currentSection() === "path" && paHistoryResults) {
-    renderPathHeatmap(paHistoryResults);
+  if (currentSection() === "path") {
+    if (paHistoryResults) {
+      renderPathHeatmap(paHistoryResults);
+    }
+    if (paDisplayedResult) {
+      const t = paDisplayedResult.payload && paDisplayedResult.payload.traceroute;
+      if (t) {
+        renderPathWaterfall(t.hops || []);
+      }
+    }
   }
 });
 
@@ -1481,23 +1492,57 @@ async function renderPath() {
     statusEl.innerHTML = '<p class="empty">No path results yet for this agent + test.</p>';
     return;
   }
+
   const r = results[0];
+  paLatestResult = r;  // cache for "Back to latest" button
+  renderPathResult(r, paAgents.find((a) => a.id === agentId));
+
+  // Attach click handler to heatmap (once at init)
+  renderPathHeatmap(historyResults);
+}
+
+// Render one path result (status, subway, hops table, waterfall)
+function renderPathResult(r, agent) {
+  paDisplayedResult = r;  // cache for theme re-render
+
   const t = r.payload && r.payload.traceroute;
+  const statusEl = $("#pa-status");
+  const subwayEl = $("#pa-subway");
+  const tbody = $("#pa-hop-table tbody");
+
   if (!t) {
-    statusEl.innerHTML = '<p class="empty">No path data in the latest result.</p>';
+    statusEl.innerHTML = '<p class="empty">No path data in this result.</p>';
+    subwayEl.innerHTML = "";
+    tbody.innerHTML = "";
     return;
   }
 
-  // Status banner
-  const agent = paAgents.find((a) => a.id === agentId);
+  // Status banner with "Viewing run from" indicator if not the latest
   const demo = t.demo ? '<span class="demo-badge">DEMO DATA</span>' : "";
+  let statusContent = "";
+
+  if (r !== paLatestResult) {
+    const runTime = new Date(r.time).toLocaleString();
+    statusContent = `<span class="viewing-indicator">Viewing run from ${runTime} — <button id="pa-back-latest" class="ghost">Back to latest</button></span>`;
+    setTimeout(() => {
+      const backBtn = $("#pa-back-latest");
+      if (backBtn) {
+        backBtn.addEventListener("click", () => {
+          if (paLatestResult) {
+            renderPathResult(paLatestResult, agent);
+          }
+        });
+      }
+    }, 0);
+  }
+
   if (r.error) {
-    statusEl.innerHTML = `${demo}<span class="health failing">Error</span> ${esc(r.error)}`;
+    statusEl.innerHTML = `${statusContent}${demo}<span class="health failing">Error</span> ${esc(r.error)}`;
   } else if (t.reached) {
-    statusEl.innerHTML = `${demo}<span class="health healthy">Reached ${esc(t.target)}</span>` +
+    statusEl.innerHTML = `${statusContent}${demo}<span class="health healthy">Reached ${esc(t.target)}</span>` +
       ` <span class="muted">${(t.hops || []).length} hops · ${fmt(t.rttMs)} ms round-trip</span>`;
   } else {
-    statusEl.innerHTML = `${demo}<span class="health failing">Path stalled</span>` +
+    statusEl.innerHTML = `${statusContent}${demo}<span class="health failing">Path stalled</span>` +
       ` <span class="muted">to ${esc(t.target)} — last response at hop ${t.failureHop || "?"}, then no reply</span>`;
   }
   $("#pa-meta").textContent = new Date(r.time).toLocaleString();
@@ -1508,6 +1553,7 @@ async function renderPath() {
 
   // Hop table with latency range bars
   const maxWorst = Math.max(0.1, ...hops.filter((h) => h.host).map((h) => h.worstRttMs || 0));
+  tbody.innerHTML = "";
   for (const h of hops) {
     const tr = document.createElement("tr");
     const host = h.host ? `<span class="mono">${esc(h.host)}</span>` : '<span class="muted">* * *</span>';
@@ -1523,13 +1569,14 @@ async function renderPath() {
     tbody.appendChild(tr);
   }
 
-  // Path history heatmap
-  renderPathHeatmap(historyResults);
+  // Waterfall chart
+  renderPathWaterfall(hops);
 }
 
 // Render vertical subway line for path visualization
 function renderPathSubway(agent, hops, t) {
   const container = $("#pa-subway");
+  container.innerHTML = "";
 
   // Station: this agent
   const agentStation = document.createElement("div");
@@ -1575,6 +1622,159 @@ function renderPathSubway(agent, hops, t) {
   }
 }
 
+// Render waterfall chart showing latency contribution by hop
+function renderPathWaterfall(hops) {
+  const container = $("#pa-waterfall");
+
+  // Count responding hops (those with a host)
+  const respondingHops = hops.filter((h) => h.host);
+  if (respondingHops.length < 2) {
+    if (paWaterfallInstance) {
+      paWaterfallInstance.dispose();
+      paWaterfallInstance = null;
+      container.style.height = "";
+    }
+    container.innerHTML = '<p class="empty">Need at least 2 responding hops to show latency contribution.</p>';
+    return;
+  }
+
+  // Calculate latency contributions
+  // RTTs are cumulative, so contribution = current avgRtt - previous avgRtt
+  const waterfallData = [];
+  let prevCumulative = 0;
+  let maxDelta = 0;
+  let largestDeltaIndex = -1;
+
+  for (let i = 0; i < hops.length; i++) {
+    const h = hops[i];
+    if (!h.host) {
+      // No-reply hops: skip but continue tracking cumulative
+      continue;
+    }
+
+    const currentCumulative = h.avgRttMs || 0;
+    const delta = currentCumulative - prevCumulative;
+
+    if (delta > maxDelta) {
+      maxDelta = delta;
+      largestDeltaIndex = waterfallData.length;  // index in waterfallData
+    }
+
+    waterfallData.push({
+      ttl: h.ttl,
+      host: h.host,
+      cumulative: currentCumulative,
+      delta: delta,
+      prevCumulative: prevCumulative,
+    });
+
+    prevCumulative = currentCumulative;
+  }
+
+  const style = getComputedStyle(document.documentElement);
+  const accentColor = style.getPropertyValue("--accent").trim();
+  const badColor = style.getPropertyValue("--bad").trim();
+  const borderColor = style.getPropertyValue("--border").trim();
+  const textColor = style.getPropertyValue("--fg").trim();
+  const mutedColor = style.getPropertyValue("--muted-solid").trim();
+
+  // Prepare data for stacked bar chart (waterfall effect)
+  const baseData = [];  // invisible base for stacking
+  const deltaData = [];  // visible bars
+
+  for (let i = 0; i < waterfallData.length; i++) {
+    const d = waterfallData[i];
+    const isLargestPositive = i === largestDeltaIndex && d.delta > 0;
+
+    // Base series: start of the visible bar (invisible, for stacking)
+    baseData.push(Math.min(d.prevCumulative, d.cumulative));
+
+    // Delta series: the height of the visible bar
+    const barHeight = Math.abs(d.delta);
+    deltaData.push(barHeight);
+  }
+
+  // Compute y-axis max
+  const maxCum = Math.max(...waterfallData.map((d) => d.cumulative));
+  const maxNice = niceMax(maxCum * 1.1);
+
+  const option = {
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: function (params) {
+        if (!params || !params[0]) return "";
+        const seriesName = params[0].seriesName;
+        if (seriesName === "base") return "";  // hide tooltip for base series
+
+        const dataIndex = params[0].dataIndex;
+        const d = waterfallData[dataIndex];
+        const sign = d.delta >= 0 ? "+" : "";
+        const label = d.delta < 0 ? "faster than previous hop (jitter)" : `added latency`;
+        return `<strong>${esc(d.host)}</strong> (TTL ${d.ttl})<br/>` +
+          `${label}: ${sign}${fmt(d.delta)} ms<br/>` +
+          `Cumulative: ${fmt(d.cumulative)} ms`;
+      }
+    },
+    grid: { height: "70%", top: 40, bottom: 60, left: 50, right: 20 },
+    xAxis: {
+      type: "category",
+      data: waterfallData.map((d) => `Hop ${d.ttl}`),
+      axisLabel: { color: mutedColor, fontSize: 11 },
+      axisLine: { lineStyle: { color: mutedColor } },
+    },
+    yAxis: {
+      type: "value",
+      min: 0,
+      max: maxNice,
+      name: "Latency (ms)",
+      nameTextStyle: { color: mutedColor, fontSize: 11 },
+      axisLabel: { color: mutedColor, fontSize: 11 },
+      axisLine: { lineStyle: { color: mutedColor } },
+      splitLine: { lineStyle: { color: mutedColor, opacity: 0.2 } },
+    },
+    series: [
+      {
+        name: "base",
+        type: "bar",
+        stack: "waterfall",
+        data: baseData,
+        itemStyle: {
+          color: "transparent",
+        },
+        tooltip: { show: false },
+      },
+      {
+        name: "Latency",
+        type: "bar",
+        stack: "waterfall",
+        data: deltaData.map((val, i) => ({
+          value: val,
+          itemStyle: {
+            color: i === largestDeltaIndex && waterfallData[i].delta > 0 ? badColor : waterfallData[i].delta < 0 ? borderColor : accentColor,
+          }
+        })),
+        itemStyle: { borderWidth: 0 },
+      }
+    ],
+    textStyle: { color: textColor },
+  };
+
+  // Init chart if needed
+  if (!paWaterfallInstance) {
+    container.innerHTML = "";
+    container.style.height = "260px";
+    paWaterfallInstance = window.echarts.init(container);
+    window.addEventListener("resize", () => {
+      if (paWaterfallInstance && currentSection() === "path") {
+        paWaterfallInstance.resize();
+      }
+    });
+  }
+
+  paWaterfallInstance.setOption(option, true);
+}
+
 // Render latency range bar for a hop
 function renderLatencyBar(best, avg, worst, maxWorst, loss) {
   if (!best || !avg || !worst) return "–";
@@ -1609,7 +1809,7 @@ async function renderPathHeatmap(results) {
   // Reverse results so newest is on the right
   const reversed = [...results].reverse();
 
-  // Collect all hops across all results
+  // Collect all hops across all results; use r.time as category key
   const allHops = new Set();
   const heatmapData = [];
   let maxAvgRtt = 0;
@@ -1622,7 +1822,7 @@ async function renderPathHeatmap(results) {
       if (h.host) {
         allHops.add(h.ttl);
         heatmapData.push([
-          new Date(r.time).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+          r.time,  // raw r.time as category key
           h.ttl,
           h.avgRttMs,
         ]);
@@ -1646,13 +1846,10 @@ async function renderPathHeatmap(results) {
       position: "top",
       formatter: function (params) {
         if (!params.data) return "";
-        const time = params.data[0];
+        const timeStr = params.data[0];
         const ttl = params.data[1];
-        // Find the original result to get host info
-        const result = reversed.find((r) => {
-          const t = r.payload && r.payload.traceroute;
-          return t && new Date(r.time).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) === time;
-        });
+        // Find the original result using r.time
+        const result = reversed.find((r) => r.time === timeStr);
         let hopInfo = "";
         if (result) {
           const t = result.payload.traceroute;
@@ -1661,7 +1858,8 @@ async function renderPathHeatmap(results) {
             hopInfo = `<br/>Host: ${hop.host}<br/>Best: ${fmt(hop.bestRttMs)} ms<br/>Worst: ${fmt(hop.worstRttMs)} ms<br/>Loss: ${fmt(hop.lossPercent, 0)}%`;
           }
         }
-        return `Time: ${time}<br/>Hop: ${ttl}${hopInfo}`;
+        const displayTime = new Date(timeStr).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+        return `Time: ${displayTime}<br/>Hop: ${ttl}${hopInfo}`;
       }
     },
     grid: { height: "70%", top: 40, bottom: 60, left: 40, right: 20 },
@@ -1669,7 +1867,13 @@ async function renderPathHeatmap(results) {
       type: "category",
       data: [...new Set(heatmapData.map((d) => d[0]))],
       splitArea: { show: true },
-      axisLabel: { color: mutedColor, fontSize: 11 },
+      axisLabel: {
+        color: mutedColor,
+        fontSize: 11,
+        formatter: function (value) {
+          return new Date(value).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+        }
+      },
       axisLine: { lineStyle: { color: mutedColor } },
     },
     yAxis: {
@@ -1708,6 +1912,18 @@ async function renderPathHeatmap(results) {
     window.addEventListener("resize", () => {
       if (paHeatmapInstance && currentSection() === "path") {
         paHeatmapInstance.resize();
+      }
+    });
+
+    // Attach click handler (only once at init)
+    paHeatmapInstance.on("click", function (params) {
+      if (!params.data || !params.data[0]) return;
+      const timeStr = params.data[0];  // raw r.time from x-axis
+      // Find result in cached history
+      const result = paHistoryResults.find((r) => r.time === timeStr);
+      if (result) {
+        const agent = paAgents.find((a) => a.id === $("#pa-agent").value);
+        renderPathResult(result, agent);
       }
     });
   }

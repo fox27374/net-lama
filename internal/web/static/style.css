@@ -777,6 +777,24 @@ button.stat-tile:focus-visible {
 
 .path-status { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4); }
 
+.viewing-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--surface-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--muted-solid);
+  flex: 1 100%;
+  margin-bottom: var(--space-2);
+}
+
+#pa-back-latest {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
 /* Vertical subway line path visualization */
 .path-subway {
   position: relative;

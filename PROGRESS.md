@@ -287,6 +287,41 @@ What has been done so far, in chronological order. Planned work lives in
   professional"; CLAUDE.md amended to note vendored third-party libs
   (currently ECharts for the path history heatmap); PROGRESS.md entry added.
 
+## 2026-07-13 — Path latency waterfall + history click-to-inspect
+
+- **Latency contribution waterfall chart**: new card between Hops table and
+  Path history. ECharts stacked-bar waterfall showing cumulative RTT by hop,
+  with the contribution (delta) of each hop highlighted. Colors: green
+  (--accent) for positive deltas, red (--bad) for the largest positive delta
+  (the hop that hurts most), and muted (--border) for negative deltas (jitter/
+  asymmetric return path). Tooltip shows host, +delta ms, cumulative avg RTT ms.
+  Fewer than 2 responding hops shows empty state. Chart height 260px; axis/text
+  colors read from CSS tokens at render time; theme toggle re-renders.
+- **Click-to-inspect heatmap cells**: clicking a cell in the Path history heatmap
+  loads that exact run into the view (status banner, subway, hops table, waterfall).
+  Refactored renderPath() → renderPathResult(result, agent) extraction to render
+  one result; the heatmap click handler finds and calls renderPathResult with the
+  clicked timestamp. Heatmap x-axis now uses raw r.time as the category key (exact
+  match, no fragile formatted-time lookup); display formatting is applied via
+  axisLabel formatter + tooltip, eliminating the previous find-by-time bug.
+- **"Back to latest" affordance**: when a historical run is displayed, a chip
+  prepends the status banner ("Viewing run from [time] — Back to latest button")
+  re-rendering the latest cached result without a refetch. Refresh / Run now /
+  agent/test change reset to latest (they already re-run renderPath).
+- **Cache & re-render**: module variables `paDisplayedResult` and `paLatestResult`
+  track the current display and latest result; theme toggle re-renders the
+  waterfall (via paDisplayedResult); both charts (waterfall + heatmap) use the
+  same lazy-init / setOption(true) / dispose-on-empty / resize / theme-re-render
+  pattern.
+- **Styling**: CSS for .viewing-indicator badge and #pa-back-latest button added
+  to style.css under the path-* section.
+- **Verification**: /app.js contains renderPathResult and renderPathWaterfall
+  functions, heatmap click handler with paHeatmapInstance.on("click"), and
+  paWaterfallInstance lifecycle. index.html has the new waterfall card container.
+  Line implementing largest-delta highlight: in renderPathWaterfall, the itemStyle
+  color logic at the data mapping step, checking `i === largestDeltaIndex &&
+  waterfallData[i].delta > 0 ? badColor : ...`.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
