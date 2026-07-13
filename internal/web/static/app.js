@@ -1437,7 +1437,7 @@ document.querySelectorAll(".seg-btn[data-metric]").forEach((btn) => {
       waterfallTitle.textContent = "Jitter by hop";
       historyTitle.textContent = "Path history — jitter";
     } else {
-      waterfallTitle.textContent = "Latency contribution by hop";
+      waterfallTitle.textContent = "Round-trip time by hop";
       historyTitle.textContent = "Path history — avg RTT";
     }
 
@@ -1706,10 +1706,10 @@ function renderPathWaterfall(hops) {
           const dataIndex = params[0].dataIndex;
           const d = waterfallData[dataIndex];
           const sign = d.delta >= 0 ? "+" : "";
-          const label = d.delta < 0 ? "faster than previous hop (jitter)" : `added latency`;
+          const label = d.delta < 0 ? "measured faster than previous hop (independent probe)" : "RTT increase vs previous hop";
           return `<strong>${esc(d.host)}</strong> (TTL ${d.ttl})<br/>` +
             `${label}: ${sign}${fmt(d.delta)} ms<br/>` +
-            `Cumulative: ${fmt(d.cumulative)} ms`;
+            `RTT to this hop: ${fmt(d.cumulative)} ms`;
         }
       },
       grid: { top: 44, bottom: 24, left: 140, right: 30 },
