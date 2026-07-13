@@ -2,21 +2,33 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 )
 
 type AlertRule struct {
-	ID         string  `json:"id"`
-	TenantID   string  `json:"tenantId"`
-	TestID     string  `json:"testId"`
-	TestName   string  `json:"testName,omitempty"`
-	Name       string  `json:"name"`
-	Metric     string  `json:"metric"`
-	Operator   string  `json:"operator"`
-	Threshold  float64 `json:"threshold"`
-	ForCount   int     `json:"forCount"`
-	WebhookURL string  `json:"webhookUrl"`
+	ID             string    `json:"id"`
+	TenantID       string    `json:"tenantId"`
+	TestID         string    `json:"testId"`
+	TestName       string    `json:"testName,omitempty"`
+	Name           string    `json:"name"`
+	Metric         string    `json:"metric"`
+	Operator       string    `json:"operator"`
+	Threshold      float64   `json:"threshold"`
+	ForCount       int       `json:"forCount"`
+	ClearThreshold *float64  `json:"clearThreshold"`
+	ClearCount     int       `json:"clearCount"`
+	TargetIds      []string  `json:"targetIds"`
+	WebhookURL     string    `json:"webhookUrl"`
+}
+
+type AlertTarget struct {
+	ID       string            `json:"id"`
+	TenantID string            `json:"tenantId"`
+	Name     string            `json:"name"`
+	Type     string            `json:"type"`
+	Config   map[string]any    `json:"config"`
 }
 
 type Alert struct {
@@ -37,10 +49,17 @@ type Alert struct {
 
 func (s *Store) CreateAlertRule(r *AlertRule) (*AlertRule, error) {
 	r.ID = newID()
+	if r.TargetIds == nil {
+		r.TargetIds = []string{}
+	}
+	if r.ClearCount == 0 {
+		r.ClearCount = 1
+	}
+	targetIDsJSON, _ := json.Marshal(r.TargetIds)
 	_, err := s.db.Exec(
-		`INSERT INTO alert_rules (id, tenant_id, test_id, name, metric, operator, threshold, for_count, webhook_url)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		r.ID, r.TenantID, r.TestID, r.Name, r.Metric, r.Operator, r.Threshold, r.ForCount, r.WebhookURL)
+		`INSERT INTO alert_rules (id, tenant_id, test_id, name, metric, operator, threshold, for_count, clear_threshold, clear_count, target_ids, webhook_url)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		r.ID, r.TenantID, r.TestID, r.Name, r.Metric, r.Operator, r.Threshold, r.ForCount, r.ClearThreshold, r.ClearCount, string(targetIDsJSON), r.WebhookURL)
 	if err != nil {
 		return nil, fmt.Errorf("creating alert rule: %w", err)
 	}
@@ -54,20 +73,27 @@ func (s *Store) DeleteAlertRule(id string) error {
 
 func (s *Store) GetAlertRule(id string) (*AlertRule, error) {
 	r := &AlertRule{}
+	var targetIDsJSON string
 	err := s.db.QueryRow(
-		`SELECT id, tenant_id, test_id, name, metric, operator, threshold, for_count, webhook_url
+		`SELECT id, tenant_id, test_id, name, metric, operator, threshold, for_count, clear_threshold, clear_count, target_ids, webhook_url
 		 FROM alert_rules WHERE id = ?`, id).
-		Scan(&r.ID, &r.TenantID, &r.TestID, &r.Name, &r.Metric, &r.Operator, &r.Threshold, &r.ForCount, &r.WebhookURL)
+		Scan(&r.ID, &r.TenantID, &r.TestID, &r.Name, &r.Metric, &r.Operator, &r.Threshold, &r.ForCount, &r.ClearThreshold, &r.ClearCount, &targetIDsJSON, &r.WebhookURL)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
-	return r, err
+	if err != nil {
+		return nil, err
+	}
+	if targetIDsJSON != "" {
+		json.Unmarshal([]byte(targetIDsJSON), &r.TargetIds)
+	}
+	return r, nil
 }
 
 func (s *Store) ListAlertRules(tenantID string) ([]*AlertRule, error) {
 	rows, err := s.db.Query(`
 		SELECT ar.id, ar.tenant_id, ar.test_id, t.name, ar.name, ar.metric,
-		       ar.operator, ar.threshold, ar.for_count, ar.webhook_url
+		       ar.operator, ar.threshold, ar.for_count, ar.clear_threshold, ar.clear_count, ar.target_ids, ar.webhook_url
 		FROM alert_rules ar JOIN tests t ON t.id = ar.test_id
 		WHERE ar.tenant_id = ? ORDER BY ar.name`, tenantID)
 	if err != nil {
@@ -78,9 +104,13 @@ func (s *Store) ListAlertRules(tenantID string) ([]*AlertRule, error) {
 	rules := []*AlertRule{}
 	for rows.Next() {
 		r := &AlertRule{}
+		var targetIDsJSON string
 		if err := rows.Scan(&r.ID, &r.TenantID, &r.TestID, &r.TestName, &r.Name, &r.Metric,
-			&r.Operator, &r.Threshold, &r.ForCount, &r.WebhookURL); err != nil {
+			&r.Operator, &r.Threshold, &r.ForCount, &r.ClearThreshold, &r.ClearCount, &targetIDsJSON, &r.WebhookURL); err != nil {
 			return nil, err
+		}
+		if targetIDsJSON != "" {
+			json.Unmarshal([]byte(targetIDsJSON), &r.TargetIds)
 		}
 		rules = append(rules, r)
 	}
@@ -91,7 +121,7 @@ func (s *Store) ListAlertRules(tenantID string) ([]*AlertRule, error) {
 func (s *Store) RulesForTest(testID string) ([]*AlertRule, error) {
 	rows, err := s.db.Query(
 		`SELECT ar.id, ar.tenant_id, ar.test_id, t.name, ar.name, ar.metric,
-		        ar.operator, ar.threshold, ar.for_count, ar.webhook_url
+		        ar.operator, ar.threshold, ar.for_count, ar.clear_threshold, ar.clear_count, ar.target_ids, ar.webhook_url
 		 FROM alert_rules ar JOIN tests t ON t.id = ar.test_id
 		 WHERE ar.test_id = ?`, testID)
 	if err != nil {
@@ -102,9 +132,13 @@ func (s *Store) RulesForTest(testID string) ([]*AlertRule, error) {
 	rules := []*AlertRule{}
 	for rows.Next() {
 		r := &AlertRule{}
+		var targetIDsJSON string
 		if err := rows.Scan(&r.ID, &r.TenantID, &r.TestID, &r.TestName, &r.Name, &r.Metric,
-			&r.Operator, &r.Threshold, &r.ForCount, &r.WebhookURL); err != nil {
+			&r.Operator, &r.Threshold, &r.ForCount, &r.ClearThreshold, &r.ClearCount, &targetIDsJSON, &r.WebhookURL); err != nil {
 			return nil, err
+		}
+		if targetIDsJSON != "" {
+			json.Unmarshal([]byte(targetIDsJSON), &r.TargetIds)
 		}
 		rules = append(rules, r)
 	}
@@ -190,4 +224,101 @@ func (s *Store) CountActiveAlerts(tenantID string) (int, error) {
 		SELECT COUNT(*) FROM alerts al JOIN alert_rules ar ON ar.id = al.rule_id
 		WHERE ar.tenant_id = ? AND al.state = 'firing'`, tenantID).Scan(&n)
 	return n, err
+}
+
+// UpdateAlertRule updates an existing alert rule.
+func (s *Store) UpdateAlertRule(r *AlertRule) (*AlertRule, error) {
+	if r.TargetIds == nil {
+		r.TargetIds = []string{}
+	}
+	if r.ClearCount == 0 {
+		r.ClearCount = 1
+	}
+	targetIDsJSON, _ := json.Marshal(r.TargetIds)
+	_, err := s.db.Exec(
+		`UPDATE alert_rules SET name = ?, metric = ?, operator = ?, threshold = ?, for_count = ?, clear_threshold = ?, clear_count = ?, target_ids = ?, webhook_url = ?
+		 WHERE id = ?`,
+		r.Name, r.Metric, r.Operator, r.Threshold, r.ForCount, r.ClearThreshold, r.ClearCount, string(targetIDsJSON), r.WebhookURL, r.ID)
+	if err != nil {
+		return nil, fmt.Errorf("updating alert rule: %w", err)
+	}
+	return r, nil
+}
+
+// --- Alert targets ---
+
+// CreateAlertTarget creates a new alert target.
+func (s *Store) CreateAlertTarget(t *AlertTarget) (*AlertTarget, error) {
+	t.ID = newID()
+	configJSON, _ := json.Marshal(t.Config)
+	_, err := s.db.Exec(
+		`INSERT INTO alert_targets (id, tenant_id, name, type, config) VALUES (?, ?, ?, ?, ?)`,
+		t.ID, t.TenantID, t.Name, t.Type, string(configJSON))
+	if err != nil {
+		return nil, fmt.Errorf("creating alert target: %w", err)
+	}
+	return t, nil
+}
+
+// GetAlertTarget retrieves an alert target by ID.
+func (s *Store) GetAlertTarget(id string) (*AlertTarget, error) {
+	t := &AlertTarget{}
+	var configJSON string
+	err := s.db.QueryRow(
+		`SELECT id, tenant_id, name, type, config FROM alert_targets WHERE id = ?`, id).
+		Scan(&t.ID, &t.TenantID, &t.Name, &t.Type, &configJSON)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	t.Config = map[string]any{}
+	if configJSON != "" {
+		json.Unmarshal([]byte(configJSON), &t.Config)
+	}
+	return t, nil
+}
+
+// ListAlertTargets returns all alert targets for a tenant.
+func (s *Store) ListAlertTargets(tenantID string) ([]*AlertTarget, error) {
+	rows, err := s.db.Query(
+		`SELECT id, tenant_id, name, type, config FROM alert_targets WHERE tenant_id = ? ORDER BY name`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	targets := []*AlertTarget{}
+	for rows.Next() {
+		t := &AlertTarget{}
+		var configJSON string
+		if err := rows.Scan(&t.ID, &t.TenantID, &t.Name, &t.Type, &configJSON); err != nil {
+			return nil, err
+		}
+		t.Config = map[string]any{}
+		if configJSON != "" {
+			json.Unmarshal([]byte(configJSON), &t.Config)
+		}
+		targets = append(targets, t)
+	}
+	return targets, rows.Err()
+}
+
+// UpdateAlertTarget updates an existing alert target.
+func (s *Store) UpdateAlertTarget(t *AlertTarget) (*AlertTarget, error) {
+	configJSON, _ := json.Marshal(t.Config)
+	_, err := s.db.Exec(
+		`UPDATE alert_targets SET name = ?, type = ?, config = ? WHERE id = ?`,
+		t.Name, t.Type, string(configJSON), t.ID)
+	if err != nil {
+		return nil, fmt.Errorf("updating alert target: %w", err)
+	}
+	return t, nil
+}
+
+// DeleteAlertTarget deletes an alert target.
+func (s *Store) DeleteAlertTarget(id string) error {
+	_, err := s.db.Exec(`DELETE FROM alert_targets WHERE id = ?`, id)
+	return err
 }

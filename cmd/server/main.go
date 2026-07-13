@@ -124,10 +124,25 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// SMTP configuration for email notifications
+	smtpStartTLS := true // default to true
+	if starttlsVal := os.Getenv("NETLAMA_SMTP_STARTTLS"); starttlsVal != "" {
+		smtpStartTLS = envEnabled("NETLAMA_SMTP_STARTTLS")
+	}
+	smtpConfig := &server.SMTPConfig{
+		Host:     os.Getenv("NETLAMA_SMTP_HOST"),
+		Port:     envIntOr("NETLAMA_SMTP_PORT", 587),
+		User:     os.Getenv("NETLAMA_SMTP_USER"),
+		Pass:     os.Getenv("NETLAMA_SMTP_PASS"),
+		From:     os.Getenv("NETLAMA_SMTP_FROM"),
+		StartTLS: smtpStartTLS,
+	}
+
 	registry := prometheus.NewRegistry()
 	metrics := server.NewMetrics(registry)
 	srv := server.New(st, metrics, logger)
 	srv.MTLS = mtlsOn
+	srv.SMTPConfig = smtpConfig
 
 	// HTTP: web UI, JSON API and Prometheus metrics
 	mux := http.NewServeMux()

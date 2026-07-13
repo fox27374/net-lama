@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	_ "modernc.org/sqlite"
@@ -166,7 +167,38 @@ func (s *Store) migrate() error {
 	if err := s.addColumnIfMissing("agents", "stats", "TEXT"); err != nil {
 		return err
 	}
-	return s.addColumnIfMissing("logs", "scope", "TEXT NOT NULL DEFAULT ''")
+	if err := s.addColumnIfMissing("logs", "scope", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+
+	// Alert targets table
+	if _, err := s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS alert_targets (
+			id         TEXT PRIMARY KEY,
+			tenant_id  TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			name       TEXT NOT NULL,
+			type       TEXT NOT NULL,
+			config     TEXT NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (tenant_id, name)
+		)
+	`); err != nil {
+		return err
+	}
+
+	// New alert_rules columns for hysteresis and targets
+	if err := s.addColumnIfMissing("alert_rules", "clear_threshold", "REAL"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("alert_rules", "clear_count", "INTEGER NOT NULL DEFAULT 1"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("alert_rules", "target_ids", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return err
+	}
+
+	// Migration: move webhook_url entries to alert_targets
+	return s.migrateWebhookTargets()
 }
 
 // addColumnIfMissing adds a column to a table if it is not already present.
@@ -197,6 +229,69 @@ func (s *Store) addColumnIfMissing(table, column, definition string) error {
 	// Backfill: rows that recorded an error are not healthy.
 	_, err = s.db.Exec("UPDATE results SET ok = 0 WHERE error != ''")
 	return err
+}
+
+// migrateWebhookTargets converts existing webhook_url entries into alert_targets.
+func (s *Store) migrateWebhookTargets() error {
+	// Find all rules with non-empty webhook_url
+	rows, err := s.db.Query(`SELECT id, tenant_id, name, webhook_url FROM alert_rules WHERE webhook_url != ''`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	rules := []struct {
+		id, tenantID, name, webhookURL string
+	}{}
+	for rows.Next() {
+		var r struct {
+			id, tenantID, name, webhookURL string
+		}
+		if err := rows.Scan(&r.id, &r.tenantID, &r.name, &r.webhookURL); err != nil {
+			return err
+		}
+		rules = append(rules, r)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// For each rule, create a webhook target and update the rule
+	for _, r := range rules {
+		// Check if target already exists (idempotent)
+		var exists int
+		err := s.db.QueryRow(
+			`SELECT COUNT(*) FROM alert_targets WHERE tenant_id = ? AND type = 'webhook' AND name = ?`,
+			r.tenantID, r.name+" webhook").Scan(&exists)
+		if err != nil {
+			return err
+		}
+		if exists > 0 {
+			continue
+		}
+
+		// Create webhook target
+		targetID := newID()
+		config := map[string]string{"url": r.webhookURL}
+		configJSON, _ := json.Marshal(config)
+
+		if _, err := s.db.Exec(
+			`INSERT INTO alert_targets (id, tenant_id, name, type, config) VALUES (?, ?, ?, 'webhook', ?)`,
+			targetID, r.tenantID, r.name+" webhook", string(configJSON)); err != nil {
+			return err
+		}
+
+		// Update rule to include the target (as JSON array)
+		targetIDs := []string{targetID}
+		targetIDsJSON, _ := json.Marshal(targetIDs)
+		if _, err := s.db.Exec(
+			`UPDATE alert_rules SET target_ids = ? WHERE id = ?`,
+			string(targetIDsJSON), r.id); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // newID returns a random 16-byte hex ID.

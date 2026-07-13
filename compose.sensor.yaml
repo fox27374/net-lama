@@ -42,6 +42,15 @@ services:
       # How many log lines (Info+) to keep per scope (the server, and each
       # agent) for the Logs page. Default: 1000.
       NETLAMA_LOG_HISTORY: ${NETLAMA_LOG_HISTORY:-}
+      # SMTP configuration for email alert notifications.
+      # Host is required to enable email notifications; others are optional.
+      # Port default: 587. StartTLS default: enabled (1).
+      NETLAMA_SMTP_HOST: ${NETLAMA_SMTP_HOST:-}
+      NETLAMA_SMTP_PORT: ${NETLAMA_SMTP_PORT:-}
+      NETLAMA_SMTP_USER: ${NETLAMA_SMTP_USER:-}
+      NETLAMA_SMTP_PASS: ${NETLAMA_SMTP_PASS:-}
+      NETLAMA_SMTP_FROM: ${NETLAMA_SMTP_FROM:-}
+      NETLAMA_SMTP_STARTTLS: ${NETLAMA_SMTP_STARTTLS:-}
     restart: unless-stopped
 
   agent:

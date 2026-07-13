@@ -1,13 +1,8 @@
 package server
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"time"
 
 	"github.com/fox27374/net-lama/internal/store"
 	pb "github.com/fox27374/net-lama/proto"
@@ -16,6 +11,7 @@ import (
 // evaluateAlerts checks a received result against the rules watching its
 // test, tracking consecutive breaches so a rule only fires after its
 // configured count, and resolves a firing alert when a good result arrives.
+// Implements hysteresis: clear_threshold + clear_count with dead-band semantics.
 func (s *Server) evaluateAlerts(conn *connectedAgent, result *pb.TestResult) {
 	if result.TestId == "" {
 		return
@@ -38,20 +34,69 @@ func (s *Server) evaluateAlerts(conn *connectedAgent, result *pb.TestResult) {
 		key := rule.ID + "|" + conn.agent.ID + "|" + subject
 
 		if breach {
+			// Increment breach counter and reset good counter
 			s.breachMu.Lock()
 			s.breachCount[key]++
 			n := s.breachCount[key]
+			delete(s.goodCount, key)
 			s.breachMu.Unlock()
+
 			if n >= rule.ForCount {
 				s.fireAlert(rule, conn, subject, value)
 			}
 		} else {
+			// Any non-breaching sample breaks the consecutive-breach streak
+			// toward firing ("N times in a row").
 			s.breachMu.Lock()
 			delete(s.breachCount, key)
 			s.breachMu.Unlock()
-			s.resolveAlert(rule, conn, subject)
+
+			clearOk := s.checkClearCondition(rule, value)
+			if clearOk {
+				// Good sample; increment clear counter
+				s.breachMu.Lock()
+				s.goodCount[key]++
+				goodN := s.goodCount[key]
+				s.breachMu.Unlock()
+
+				if goodN >= rule.ClearCount {
+					s.resolveAlert(rule, conn, subject)
+					s.breachMu.Lock()
+					delete(s.goodCount, key)
+					s.breachMu.Unlock()
+				}
+			} else {
+				// Sample in dead band; reset clear progress but keep firing
+				s.breachMu.Lock()
+				delete(s.goodCount, key)
+				s.breachMu.Unlock()
+			}
 		}
 	}
+}
+
+// checkClearCondition determines if a non-breach sample satisfies the clear condition.
+// If clear_threshold is set, the value must satisfy the inverse condition.
+// Otherwise, non-breach is sufficient.
+func (s *Server) checkClearCondition(rule *store.AlertRule, value float64) bool {
+	if rule.ClearThreshold == nil {
+		return true // Non-breach is sufficient for clear
+	}
+
+	// Inverse condition: if threshold op is >, clear is <; if <=, clear is >
+	switch rule.Operator {
+	case ">":
+		return value < *rule.ClearThreshold
+	case ">=":
+		return value < *rule.ClearThreshold
+	case "<":
+		return value > *rule.ClearThreshold
+	case "<=":
+		return value > *rule.ClearThreshold
+	case "==":
+		return true // For equality, non-breach is the clear condition
+	}
+	return true
 }
 
 func (s *Server) fireAlert(rule *store.AlertRule, conn *connectedAgent, subject string, value float64) {
@@ -67,7 +112,7 @@ func (s *Server) fireAlert(rule *store.AlertRule, conn *connectedAgent, subject 
 	}
 	s.Logger.Warn("Alert firing",
 		slog.String("rule", rule.Name), slog.String("agent", conn.agent.Name), slog.String("message", msg))
-	s.notifyWebhook(rule, conn, alert, "firing", value)
+	s.notifyTargets(rule, conn, alert, "firing", value)
 }
 
 func (s *Server) resolveAlert(rule *store.AlertRule, conn *connectedAgent, subject string) {
@@ -82,7 +127,7 @@ func (s *Server) resolveAlert(rule *store.AlertRule, conn *connectedAgent, subje
 	s.Logger.Info("Alert resolved",
 		slog.String("rule", rule.Name), slog.String("agent", conn.agent.Name))
 	active.State = "resolved"
-	s.notifyWebhook(rule, conn, active, "resolved", active.Value)
+	s.notifyTargets(rule, conn, active, "resolved", active.Value)
 }
 
 // resultSubject identifies the specific target within a result, so
@@ -186,42 +231,4 @@ func alertMessage(rule *store.AlertRule, conn *connectedAgent, subject string, v
 	}
 	return fmt.Sprintf("%s: %s%s %s %.2f (value %.2f) on %s",
 		rule.Name, rule.Metric, target, rule.Operator, rule.Threshold, value, conn.agent.Name)
-}
-
-// notifyWebhook POSTs the alert to the rule's webhook URL, if set.
-func (s *Server) notifyWebhook(rule *store.AlertRule, conn *connectedAgent, alert *store.Alert, state string, value float64) {
-	if rule.WebhookURL == "" {
-		return
-	}
-	payload := map[string]any{
-		"state":     state,
-		"rule":      rule.Name,
-		"test":      rule.TestName,
-		"metric":    rule.Metric,
-		"threshold": rule.Threshold,
-		"value":     value,
-		"tenant":    conn.tenant,
-		"site":      conn.agent.SiteName,
-		"agent":     conn.agent.Name,
-		"message":   alert.Message,
-		"time":      time.Now().UTC().Format(time.RFC3339),
-	}
-	body, _ := json.Marshal(payload)
-	url := rule.WebhookURL
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-		if err != nil {
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			s.Logger.Warn("Alert webhook failed", slog.String("rule", rule.Name), slog.Any("error", err))
-			return
-		}
-		resp.Body.Close()
-	}()
 }

@@ -59,7 +59,14 @@ func (a *API) Register(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /api/v1/alert-rules", a.auth(a.handleListAlertRules))
 	mux.HandleFunc("POST /api/v1/alert-rules", a.auth(a.handleCreateAlertRule))
+	mux.HandleFunc("PUT /api/v1/alert-rules/{id}", a.auth(a.handleUpdateAlertRule))
 	mux.HandleFunc("DELETE /api/v1/alert-rules/{id}", a.auth(a.handleDeleteAlertRule))
+
+	mux.HandleFunc("GET /api/v1/alert-targets", a.auth(a.handleListAlertTargets))
+	mux.HandleFunc("POST /api/v1/alert-targets", a.auth(a.handleCreateAlertTarget))
+	mux.HandleFunc("PUT /api/v1/alert-targets/{id}", a.auth(a.handleUpdateAlertTarget))
+	mux.HandleFunc("DELETE /api/v1/alert-targets/{id}", a.auth(a.handleDeleteAlertTarget))
+
 	mux.HandleFunc("GET /api/v1/alerts", a.auth(a.handleListAlerts))
 
 	mux.HandleFunc("GET /api/v1/apikeys", a.auth(a.handleListAPIKeys))

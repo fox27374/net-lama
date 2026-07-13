@@ -438,9 +438,60 @@ entries.
 
 ---
 
+## Alert Targets
+
+Alert notifications are dispatched to targets (webhook, email, script, SNMP).
+Each target has a type-specific configuration.
+
+### `GET /api/v1/alert-targets`
+
+Query: `tenantId` (required for admins). Returns `AlertTarget[]`:
+
+```json
+[{
+  "id": "...", "tenantId": "...", "name": "Ops Slack",
+  "type": "webhook",
+  "config": {"url": "https://hooks.slack.com/..."}
+}, {
+  "id": "...", "tenantId": "...", "name": "On-call Team",
+  "type": "email",
+  "config": {"to": ["alice@example.com", "bob@example.com"], "subject": "Alert: {{rule}}"}
+}, {
+  "id": "...", "tenantId": "...", "name": "SNMPv2c Trap",
+  "type": "snmp",
+  "config": {"host": "nms.example.com", "port": 162, "community": "public"}
+}]
+```
+
+### `POST /api/v1/alert-targets`
+
+Create a new alert target. Body:
+`{"name": "...", "type": "webhook|email|script|snmp", "config": {...}, "tenantId": "..."}`.
+
+`name` required and unique per tenant. `type` must be one of:
+- `webhook`: `config` must have `url` (string).
+- `email`: `config` must have `to` (array of email addresses); `subject` optional.
+- `script`: `config` must have `path` (string to executable) and optional `args` (array);
+  **admin-only** (tenant users get `403`).
+- `snmp`: `config` must have `host` (string), optional `port` (default 162), `community` (default "public").
+
+Returns the created `AlertTarget`. Tenant users can only create webhook and email targets.
+
+### `PUT /api/v1/alert-targets/{id}`
+
+Update an alert target. Same `config` validation as POST. Script targets require
+admin access. `403` if not in your tenant (tenant users).
+
+### `DELETE /api/v1/alert-targets/{id}`
+
+`403` if not in your tenant. `204`.
+
+---
+
 ## Alert Rules
 
-Per-test rules that watch either overall health or a numeric metric.
+Per-test rules that watch either overall health or a numeric metric, with optional
+hysteresis (clear threshold + clear count).
 
 ### `GET /api/v1/alert-rules`
 
@@ -450,24 +501,37 @@ Query: `tenantId` (required for admins). Returns `AlertRule[]`:
 [{
   "id": "...", "tenantId": "...", "testId": "...", "testName": "ping-gw",
   "name": "High latency", "metric": "latency_ms", "operator": ">",
-  "threshold": 100, "forCount": 2, "webhookUrl": "https://..."
+  "threshold": 100, "forCount": 2, "clearThreshold": 70, "clearCount": 10,
+  "targetIds": ["target-id-1", "target-id-2"], "webhookUrl": ""
 }]
 ```
 
 ### `POST /api/v1/alert-rules`
 
-Body: `{"name": "...", "testId": "...", "metric": "...", "operator": "...", "threshold": 0, "forCount": 1, "webhookUrl": "...", "tenantId": "..."}`.
+Body: `{"name": "...", "testId": "...", "metric": "...", "operator": "...",
+"threshold": 0, "forCount": 1, "clearThreshold": null, "clearCount": 1,
+"targetIds": [], "webhookUrl": "", "tenantId": "..."}`.
+
 `tenantId` required for admins. `name` required. `testId` must reference an
 existing test in the tenant. `metric` must be one of `unhealthy`,
 `latency_ms`, `loss_percent`, `download_mbps`, `upload_mbps`. For any
 metric other than `unhealthy`, `operator` must be one of `>`, `>=`, `<`,
 `<=`, `==`. `forCount` (consecutive breaches before firing) defaults to 1 if
-< 1. `webhookUrl` is optional (POSTed a JSON payload when the rule
-fires/resolves). Returns the created `AlertRule`.
+< 1. `clearThreshold` (optional, must satisfy inverse condition for clearing)
+and `clearCount` (default 1, consecutive samples meeting clear condition before
+resolving) implement hysteresis. `targetIds` is an array of alert target IDs
+(must all exist in the tenant); rules are always stored and visible in the UI
+regardless of targets. `webhookUrl` (deprecated, moved to webhook targets) is
+optional. Returns the created `AlertRule`.
+
+### `PUT /api/v1/alert-rules/{id}`
+
+Update an alert rule with the same fields as POST. `403` if the rule isn't in
+your tenant. Returns the updated `AlertRule`.
 
 ### `DELETE /api/v1/alert-rules/{id}`
 
-`403` if the rule isn't in your tenant (tenant users). `204`.
+`403` if the rule isn't in your tenant. `204`.
 
 ---
 

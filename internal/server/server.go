@@ -33,11 +33,15 @@ type Server struct {
 	// bind each cert to its agent by matching the CN against the agent name.
 	MTLS bool
 
+	// SMTP configuration for email notifications
+	SMTPConfig *SMTPConfig
+
 	mu        sync.Mutex
 	connected map[string]*connectedAgent // keyed by agent ID
 
 	breachMu    sync.Mutex
-	breachCount map[string]int // consecutive alert-rule breaches, keyed by rule|agent
+	breachCount map[string]int // consecutive alert-rule breaches, keyed by rule|agent|subject
+	goodCount   map[string]int // consecutive non-breach samples (for hysteresis), keyed by rule|agent|subject
 
 	reconnectMu    sync.Mutex
 	reconnectCount map[string]int // count of "connected" transitions in 15m window, keyed by agent ID
@@ -51,6 +55,7 @@ func New(st *store.Store, metrics *Metrics, logger *slog.Logger) *Server {
 		Logger:         logger,
 		connected:      make(map[string]*connectedAgent),
 		breachCount:    make(map[string]int),
+		goodCount:      make(map[string]int),
 		reconnectCount: make(map[string]int),
 		reconnectTimes: make(map[string][]time.Time),
 	}

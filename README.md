@@ -65,7 +65,9 @@ comes from `NETLAMA_ADMIN_PASSWORD` or is generated and printed in the log.
 
 Server flags/env: `-grpc`/`NETLAMA_GRPC_ADDR` (default `:50051`), `-http`/`NETLAMA_HTTP_ADDR`
 (default `:9090`), `-db`/`NETLAMA_DB`, `-log-history`/`NETLAMA_LOG_HISTORY` (default `1000`,
-see [Logs](#logs) below). Agent: `-server`/`NETLAMA_SERVER`,
+see [Logs](#logs) below). Email alert notifications use `NETLAMA_SMTP_HOST` (required to enable
+email), `NETLAMA_SMTP_PORT` (default `587`), `NETLAMA_SMTP_USER`, `NETLAMA_SMTP_PASS`,
+`NETLAMA_SMTP_FROM`, `NETLAMA_SMTP_STARTTLS` (default enabled). Agent: `-server`/`NETLAMA_SERVER`,
 `-token`/`NETLAMA_TOKEN`, `-id`/`NETLAMA_CLIENT_ID` (informational, defaults to hostname).
 Set `DEBUG=1` for debug logging. Cross-compile the agent for a Raspberry Pi with `make pi`.
 
@@ -93,8 +95,10 @@ The UI (login with username/password, dark/light theme) has a fixed left sidebar
 * **Path** — traceroute path visualization: the hop chain from an agent to a target
   (TCP/ICMP/UDP), per-hop latency and loss, and where a failing path breaks
 * **Alerts** — define rules (a test is unhealthy, or a metric such as latency/loss
-  crosses a threshold for N consecutive runs) with optional webhook notification;
-  see active and recent alerts, with a firing count badge in the nav
+  crosses a threshold for N consecutive runs) with hysteresis (clear threshold +
+  clear count); route notifications to targets (webhook, email via SMTP, script,
+  SNMPv2c trap); alerts are always stored and visible regardless of targets; see
+  active and recent alerts with a firing count badge in the nav
 * **Logs** — server and agent log lines (Info and above) in one place, newest
   first, filterable by agent and level; admins can also filter by source and see
   server logs (tenant users only ever see their own agents' logs). Auto-refreshes
@@ -115,7 +119,7 @@ specific agent immediately instead of waiting for its interval.
 Everything the UI does goes through the JSON API under `/api/v1`: `tenants`,
 `users`, `sites`, `sites/{id}/tests`, `tests`, `agents`, `apikeys`,
 `results?siteId=&agentId=&testId=&limit=`, `logs?source=&agentId=&level=&limit=`,
-`alert-rules`, `alerts`. Two auth methods are accepted on every route: the
+`alert-targets`, `alert-rules`, `alerts`. Two auth methods are accepted on every route: the
 session cookie (`POST /api/v1/login`) used by the UI, or an
 `Authorization: Bearer nlk_...` API key for scripts — create one via
 `POST /api/v1/apikeys` (with a session cookie) or the API Keys page, then
