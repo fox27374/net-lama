@@ -257,6 +257,15 @@ What has been done so far, in chronological order. Planned work lives in
   hover effects (surface shift on tiles, muted→accent color transition on
   "View all" links) and focus-visible outlines.
 
+## 2026-07-13 — Browser back/forward navigation between sections
+
+- Sections are now recorded in browser history via the URL hash
+  (`#dashboard`, `#agents`, …): the mouse/browser back and forward buttons
+  move between previously visited sections instead of leaving the app, the
+  hash acts as a shareable deep-link to a section, and a reload stays on
+  the current page. The first section replaces the history entry so "back"
+  from it still exits cleanly.
+
 ## 2026-07-13 — Path view rework (vertical subway line, MTR-style latency bars, ECharts heatmap)
 
 - **Path view redesign** (UI-only, no Go changes): replaced the horizontal

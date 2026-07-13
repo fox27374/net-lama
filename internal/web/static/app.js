@@ -80,19 +80,35 @@ async function showApp() {
     sel.innerHTML = tenants.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
     if (prev && tenants.some((t) => t.id === prev)) sel.value = prev;
   }
-  showSection("dashboard");
+  // Honor a section deep-link in the URL hash; default to the dashboard.
+  const initial = location.hash.slice(1);
+  showSection(sections.includes(initial) ? initial : "dashboard");
 }
 
 const sections = ["dashboard", "agents", "tests", "sites", "results", "wireless", "path", "alerts", "logs", "apikeys", "admin"];
 
-function showSection(name) {
+function showSection(name, fromHistory = false) {
   for (const sec of sections) $("#section-" + sec).classList.add("hidden");
   $("#section-" + name).classList.remove("hidden");
   document.querySelectorAll(".nav-item").forEach((b) => {
     b.classList.toggle("active", b.dataset.nav === name);
   });
+  // Record navigation in browser history so the back/forward (and mouse
+  // back) buttons move between sections instead of leaving the app. The
+  // first section replaces the entry so "back" from it exits cleanly.
+  if (!fromHistory && location.hash !== "#" + name) {
+    if (location.hash === "") history.replaceState(null, "", "#" + name);
+    else history.pushState(null, "", "#" + name);
+  }
   reloadSection(name);
 }
+
+window.addEventListener("popstate", () => {
+  const name = location.hash.slice(1);
+  if (!sections.includes(name)) return;
+  if ($("#app-view").classList.contains("hidden")) return; // not logged in
+  if (name !== currentSection()) showSection(name, true);
+});
 
 function currentSection() {
   return sections.find((s) => !$("#section-" + s).classList.contains("hidden"));
