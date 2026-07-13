@@ -1008,7 +1008,7 @@ let chartState = null; // {results, windowSec} for re-render on resize/theme
 
 function seriesColor(i) {
   const style = getComputedStyle(document.documentElement);
-  return style.getPropertyValue(`--series-${(i % 8) + 1}`).trim();
+  return style.getPropertyValue(`--cat-${(i % 8) + 1}`).trim();
 }
 
 // Build series from results; only when a single test is selected does a
