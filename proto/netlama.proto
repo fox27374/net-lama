@@ -230,6 +230,7 @@ message Hop {
   double best_rtt_ms = 5;
   double worst_rtt_ms = 6;
   uint32 sent = 7;
+  double jitter_ms = 8;
 }
 
 message LogEntry {

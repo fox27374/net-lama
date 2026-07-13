@@ -44,11 +44,13 @@ func demoTraceroute(target, protocol string, port uint32) *TracerouteResult {
 			loss = 100
 		}
 		jitter := rand.Float64() * 2
+		jitterMs := 0.2 + rand.Float64()*(3.0-0.2) // 0.2-3 ms
 		hop := Hop{
 			TTL: ttl, Host: p.host, LossPercent: loss, Sent: 5,
 			AvgRttMs:   p.base + jitter,
 			BestRttMs:  p.base,
 			WorstRttMs: p.base + jitter + 2,
+			JitterMs:   jitterMs,
 		}
 		res.Hops = append(res.Hops, hop)
 		if p.host != "" {

@@ -351,6 +351,7 @@ func (a *Agent) runTraceroute(ctx context.Context, spec *pb.TestSpec, params *pb
 			AvgRttMs:    h.AvgRttMs,
 			BestRttMs:   h.BestRttMs,
 			WorstRttMs:  h.WorstRttMs,
+			JitterMs:    h.JitterMs,
 			Sent:        h.Sent,
 		})
 	}

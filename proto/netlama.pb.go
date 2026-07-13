@@ -1985,6 +1985,7 @@ type Hop struct {
 	BestRttMs     float64                `protobuf:"fixed64,5,opt,name=best_rtt_ms,json=bestRttMs,proto3" json:"best_rtt_ms,omitempty"`
 	WorstRttMs    float64                `protobuf:"fixed64,6,opt,name=worst_rtt_ms,json=worstRttMs,proto3" json:"worst_rtt_ms,omitempty"`
 	Sent          uint32                 `protobuf:"varint,7,opt,name=sent,proto3" json:"sent,omitempty"`
+	JitterMs      float64                `protobuf:"fixed64,8,opt,name=jitter_ms,json=jitterMs,proto3" json:"jitter_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2064,6 +2065,13 @@ func (x *Hop) GetWorstRttMs() float64 {
 func (x *Hop) GetSent() uint32 {
 	if x != nil {
 		return x.Sent
+	}
+	return 0
+}
+
+func (x *Hop) GetJitterMs() float64 {
+	if x != nil {
+		return x.JitterMs
 	}
 	return 0
 }
@@ -2414,7 +2422,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"failureHop\x12\x15\n" +
 	"\x06rtt_ms\x18\x06 \x01(\x01R\x05rttMs\x12\x12\n" +
 	"\x04demo\x18\a \x01(\bR\x04demo\x12#\n" +
-	"\x04hops\x18\b \x03(\v2\x0f.netlama.v1.HopR\x04hops\"\xc2\x01\n" +
+	"\x04hops\x18\b \x03(\v2\x0f.netlama.v1.HopR\x04hops\"\xdf\x01\n" +
 	"\x03Hop\x12\x10\n" +
 	"\x03ttl\x18\x01 \x01(\rR\x03ttl\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12!\n" +
@@ -2424,7 +2432,8 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\vbest_rtt_ms\x18\x05 \x01(\x01R\tbestRttMs\x12 \n" +
 	"\fworst_rtt_ms\x18\x06 \x01(\x01R\n" +
 	"worstRttMs\x12\x12\n" +
-	"\x04sent\x18\a \x01(\rR\x04sent\"\x80\x01\n" +
+	"\x04sent\x18\a \x01(\rR\x04sent\x12\x1b\n" +
+	"\tjitter_ms\x18\b \x01(\x01R\bjitterMs\"\x80\x01\n" +
 	"\bLogEntry\x12.\n" +
 	"\x04time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x12\x18\n" +

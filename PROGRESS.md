@@ -365,6 +365,25 @@ What has been done so far, in chronological order. Planned work lives in
   loss-mode visualMap at `{ min: 0, max: 100, ..., inRange: { color: [okColor,
   warnColor, badColor] } }`.
 
+## 2026-07-13 — Per-hop jitter and honest no-reply hops
+
+- **Jitter parsing end-to-end**: mtr's StDev field (per-hop jitter) is now
+  parsed from `mtr --json` output through the full pipeline: probe result
+  (`Hop.JitterMs`), protobuf (`Hop.jitter_ms`, field 8), agent-side
+  conversion, and stored as `jitterMs` in JSON results.
+- **Jitter demo mode**: synthetic traceroute data emits realistic jitter values
+  (0.2–3 ms per hop).
+- **UI metric toggle**: Path view now has three metric segments (Latency /
+  Jitter / Loss). Waterfall and heatmap charts render jitter values with
+  appropriate scaling and color ramps. Tooltip shows jitterMs when in jitter
+  mode.
+- **Hops table**: added "Jitter (ms)" column (after Worst RTT) showing jitter
+  for responding hops, "–" for anonymous/no-reply hops or missing data. Old
+  results without jitterMs are handled gracefully (treated as 0).
+- **No-reply hops fix**: anonymous hops (no host) now render "no reply" in the
+  Loss cell instead of "100%", which reads as an outage. Subway diagram and
+  charts already handled this correctly.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

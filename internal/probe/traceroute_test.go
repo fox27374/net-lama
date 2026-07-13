@@ -6,10 +6,10 @@ const mtrReached = `{
   "report": {
     "mtr": {"src": "10.0.0.5", "dst": "8.8.8.8", "tests": 5},
     "hubs": [
-      {"count": 1, "host": "192.168.1.1", "Loss%": 0.0, "Snt": 5, "Avg": 0.7, "Best": 0.5, "Wrst": 1.2},
-      {"count": 2, "host": "???", "Loss%": 100.0, "Snt": 5, "Avg": 0.0, "Best": 0.0, "Wrst": 0.0},
-      {"count": 3, "host": "72.14.204.68", "Loss%": 0.0, "Snt": 5, "Avg": 12.4, "Best": 11.9, "Wrst": 14.1},
-      {"count": 4, "host": "8.8.8.8", "Loss%": 0.0, "Snt": 5, "Avg": 15.1, "Best": 14.8, "Wrst": 16.0}
+      {"count": 1, "host": "192.168.1.1", "Loss%": 0.0, "Snt": 5, "Avg": 0.7, "Best": 0.5, "Wrst": 1.2, "StDev": 0.25},
+      {"count": 2, "host": "???", "Loss%": 100.0, "Snt": 5, "Avg": 0.0, "Best": 0.0, "Wrst": 0.0, "StDev": 0.0},
+      {"count": 3, "host": "72.14.204.68", "Loss%": 0.0, "Snt": 5, "Avg": 12.4, "Best": 11.9, "Wrst": 14.1, "StDev": 0.85},
+      {"count": 4, "host": "8.8.8.8", "Loss%": 0.0, "Snt": 5, "Avg": 15.1, "Best": 14.8, "Wrst": 16.0, "StDev": 0.65}
     ]
   }
 }`
@@ -31,16 +31,22 @@ func TestParseMTRReached(t *testing.T) {
 	if res.RttMs != 15.1 {
 		t.Errorf("expected destination RTT 15.1, got %v", res.RttMs)
 	}
+	if res.Hops[0].JitterMs != 0.25 {
+		t.Errorf("expected hop 1 jitter 0.25, got %v", res.Hops[0].JitterMs)
+	}
+	if res.Hops[3].JitterMs != 0.65 {
+		t.Errorf("expected hop 4 jitter 0.65, got %v", res.Hops[3].JitterMs)
+	}
 }
 
 const mtrStalled = `{
   "report": {
     "mtr": {"src": "10.0.0.5", "dst": "203.0.113.9", "tests": 5},
     "hubs": [
-      {"count": 1, "host": "192.168.1.1", "Loss%": 0.0, "Snt": 5, "Avg": 0.7, "Best": 0.5, "Wrst": 1.2},
-      {"count": 2, "host": "84.116.130.1", "Loss%": 0.0, "Snt": 5, "Avg": 8.5, "Best": 8.0, "Wrst": 9.1},
-      {"count": 3, "host": "???", "Loss%": 100.0, "Snt": 5, "Avg": 0.0, "Best": 0.0, "Wrst": 0.0},
-      {"count": 4, "host": "???", "Loss%": 100.0, "Snt": 5, "Avg": 0.0, "Best": 0.0, "Wrst": 0.0}
+      {"count": 1, "host": "192.168.1.1", "Loss%": 0.0, "Snt": 5, "Avg": 0.7, "Best": 0.5, "Wrst": 1.2, "StDev": 0.25},
+      {"count": 2, "host": "84.116.130.1", "Loss%": 0.0, "Snt": 5, "Avg": 8.5, "Best": 8.0, "Wrst": 9.1, "StDev": 0.55},
+      {"count": 3, "host": "???", "Loss%": 100.0, "Snt": 5, "Avg": 0.0, "Best": 0.0, "Wrst": 0.0, "StDev": 0.0},
+      {"count": 4, "host": "???", "Loss%": 100.0, "Snt": 5, "Avg": 0.0, "Best": 0.0, "Wrst": 0.0, "StDev": 0.0}
     ]
   }
 }`

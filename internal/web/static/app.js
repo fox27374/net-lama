@@ -1382,7 +1382,7 @@ let paHeatmapInstance = null;  // ECharts instance
 let paWaterfallInstance = null;  // ECharts waterfall instance
 let paDisplayedResult = null;  // cached result for theme re-render and Back to latest
 let paLatestResult = null;  // latest result for "Back to latest" button
-let paMetric = "latency";  // toggle between "latency" and "loss"
+let paMetric = "latency";  // toggle between "latency", "jitter", and "loss"
 
 async function loadPath() {
   [paAgents, paTests] = await Promise.all([
@@ -1417,7 +1417,7 @@ $("#pa-run").addEventListener("click", async () => {
   await runTestNow($("#pa-agent").value, $("#pa-test").value, btn, renderPath);
 });
 
-// Metric toggle (Latency / Loss)
+// Metric toggle (Latency / Jitter / Loss)
 document.querySelectorAll(".seg-btn[data-metric]").forEach((btn) => {
   btn.addEventListener("click", () => {
     paMetric = btn.dataset.metric;
@@ -1433,6 +1433,9 @@ document.querySelectorAll(".seg-btn[data-metric]").forEach((btn) => {
     if (paMetric === "loss") {
       waterfallTitle.textContent = "Packet loss by hop";
       historyTitle.textContent = "Path history — loss";
+    } else if (paMetric === "jitter") {
+      waterfallTitle.textContent = "Jitter by hop";
+      historyTitle.textContent = "Path history — jitter";
     } else {
       waterfallTitle.textContent = "Latency contribution by hop";
       historyTitle.textContent = "Path history — avg RTT";
@@ -1592,13 +1595,15 @@ function renderPathResult(r, agent) {
     const tr = document.createElement("tr");
     const host = h.host ? `<span class="mono">${esc(h.host)}</span>` : '<span class="muted">* * *</span>';
     const latencyCell = h.host ? renderLatencyBar(h.bestRttMs, h.avgRttMs, h.worstRttMs, maxWorst, h.lossPercent) : "–";
+    const lossDisplay = h.host ? lossCell(h.lossPercent) : '<span class="muted">no reply</span>';
     tr.innerHTML = `
       <td class="num">${h.ttl}</td>
       <td>${host}</td>
-      <td class="num">${lossCell(h.lossPercent)}</td>
+      <td class="num">${lossDisplay}</td>
       <td class="num">${h.host ? fmt(h.avgRttMs) : "–"}</td>
       <td class="num">${h.host ? fmt(h.bestRttMs) : "–"}</td>
       <td class="num">${h.host ? fmt(h.worstRttMs) : "–"}</td>
+      <td class="num">${h.host && h.jitterMs ? fmt(h.jitterMs) : "–"}</td>
       <td>${latencyCell}</td>`;
     tbody.appendChild(tr);
   }
@@ -1797,6 +1802,74 @@ function renderPathWaterfall(hops) {
       ],
       textStyle: { color: textColor },
     };
+  } else if (paMetric === "jitter") {
+    // Jitter mode: plain horizontal bars, not cumulative
+    const jitterData = respondingHops.map((h) => ({
+      ttl: h.ttl,
+      host: h.host,
+      jitter: h.jitterMs || 0,
+      avgRtt: h.avgRttMs || 0,
+    }));
+
+    // Truncate host label to ~24 chars
+    const labels = jitterData.map((d) => {
+      const label = `${d.ttl}  ${d.host}`;
+      return label.length > 24 ? label.substring(0, 21) + "…" : label;
+    });
+
+    const maxJitter = Math.max(0.1, ...jitterData.map((d) => d.jitter));
+    const maxNice = niceMax(maxJitter * 1.1);
+
+    const jitterValues = jitterData.map((d) => ({
+      value: d.jitter,
+      itemStyle: {
+        color: accentColor,
+      }
+    }));
+
+    option = {
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        formatter: function (params) {
+          if (!params || !params[0]) return "";
+          const dataIndex = params[0].dataIndex;
+          const d = jitterData[dataIndex];
+          return `<strong>${esc(d.host)}</strong> (TTL ${d.ttl})<br/>` +
+            `Jitter: ${fmt(d.jitter)} ms<br/>` +
+            `Avg RTT: ${fmt(d.avgRtt)} ms`;
+        }
+      },
+      grid: { height: "70%", top: 10, bottom: 60, left: 140, right: 20 },
+      xAxis: {
+        type: "value",
+        position: "top",
+        min: 0,
+        max: maxNice,
+        name: "Jitter (ms)",
+        nameTextStyle: { color: mutedColor, fontSize: 11 },
+        axisLabel: { color: mutedColor, fontSize: 11 },
+        axisLine: { lineStyle: { color: mutedColor } },
+        splitLine: { lineStyle: { color: mutedColor, opacity: 0.2 } },
+      },
+      yAxis: {
+        type: "category",
+        data: labels,
+        inverse: true,
+        axisLabel: { color: mutedColor, fontSize: 11, formatter: (val) => val.length > 24 ? val.substring(0, 21) + "…" : val },
+        axisLine: { lineStyle: { color: mutedColor } },
+      },
+      series: [
+        {
+          name: "Jitter",
+          type: "bar",
+          barWidth: 16,
+          data: jitterValues,
+          itemStyle: { borderWidth: 0 },
+        }
+      ],
+      textStyle: { color: textColor },
+    };
   } else {
     // Loss mode: plain horizontal bars, not cumulative
     const lossData = respondingHops.map((h) => ({
@@ -1923,6 +1996,7 @@ async function renderPathHeatmap(results) {
   const allHops = new Set();
   const heatmapData = [];
   let maxAvgRtt = 0;
+  let maxJitter = 0;
 
   for (const r of reversed) {
     const t = r.payload && r.payload.traceroute;
@@ -1931,7 +2005,14 @@ async function renderPathHeatmap(results) {
     for (const h of t.hops) {
       if (h.host) {
         allHops.add(h.ttl);
-        const value = paMetric === "loss" ? h.lossPercent : h.avgRttMs;
+        let value;
+        if (paMetric === "loss") {
+          value = h.lossPercent;
+        } else if (paMetric === "jitter") {
+          value = h.jitterMs || 0;
+        } else {
+          value = h.avgRttMs;
+        }
         heatmapData.push([
           r.time,  // raw r.time as category key
           h.ttl,
@@ -1939,6 +2020,8 @@ async function renderPathHeatmap(results) {
         ]);
         if (paMetric === "latency") {
           maxAvgRtt = Math.max(maxAvgRtt, h.avgRttMs || 0);
+        } else if (paMetric === "jitter") {
+          maxJitter = Math.max(maxJitter, h.jitterMs || 0);
         }
       }
     }
@@ -1959,6 +2042,17 @@ async function renderPathHeatmap(results) {
     visualMapConfig = {
       min: 0,
       max: 100,
+      orient: "horizontal",
+      bottom: 10,
+      left: "center",
+      inRange: { color: [okColor, warnColor, badColor] },
+      textStyle: { color: mutedColor, fontSize: 11 },
+    };
+  } else if (paMetric === "jitter") {
+    const maxNice = niceMax(Math.max(0.1, maxJitter) * 1.1);
+    visualMapConfig = {
+      min: 0,
+      max: maxNice,
       orient: "horizontal",
       bottom: 10,
       left: "center",
@@ -1994,6 +2088,8 @@ async function renderPathHeatmap(results) {
           if (hop && hop.host) {
             if (paMetric === "loss") {
               hopInfo = `<br/>Host: ${hop.host}<br/>Loss: ${fmt(hop.lossPercent, 0)}%<br/>Avg RTT: ${fmt(hop.avgRttMs)} ms`;
+            } else if (paMetric === "jitter") {
+              hopInfo = `<br/>Host: ${hop.host}<br/>Jitter: ${fmt(hop.jitterMs || 0)} ms<br/>Avg RTT: ${fmt(hop.avgRttMs)} ms`;
             } else {
               hopInfo = `<br/>Host: ${hop.host}<br/>Best: ${fmt(hop.bestRttMs)} ms<br/>Worst: ${fmt(hop.worstRttMs)} ms<br/>Loss: ${fmt(hop.lossPercent, 0)}%`;
             }
@@ -2027,7 +2123,7 @@ async function renderPathHeatmap(results) {
     visualMap: visualMapConfig,
     series: [
       {
-        name: paMetric === "loss" ? "Loss (%)" : "Avg RTT (ms)",
+        name: paMetric === "loss" ? "Loss (%)" : paMetric === "jitter" ? "Jitter (ms)" : "Avg RTT (ms)",
         type: "heatmap",
         data: heatmapData,
         itemStyle: { borderWidth: 0 },

@@ -15,6 +15,7 @@ type Hop struct {
 	AvgRttMs    float64
 	BestRttMs   float64
 	WorstRttMs  float64
+	JitterMs    float64
 	Sent        uint32
 }
 
@@ -90,6 +91,7 @@ type mtrReport struct {
 			Avg   float64 `json:"Avg"`
 			Best  float64 `json:"Best"`
 			Wrst  float64 `json:"Wrst"`
+			StDev float64 `json:"StDev"`
 		} `json:"hubs"`
 	} `json:"report"`
 }
@@ -114,6 +116,7 @@ func parseMTR(data []byte, target string, maxHops uint32) (*TracerouteResult, er
 			AvgRttMs:    h.Avg,
 			BestRttMs:   h.Best,
 			WorstRttMs:  h.Wrst,
+			JitterMs:    h.StDev,
 			Sent:        uint32(h.Snt),
 		}
 		res.Hops = append(res.Hops, hop)
