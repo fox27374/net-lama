@@ -429,6 +429,34 @@ What has been done so far, in chronological order. Planned work lives in
 - **Server & storage**: protojson passes `hostName` through without change; it
   is omitted from JSON when empty, so older agents continue to work.
 
+## 2026-07-13 — Alert-rule configuration UI as its own menu item
+
+- **UI restructuring**: moved alert rules and added alert targets configuration
+  to a new dedicated "Alerts & Alert Rules" page under a new "Configuration" sidebar
+  group (above the "Manage" group). The existing Alerts page now shows only active
+  and recent alert instances (firing/resolved state history).
+- **Alert targets management**: new Alert Targets block with a table and create/edit
+  dialog supporting all four target types: webhook (URL), email (to/subject), SNMPv2c
+  trap (host/port/community), and script (path/args, admin-only). A static built-in
+  "Dashboard" row reminds users that alerts are always stored and visible regardless
+  of targets. Type-switching UI hides/shows relevant config fields; edit button allows
+  updating existing targets; delete removes targets (validating they're not in use).
+  Target type "script" is hidden from non-admin users (403 errors on API for non-admins
+  creating or editing script targets).
+- **Alert rules extended**: rule dialog now includes clear threshold (optional number),
+  clear count (for hysteresis exit), and a checkbox multi-select list of alert targets
+  (populated from the API). Rules table shows a "Clear Condition" column summarizing
+  the inverse condition and clear count (e.g., "latency (ms) < 70 ×10"). Rules support
+  edit mode (PUT /api/v1/alert-rules/{id}) in addition to create.
+- **Alerts page simplified**: the Alerts section now displays only the active & recent
+  alerts view (removed the rules table from this page). Firing alerts appear first,
+  then recent resolved ones, all routable to their rules via the Configuration page.
+- **Navigation**: new URL hash section "alertcfg" automatically works with the existing
+  browser history and deep-link system (showSection, reloadSection, sections array).
+- **ROADMAP** checkbox completed with this entry. README alerting paragraph covers
+  targets, clear hysteresis, and SMTP env vars — no changes needed there (already
+  documented).
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

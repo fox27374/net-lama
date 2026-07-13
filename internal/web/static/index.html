@@ -47,6 +47,11 @@
     </nav>
     <div class="sidebar-divider"></div>
     <nav class="sidebar-nav">
+      <div class="nav-group-label">Configuration</div>
+      <button data-nav="alertcfg" class="nav-item">Alerts &amp; Alert Rules</button>
+    </nav>
+    <div class="sidebar-divider"></div>
+    <nav class="sidebar-nav">
       <div class="nav-group-label">Manage</div>
       <button data-nav="admin" class="nav-item" id="nav-admin-btn">Tenants &amp; Users</button>
       <button data-nav="apikeys" class="nav-item" id="nav-apikeys-btn">API Keys</button>
@@ -286,6 +291,27 @@
       </div>
     </section>
 
+    <!-- Alert Configuration -->
+    <section id="section-alertcfg" class="hidden">
+      <div class="section-head"><h2>Alerts &amp; Alert Rules</h2></div>
+      <div class="card table-card">
+        <div class="section-head"><h3>Alert targets</h3><button id="btn-new-target" class="primary">New target</button></div>
+        <table id="targets-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Summary</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="targets-empty" class="empty hidden">No alert targets yet. Configure at least one to route alerts (or leave empty to view alerts only).</p>
+      </div>
+      <div class="card table-card">
+        <div class="section-head"><h3>Rules</h3><button id="btn-new-rule" class="primary">New rule</button></div>
+        <table id="rules-table">
+          <thead><tr><th>Name</th><th>Test</th><th>Condition</th><th>Clear Condition</th><th>Targets</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="rules-empty" class="empty hidden">No alert rules yet. Create one to be notified when a test fails or breaches a threshold.</p>
+      </div>
+    </section>
+
     <!-- Alerts -->
     <section id="section-alerts" class="hidden">
       <div class="section-head"><h2>Alerts</h2></div>
@@ -296,14 +322,6 @@
           <tbody></tbody>
         </table>
         <p id="alerts-empty" class="empty hidden">No alerts yet.</p>
-      </div>
-      <div class="card table-card">
-        <div class="section-head"><h3>Rules</h3><button id="btn-new-rule" class="primary">New rule</button></div>
-        <table id="rules-table">
-          <thead><tr><th>Name</th><th>Test</th><th>Condition</th><th>For</th><th>Webhook</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <p id="rules-empty" class="empty hidden">No alert rules yet. Create one to be notified when a test fails or breaches a threshold.</p>
       </div>
     </section>
 
@@ -526,9 +544,47 @@
   </form>
 </dialog>
 
+<dialog id="dlg-target">
+  <form id="form-target">
+    <h3 id="dlg-target-title">New alert target</h3>
+    <label>Name <input type="text" id="at-name" placeholder="Ops Slack" required></label>
+    <label>Type
+      <select id="at-type">
+        <option value="webhook">Webhook</option>
+        <option value="email">Email</option>
+        <option value="snmp">SNMPv2c Trap</option>
+        <option value="script" id="at-type-script">Script</option>
+      </select>
+    </label>
+    <div id="at-webhook-params" class="hidden">
+      <label>URL <input type="text" id="at-webhook-url" placeholder="https://hooks.slack.com/services/..."></label>
+    </div>
+    <div id="at-email-params" class="hidden">
+      <label>To (comma-separated) <input type="text" id="at-email-to" placeholder="alice@example.com, bob@example.com"></label>
+      <label>Subject (optional) <input type="text" id="at-email-subject" placeholder="Alert: {{rule}}"></label>
+    </div>
+    <div id="at-snmp-params" class="hidden">
+      <label>Host <input type="text" id="at-snmp-host" placeholder="nms.example.com"></label>
+      <div class="grid2">
+        <label>Port <input type="number" id="at-snmp-port" value="162" min="1" max="65535"></label>
+        <label>Community <input type="text" id="at-snmp-community" value="public"></label>
+      </div>
+    </div>
+    <div id="at-script-params" class="hidden">
+      <label>Path <input type="text" id="at-script-path" placeholder="/usr/local/bin/alert.sh"></label>
+      <label>Args (JSON array, optional) <input type="text" id="at-script-args" placeholder="[&quot;--verbose&quot;]"></label>
+    </div>
+    <p class="error hidden" id="at-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Create</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="dlg-rule">
   <form id="form-rule">
-    <h3>New alert rule</h3>
+    <h3 id="dlg-rule-title">New alert rule</h3>
     <label>Name <input type="text" id="ar-name" placeholder="High latency to gateway" required></label>
     <label>Test <select id="ar-test"></select></label>
     <label>Condition
@@ -552,7 +608,15 @@
       <label>Threshold <input type="number" id="ar-threshold" step="any" value="0"></label>
     </div>
     <label>Fire after N consecutive breaches <input type="number" id="ar-forcount" min="1" value="2"></label>
-    <label>Webhook URL (optional) <input type="text" id="ar-webhook" placeholder="https://hooks.slack.com/services/..."></label>
+    <div id="ar-clearthreshold-wrap">
+      <label>Clear threshold (optional) <input type="number" id="ar-clearthreshold" step="any" placeholder="leave blank if N/A"></label>
+    </div>
+    <label>Clear after N consecutive clears <input type="number" id="ar-clearcount" min="1" value="1"></label>
+    <div id="ar-targets-wrap">
+      <label>Alert targets (select any)</label>
+      <div id="ar-targets-list" class="check-list"></div>
+    </div>
+    <label>Webhook URL (optional, deprecated) <input type="text" id="ar-webhook" placeholder="https://hooks.slack.com/services/..."></label>
     <p class="error hidden" id="ar-error"></p>
     <div class="row end">
       <button type="button" class="ghost" data-close>Cancel</button>

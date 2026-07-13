@@ -94,7 +94,7 @@ Planned work, roughly grouped. Not ordered by priority yet.
       and logs
 - [x] Modify the path view to look more professional (vertical subway line,
       MTR-style latency bars in table, path-history heatmap)
-- [ ] Alert-rule configuration UI as its own menu item
+- [x] Alert-rule configuration UI as its own menu item
 - [ ] Logo for the web UI
 - [ ] Version tag reported by server and agent, shown in UI/API
 - [ ] Configurable result retention: time-based (e.g. "keep 30 days") and/or

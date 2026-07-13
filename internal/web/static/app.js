@@ -85,7 +85,7 @@ async function showApp() {
   showSection(sections.includes(initial) ? initial : "dashboard");
 }
 
-const sections = ["dashboard", "agents", "tests", "sites", "results", "wireless", "path", "alerts", "logs", "apikeys", "admin"];
+const sections = ["dashboard", "agents", "tests", "sites", "results", "wireless", "path", "alerts", "alertcfg", "logs", "apikeys", "admin"];
 
 function showSection(name, fromHistory = false) {
   for (const sec of sections) $("#section-" + sec).classList.add("hidden");
@@ -123,6 +123,7 @@ function reloadSection(name) {
   if (name === "wireless") loadWireless();
   if (name === "path") loadPath();
   if (name === "alerts") loadAlerts();
+  if (name === "alertcfg") loadAlertCfg();
   if (name === "logs") loadLogs();
   if (name === "apikeys") loadApiKeys();
   if (name === "admin") loadAdmin();
@@ -2218,10 +2219,7 @@ function updateAlertBadge(count) {
 }
 
 async function loadAlerts() {
-  const [alerts, rules] = await Promise.all([
-    api("GET", "/api/v1/alerts" + tenantParam()),
-    api("GET", "/api/v1/alert-rules" + tenantParam()),
-  ]);
+  const alerts = await api("GET", "/api/v1/alerts" + tenantParam());
 
   updateAlertBadge(alerts.filter((a) => a.state === "firing").length);
 
@@ -2241,45 +2239,36 @@ async function loadAlerts() {
       <td class="muted nowrap">${since}</td>`;
     at.appendChild(tr);
   }
-
-  const rt = $("#rules-table tbody");
-  rt.innerHTML = "";
-  $("#rules-empty").classList.toggle("hidden", rules.length > 0);
-  for (const r of rules) {
-    const cond = r.metric === "unhealthy"
-      ? "is unhealthy"
-      : `${METRIC_LABEL[r.metric] || r.metric} ${r.operator} ${r.threshold}`;
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><strong>${esc(r.name)}</strong></td>
-      <td>${esc(r.testName)}</td>
-      <td class="muted">${esc(cond)}</td>
-      <td class="muted">${r.forCount}×</td>
-      <td class="muted">${r.webhookUrl ? "✓" : "—"}</td>
-      <td style="text-align:right"><button class="danger" data-del>Delete</button></td>`;
-    tr.querySelector("[data-del]").addEventListener("click", async () => {
-      if (!confirm(`Delete rule "${r.name}"?`)) return;
-      await api("DELETE", `/api/v1/alert-rules/${r.id}`);
-      loadAlerts();
-    });
-    rt.appendChild(tr);
-  }
 }
 
 $("#ar-metric").addEventListener("change", () => {
   $("#ar-threshold-wrap").classList.toggle("hidden", $("#ar-metric").value === "unhealthy");
 });
 
+let editingRuleId = null;
+
 $("#btn-new-rule").addEventListener("click", async () => {
-  const tests = await api("GET", "/api/v1/tests" + tenantParam());
+  editingRuleId = null;
+  const [tests, targets] = await Promise.all([
+    api("GET", "/api/v1/tests" + tenantParam()),
+    api("GET", "/api/v1/alert-targets" + tenantParam()),
+  ]);
   if (!tests.length) { alert("Create a test first."); return; }
+  $("#dlg-rule-title").textContent = "New alert rule";
   $("#ar-name").value = "";
   $("#ar-test").innerHTML = tests.map((t) => `<option value="${t.id}">${esc(t.name)} (${t.type})</option>`).join("");
   $("#ar-metric").value = "unhealthy";
   $("#ar-threshold-wrap").classList.add("hidden");
   $("#ar-threshold").value = 0;
   $("#ar-forcount").value = 2;
+  $("#ar-clearthreshold").value = "";
+  $("#ar-clearcount").value = 1;
   $("#ar-webhook").value = "";
+  // Populate target checkboxes
+  const targetsList = $("#ar-targets-list");
+  targetsList.innerHTML = targets.map((t) => `
+    <label class="check"><input type="checkbox" value="${t.id}" class="ar-target-checkbox"> ${esc(t.name)} (${t.type})</label>
+  `).join("");
   dialogError("#ar-error", "");
   $("#dlg-rule").showModal();
 });
@@ -2287,6 +2276,8 @@ $("#btn-new-rule").addEventListener("click", async () => {
 $("#form-rule").addEventListener("submit", async (e) => {
   e.preventDefault();
   const metric = $("#ar-metric").value;
+  const clearThresholdVal = $("#ar-clearthreshold").value.trim();
+  const targetIds = Array.from(document.querySelectorAll(".ar-target-checkbox:checked")).map(el => el.value);
   const body = {
     name: $("#ar-name").value.trim(),
     testId: $("#ar-test").value,
@@ -2294,16 +2285,234 @@ $("#form-rule").addEventListener("submit", async (e) => {
     operator: metric === "unhealthy" ? ">" : $("#ar-op").value,
     threshold: metric === "unhealthy" ? 0 : +$("#ar-threshold").value,
     forCount: +$("#ar-forcount").value,
+    clearThreshold: clearThresholdVal ? +clearThresholdVal : null,
+    clearCount: +$("#ar-clearcount").value,
+    targetIds,
     webhookUrl: $("#ar-webhook").value.trim(),
   };
   const tid = tenantParam("");
   if (tid) body.tenantId = tid.split("=")[1];
   try {
-    await api("POST", "/api/v1/alert-rules", body);
+    if (editingRuleId) {
+      await api("PUT", `/api/v1/alert-rules/${editingRuleId}`, body);
+    } else {
+      await api("POST", "/api/v1/alert-rules", body);
+    }
     $("#dlg-rule").close();
-    loadAlerts();
+    loadAlertCfg();
   } catch (err) {
     dialogError("#ar-error", err.message);
+  }
+});
+
+// --- Alert Configuration ---
+async function loadAlertCfg() {
+  const [targets, rules] = await Promise.all([
+    api("GET", "/api/v1/alert-targets" + tenantParam()),
+    api("GET", "/api/v1/alert-rules" + tenantParam()),
+  ]);
+
+  // Render targets table
+  const tt = $("#targets-table tbody");
+  tt.innerHTML = "";
+  // Add built-in Dashboard row
+  const dashboardRow = document.createElement("tr");
+  dashboardRow.innerHTML = `
+    <td><strong>Dashboard</strong></td>
+    <td><span class="chip">built-in</span></td>
+    <td class="muted">Always visible in Alerts</td>
+    <td style="text-align:right">—</td>`;
+  tt.appendChild(dashboardRow);
+  // Add user targets
+  for (const t of targets) {
+    const summary = t.type === "webhook" ? esc(t.config.url || "")
+      : t.type === "email" ? esc((t.config.to || []).join(", "))
+      : t.type === "script" ? esc(t.config.path || "")
+      : t.type === "snmp" ? esc((t.config.host || "") + ":" + (t.config.port || 162))
+      : "—";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${esc(t.name)}</strong></td>
+      <td><span class="chip">${t.type}</span></td>
+      <td class="muted">${summary}</td>
+      <td style="text-align:right"><button class="edit-target" data-id="${t.id}">Edit</button> <button class="danger" data-del="${t.id}">Delete</button></td>`;
+    tr.querySelector(".edit-target").addEventListener("click", () => editAlertTarget(t));
+    tr.querySelector("[data-del]").addEventListener("click", async () => {
+      if (!confirm(`Delete target "${t.name}"?`)) return;
+      await api("DELETE", `/api/v1/alert-targets/${t.id}`);
+      loadAlertCfg();
+    });
+    tt.appendChild(tr);
+  }
+  $("#targets-empty").classList.toggle("hidden", targets.length > 0);
+
+  // Render rules table
+  const rt = $("#rules-table tbody");
+  rt.innerHTML = "";
+  for (const r of rules) {
+    const cond = r.metric === "unhealthy"
+      ? "is unhealthy"
+      : `${METRIC_LABEL[r.metric] || r.metric} ${r.operator} ${r.threshold}`;
+    const clearCond = r.metric === "unhealthy"
+      ? "passes"
+      : r.clearThreshold !== null && r.clearThreshold !== undefined
+      ? `${METRIC_LABEL[r.metric] || r.metric} ${r.operator === ">" ? "<" : r.operator === ">=" ? "<" : r.operator === "<" ? ">" : r.operator === "<=" ? ">" : "!="} ${r.clearThreshold}`
+      : "no longer breaching";
+    const targetNames = (r.targetIds || []).length > 0
+      ? r.targetIds.map(id => {
+          const t = targets.find(t => t.id === id);
+          return t ? t.name : id;
+        }).join(", ")
+      : "—";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${esc(r.name)}</strong></td>
+      <td>${esc(r.testName)}</td>
+      <td class="muted">${esc(cond)} ×${r.forCount}</td>
+      <td class="muted">${esc(clearCond)} ×${r.clearCount}</td>
+      <td class="muted">${esc(targetNames)}</td>
+      <td style="text-align:right"><button class="edit-rule" data-id="${r.id}">Edit</button> <button class="danger" data-del="${r.id}">Delete</button></td>`;
+    tr.querySelector(".edit-rule").addEventListener("click", () => editAlertRule(r, targets));
+    tr.querySelector("[data-del]").addEventListener("click", async () => {
+      if (!confirm(`Delete rule "${r.name}"?`)) return;
+      await api("DELETE", `/api/v1/alert-rules/${r.id}`);
+      loadAlertCfg();
+    });
+    rt.appendChild(tr);
+  }
+  $("#rules-empty").classList.toggle("hidden", rules.length > 0);
+}
+
+async function editAlertRule(rule, targets) {
+  editingRuleId = rule.id;
+  const tests = await api("GET", "/api/v1/tests" + tenantParam());
+  $("#dlg-rule-title").textContent = "Edit alert rule";
+  $("#ar-name").value = rule.name;
+  $("#ar-test").innerHTML = tests.map((t) => `<option value="${t.id}" ${t.id === rule.testId ? "selected" : ""}>${esc(t.name)} (${t.type})</option>`).join("");
+  $("#ar-metric").value = rule.metric;
+  $("#ar-threshold-wrap").classList.toggle("hidden", rule.metric === "unhealthy");
+  if (rule.metric !== "unhealthy") {
+    $("#ar-op").value = rule.operator;
+    $("#ar-threshold").value = rule.threshold;
+  }
+  $("#ar-forcount").value = rule.forCount;
+  $("#ar-clearthreshold").value = rule.clearThreshold || "";
+  $("#ar-clearcount").value = rule.clearCount || 1;
+  $("#ar-webhook").value = rule.webhookUrl || "";
+  // Populate target checkboxes
+  const targetsList = $("#ar-targets-list");
+  targetsList.innerHTML = targets.map((t) => `
+    <label class="check"><input type="checkbox" value="${t.id}" class="ar-target-checkbox" ${(rule.targetIds || []).includes(t.id) ? "checked" : ""}> ${esc(t.name)} (${t.type})</label>
+  `).join("");
+  dialogError("#ar-error", "");
+  $("#dlg-rule").showModal();
+}
+
+let editingTargetId = null;
+
+$("#btn-new-target").addEventListener("click", () => {
+  editingTargetId = null;
+  $("#dlg-target-title").textContent = "New alert target";
+  $("#at-name").value = "";
+  $("#at-type").value = "webhook";
+  $("#at-webhook-url").value = "";
+  $("#at-email-to").value = "";
+  $("#at-email-subject").value = "";
+  $("#at-snmp-host").value = "";
+  $("#at-snmp-port").value = "162";
+  $("#at-snmp-community").value = "public";
+  $("#at-script-path").value = "";
+  $("#at-script-args").value = "";
+  // Hide script option for non-admins
+  $("#at-type-script").classList.toggle("hidden", !me.isAdmin);
+  showTargetTypeFields("webhook");
+  dialogError("#at-error", "");
+  $("#dlg-target").showModal();
+});
+
+function editAlertTarget(target) {
+  editingTargetId = target.id;
+  $("#dlg-target-title").textContent = "Edit alert target";
+  $("#at-name").value = target.name;
+  $("#at-type").value = target.type;
+  if (target.type === "webhook") {
+    $("#at-webhook-url").value = target.config.url || "";
+  } else if (target.type === "email") {
+    $("#at-email-to").value = (target.config.to || []).join(", ");
+    $("#at-email-subject").value = target.config.subject || "";
+  } else if (target.type === "snmp") {
+    $("#at-snmp-host").value = target.config.host || "";
+    $("#at-snmp-port").value = target.config.port || 162;
+    $("#at-snmp-community").value = target.config.community || "public";
+  } else if (target.type === "script") {
+    $("#at-script-path").value = target.config.path || "";
+    $("#at-script-args").value = JSON.stringify(target.config.args || []);
+  }
+  // Hide script option for non-admins
+  $("#at-type-script").classList.toggle("hidden", !me.isAdmin);
+  showTargetTypeFields(target.type);
+  dialogError("#at-error", "");
+  $("#dlg-target").showModal();
+}
+
+$("#at-type").addEventListener("change", () => {
+  showTargetTypeFields($("#at-type").value);
+});
+
+function showTargetTypeFields(type) {
+  $("#at-webhook-params").classList.toggle("hidden", type !== "webhook");
+  $("#at-email-params").classList.toggle("hidden", type !== "email");
+  $("#at-snmp-params").classList.toggle("hidden", type !== "snmp");
+  $("#at-script-params").classList.toggle("hidden", type !== "script");
+}
+
+$("#form-target").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const type = $("#at-type").value;
+  const config = {};
+
+  if (type === "webhook") {
+    config.url = $("#at-webhook-url").value.trim();
+  } else if (type === "email") {
+    const to = $("#at-email-to").value.trim();
+    config.to = to.split(",").map(s => s.trim()).filter(s => s);
+    const subject = $("#at-email-subject").value.trim();
+    if (subject) config.subject = subject;
+  } else if (type === "snmp") {
+    config.host = $("#at-snmp-host").value.trim();
+    config.port = +$("#at-snmp-port").value;
+    config.community = $("#at-snmp-community").value.trim();
+  } else if (type === "script") {
+    config.path = $("#at-script-path").value.trim();
+    const argsStr = $("#at-script-args").value.trim();
+    if (argsStr) {
+      try {
+        config.args = JSON.parse(argsStr);
+      } catch (err) {
+        dialogError("#at-error", "Invalid JSON for args");
+        return;
+      }
+    }
+  }
+
+  const body = {
+    name: $("#at-name").value.trim(),
+    type,
+    config,
+  };
+  const tid = tenantParam("");
+  if (tid) body.tenantId = tid.split("=")[1];
+
+  try {
+    if (editingTargetId) {
+      await api("PUT", `/api/v1/alert-targets/${editingTargetId}`, body);
+    } else {
+      await api("POST", "/api/v1/alert-targets", body);
+    }
+    $("#dlg-target").close();
+    loadAlertCfg();
+  } catch (err) {
+    dialogError("#at-error", err.message);
   }
 });
 
