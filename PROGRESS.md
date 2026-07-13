@@ -398,6 +398,28 @@ What has been done so far, in chronological order. Planned work lives in
   for metric values. Updated chart height formula to `rows*28 + 100` for
   proper spacing.
 
+## 2026-07-13 — Path reverse-DNS (PTR) resolution
+
+- **Hop name resolution**: traceroute probes now perform best-effort parallel
+  reverse-DNS (PTR) lookups on hop IPs. `internal/probe/traceroute.go` adds
+  `HostName string` field to `Hop`, and `resolveHopNames()` function that
+  spawns goroutines for each IP with a 1500ms context timeout per lookup,
+  strips the trailing dot from results, and never fails the test (errors/
+  timeouts leave `HostName` empty). Called after `parseMTR()` completes.
+- **Proto & agent**: `proto/netlama.proto` adds `string host_name = 9;` to
+  message `Hop`; `make proto` regenerates `*.pb.go`; `internal/agent/scheduler.go`
+  copies `HostName` in the probe→proto hop conversion.
+- **Demo mode**: `internal/probe/traceroute_demo.go` assigns synthetic hostnames
+  to two hops ("gw.demo.lan" for the first hop, "core1.demo-isp.net" for a
+  mid-path hop) while the rest stay empty, exercising the UI fallback path.
+- **UI display rule** (hostname || IP): Hops table shows `hostName` as the main
+  display with IP as a muted second line (monospace) when a name exists; bare
+  IP (mono) when no name. Waterfall y-axis labels and tooltips follow the same
+  rule (name + IP in parentheses when both exist). Heatmap tooltip shows the
+  same. No-reply hops ("* * *") unchanged.
+- **Server & storage**: protojson passes `hostName` through without change; it
+  is omitted from JSON when empty, so older agents continue to work.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

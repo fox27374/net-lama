@@ -10,17 +10,18 @@ func demoTraceroute(target, protocol string, port uint32) *TracerouteResult {
 
 	// A plausible path: LAN gateway -> ISP -> transit -> destination.
 	path := []struct {
-		host string
-		base float64
+		host     string
+		hostName string
+		base     float64
 	}{
-		{"192.168.1.1", 0.6},
-		{"10.64.0.1", 3.2},
-		{"", 0},               // one anonymous hop
-		{"84.116.130.1", 8.5}, // ISP edge
-		{"213.46.160.42", 11.0},
-		{"72.14.204.68", 14.5}, // transit
-		{"108.170.240.1", 18.0},
-		{targetIP, 21.0},
+		{"192.168.1.1", "gw.demo.lan", 0.6},
+		{"10.64.0.1", "", 3.2},
+		{"", "", 0},                        // one anonymous hop
+		{"84.116.130.1", "core1.demo-isp.net", 8.5}, // ISP edge
+		{"213.46.160.42", "", 11.0},
+		{"72.14.204.68", "", 14.5}, // transit
+		{"108.170.240.1", "", 18.0},
+		{targetIP, "", 21.0},
 	}
 
 	// Occasionally stall the path partway to exercise the failure view.
@@ -46,7 +47,7 @@ func demoTraceroute(target, protocol string, port uint32) *TracerouteResult {
 		jitter := rand.Float64() * 2
 		jitterMs := 0.2 + rand.Float64()*(3.0-0.2) // 0.2-3 ms
 		hop := Hop{
-			TTL: ttl, Host: p.host, LossPercent: loss, Sent: 5,
+			TTL: ttl, Host: p.host, HostName: p.hostName, LossPercent: loss, Sent: 5,
 			AvgRttMs:   p.base + jitter,
 			BestRttMs:  p.base,
 			WorstRttMs: p.base + jitter + 2,

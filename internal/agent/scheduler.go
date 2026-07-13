@@ -347,6 +347,7 @@ func (a *Agent) runTraceroute(ctx context.Context, spec *pb.TestSpec, params *pb
 		hops = append(hops, &pb.Hop{
 			Ttl:         h.TTL,
 			Host:        h.Host,
+			HostName:    h.HostName,
 			LossPercent: h.LossPercent,
 			AvgRttMs:    h.AvgRttMs,
 			BestRttMs:   h.BestRttMs,

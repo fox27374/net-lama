@@ -4,13 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os/exec"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 type Hop struct {
 	TTL         uint32
 	Host        string // IP; empty = anonymous (no reply)
+	HostName    string // reverse-DNS name; empty when not resolved or failed
 	LossPercent float64
 	AvgRttMs    float64
 	BestRttMs   float64
@@ -74,7 +79,36 @@ func Traceroute(ctx context.Context, target, protocol string, port, maxHops, pro
 	if err != nil {
 		return nil, err
 	}
+	resolveHopNames(ctx, res.Hops)
 	return res, nil
+}
+
+// resolveHopNames performs best-effort parallel reverse-DNS resolution on hop IPs.
+// Each lookup has a 1500ms timeout and never fails the test. Names are stored in-place
+// with trailing dots stripped; failures or timeouts leave HostName empty.
+func resolveHopNames(ctx context.Context, hops []Hop) {
+	var wg sync.WaitGroup
+	for i := range hops {
+		if hops[i].Host == "" {
+			continue // anonymous hop; nothing to resolve
+		}
+		// Check if Host is already a name (not an IP)
+		if net.ParseIP(hops[i].Host) == nil {
+			continue // already a name, skip resolution
+		}
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			lookupCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+			defer cancel()
+			names, err := net.DefaultResolver.LookupAddr(lookupCtx, hops[i].Host)
+			if err == nil && len(names) > 0 {
+				// Take the first name and strip trailing dot
+				hops[i].HostName = strings.TrimSuffix(names[0], ".")
+			}
+		}(i)
+	}
+	wg.Wait()
 }
 
 // mtrReport mirrors the relevant parts of `mtr --json` output.

@@ -1587,7 +1587,14 @@ function renderPathResult(r, agent) {
   tbody.innerHTML = "";
   for (const h of hops) {
     const tr = document.createElement("tr");
-    const host = h.host ? `<span class="mono">${esc(h.host)}</span>` : '<span class="muted">* * *</span>';
+    let host;
+    if (h.host) {
+      const display = h.hostName || h.host;
+      const secondLine = h.hostName ? `<div class="muted" style="font-size: var(--text-xs); font-family: monospace;">${esc(h.host)}</div>` : '';
+      host = `<div>${esc(display)}</div>${secondLine}`;
+    } else {
+      host = '<span class="muted">* * *</span>';
+    }
     const latencyCell = h.host ? renderLatencyBarWithValue(h.bestRttMs, h.avgRttMs, h.worstRttMs, maxWorst, h.lossPercent) : '<span class="muted">no reply</span>';
     const lossBarCell = h.host ? renderLossBar(h.lossPercent) : '<span class="muted">–</span>';
     const jitterBarCell = h.host && h.jitterMs ? renderJitterBar(h.jitterMs, maxJitter) : '<span class="muted">–</span>';
@@ -1653,6 +1660,7 @@ function renderPathWaterfall(hops) {
       waterfallData.push({
         ttl: h.ttl,
         host: h.host,
+        hostName: h.hostName,
         cumulative: currentCumulative,
         delta: delta,
         prevCumulative: prevCumulative,
@@ -1690,7 +1698,8 @@ function renderPathWaterfall(hops) {
 
     // Truncate host label to ~24 chars
     const labels = waterfallData.map((d) => {
-      const label = `${d.ttl}  ${d.host}`;
+      const display = d.hostName || d.host;
+      const label = `${d.ttl}  ${display}`;
       return label.length > 24 ? label.substring(0, 21) + "…" : label;
     });
 
@@ -1707,7 +1716,8 @@ function renderPathWaterfall(hops) {
           const d = waterfallData[dataIndex];
           const sign = d.delta >= 0 ? "+" : "";
           const label = d.delta < 0 ? "measured faster than previous hop (independent probe)" : "RTT increase vs previous hop";
-          return `<strong>${esc(d.host)}</strong> (TTL ${d.ttl})<br/>` +
+          let hostLine = d.hostName ? `<strong>${esc(d.hostName)}</strong> (${esc(d.host)})` : `<strong>${esc(d.host)}</strong>`;
+          return `${hostLine} (TTL ${d.ttl})<br/>` +
             `${label}: ${sign}${fmt(d.delta)} ms<br/>` +
             `RTT to this hop: ${fmt(d.cumulative)} ms`;
         }
@@ -1771,13 +1781,15 @@ function renderPathWaterfall(hops) {
     const jitterData = respondingHops.map((h) => ({
       ttl: h.ttl,
       host: h.host,
+      hostName: h.hostName,
       jitter: h.jitterMs || 0,
       avgRtt: h.avgRttMs || 0,
     }));
 
     // Truncate host label to ~24 chars
     const labels = jitterData.map((d) => {
-      const label = `${d.ttl}  ${d.host}`;
+      const display = d.hostName || d.host;
+      const label = `${d.ttl}  ${display}`;
       return label.length > 24 ? label.substring(0, 21) + "…" : label;
     });
 
@@ -1799,7 +1811,8 @@ function renderPathWaterfall(hops) {
           if (!params || !params[0]) return "";
           const dataIndex = params[0].dataIndex;
           const d = jitterData[dataIndex];
-          return `<strong>${esc(d.host)}</strong> (TTL ${d.ttl})<br/>` +
+          let hostLine = d.hostName ? `<strong>${esc(d.hostName)}</strong> (${esc(d.host)})` : `<strong>${esc(d.host)}</strong>`;
+          return `${hostLine} (TTL ${d.ttl})<br/>` +
             `Jitter: ${fmt(d.jitter)} ms<br/>` +
             `Avg RTT: ${fmt(d.avgRtt)} ms`;
         }
@@ -1840,13 +1853,15 @@ function renderPathWaterfall(hops) {
     const lossData = respondingHops.map((h) => ({
       ttl: h.ttl,
       host: h.host,
+      hostName: h.hostName,
       loss: h.lossPercent || 0,
       avgRtt: h.avgRttMs || 0,
     }));
 
     // Truncate host label to ~24 chars
     const labels = lossData.map((d) => {
-      const label = `${d.ttl}  ${d.host}`;
+      const display = d.hostName || d.host;
+      const label = `${d.ttl}  ${display}`;
       return label.length > 24 ? label.substring(0, 21) + "…" : label;
     });
 
@@ -1865,7 +1880,8 @@ function renderPathWaterfall(hops) {
           if (!params || !params[0]) return "";
           const dataIndex = params[0].dataIndex;
           const d = lossData[dataIndex];
-          return `<strong>${esc(d.host)}</strong> (TTL ${d.ttl})<br/>` +
+          let hostLine = d.hostName ? `<strong>${esc(d.hostName)}</strong> (${esc(d.host)})` : `<strong>${esc(d.host)}</strong>`;
+          return `${hostLine} (TTL ${d.ttl})<br/>` +
             `Loss: ${fmt(d.loss, 0)}%<br/>` +
             `Avg RTT: ${fmt(d.avgRtt)} ms`;
         }
@@ -2086,12 +2102,14 @@ async function renderPathHeatmap(results) {
           const t = result.payload.traceroute;
           const hop = (t.hops || []).find((h) => h.ttl === ttl);
           if (hop && hop.host) {
+            const display = hop.hostName || hop.host;
+            const hostStr = hop.hostName ? `${display} (${hop.host})` : display;
             if (paMetric === "loss") {
-              hopInfo = `<br/>Host: ${hop.host}<br/>Loss: ${fmt(hop.lossPercent, 0)}%<br/>Avg RTT: ${fmt(hop.avgRttMs)} ms`;
+              hopInfo = `<br/>${hostStr}<br/>Loss: ${fmt(hop.lossPercent, 0)}%<br/>Avg RTT: ${fmt(hop.avgRttMs)} ms`;
             } else if (paMetric === "jitter") {
-              hopInfo = `<br/>Host: ${hop.host}<br/>Jitter: ${fmt(hop.jitterMs || 0)} ms<br/>Avg RTT: ${fmt(hop.avgRttMs)} ms`;
+              hopInfo = `<br/>${hostStr}<br/>Jitter: ${fmt(hop.jitterMs || 0)} ms<br/>Avg RTT: ${fmt(hop.avgRttMs)} ms`;
             } else {
-              hopInfo = `<br/>Host: ${hop.host}<br/>Best: ${fmt(hop.bestRttMs)} ms<br/>Worst: ${fmt(hop.worstRttMs)} ms<br/>Loss: ${fmt(hop.lossPercent, 0)}%`;
+              hopInfo = `<br/>${hostStr}<br/>Best: ${fmt(hop.bestRttMs)} ms<br/>Worst: ${fmt(hop.worstRttMs)} ms<br/>Loss: ${fmt(hop.lossPercent, 0)}%`;
             }
           }
         }
