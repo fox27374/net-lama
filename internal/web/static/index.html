@@ -264,18 +264,18 @@
       <div id="pa-body" class="hidden">
         <div class="card">
           <div id="pa-status" class="path-status"></div>
-          <div id="pa-chain" class="hop-chain"></div>
-        </div>
-        <div class="card">
-          <h3>Latency by hop</h3>
-          <div id="pa-latency"></div>
+          <div id="pa-subway" class="path-subway"></div>
         </div>
         <div class="card table-card">
           <div class="section-head"><h3>Hops</h3><span class="muted" id="pa-meta"></span></div>
           <table id="pa-hop-table">
-            <thead><tr><th>#</th><th>Host</th><th class="num">Loss</th><th class="num">Avg (ms)</th><th class="num">Best</th><th class="num">Worst</th></tr></thead>
+            <thead><tr><th>#</th><th>Host</th><th class="num">Loss</th><th class="num">Avg (ms)</th><th class="num">Best</th><th class="num">Worst</th><th>Latency</th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+        <div class="card">
+          <div class="section-head"><h3>Path history</h3></div>
+          <div id="pa-history"></div>
         </div>
       </div>
     </section>
@@ -606,6 +606,7 @@
   </form>
 </dialog>
 
+<script src="vendor/echarts.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

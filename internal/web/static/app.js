@@ -1377,6 +1377,8 @@ $("#wl-iface-save").addEventListener("click", async () => {
 // --- Path (traceroute) ---
 let paAgents = [];
 let paTests = [];
+let paHistoryResults = null;  // cached for theme re-render
+let paHeatmapInstance = null;  // ECharts instance
 
 async function loadPath() {
   [paAgents, paTests] = await Promise.all([
@@ -1411,6 +1413,21 @@ $("#pa-run").addEventListener("click", async () => {
   await runTestNow($("#pa-agent").value, $("#pa-test").value, btn, renderPath);
 });
 
+// Add theme toggle handler for path heatmap
+const originalThemeToggleHandler = $("#theme-toggle")._listener || null;
+$("#theme-toggle").addEventListener("click", () => {
+  if (currentSection() === "path" && paHistoryResults) {
+    renderPathHeatmap(paHistoryResults);
+  }
+});
+
+// Handle window resize for heatmap
+window.addEventListener("resize", () => {
+  if (paHeatmapInstance && currentSection() === "path") {
+    paHeatmapInstance.resize();
+  }
+});
+
 // runTestNow triggers an on-demand run and refreshes after a short delay.
 async function runTestNow(agentId, testId, btn, refresh) {
   if (!agentId || !testId) return;
@@ -1437,16 +1454,26 @@ async function renderPath() {
   const testId = $("#pa-test").value;
   if (!agentId || !testId) return;
 
-  const params = new URLSearchParams({ agentId, testId, type: "traceroute", limit: "1" });
+  // Fetch latest result and history (last 48)
   const tid = tenantParam("");
-  if (tid) params.set("tenantId", tid.split("=")[1]);
-  const results = await api("GET", "/api/v1/results?" + params.toString());
+  const params1 = new URLSearchParams({ agentId, testId, type: "traceroute", limit: "1" });
+  const params2 = new URLSearchParams({ agentId, testId, type: "traceroute", limit: "48" });
+  if (tid) {
+    params1.set("tenantId", tid.split("=")[1]);
+    params2.set("tenantId", tid.split("=")[1]);
+  }
+  const [results, historyResults] = await Promise.all([
+    api("GET", "/api/v1/results?" + params1.toString()),
+    api("GET", "/api/v1/results?" + params2.toString()),
+  ]);
+
+  paHistoryResults = historyResults;  // cache for theme re-render
 
   const statusEl = $("#pa-status");
-  const chainEl = $("#pa-chain");
+  const subwayEl = $("#pa-subway");
   const tbody = $("#pa-hop-table tbody");
   statusEl.innerHTML = "";
-  chainEl.innerHTML = "";
+  subwayEl.innerHTML = "";
   tbody.innerHTML = "";
   $("#pa-meta").textContent = "";
 
@@ -1475,178 +1502,217 @@ async function renderPath() {
   }
   $("#pa-meta").textContent = new Date(r.time).toLocaleString();
 
-  // Hop chain: agent -> hops -> target
-  chainEl.appendChild(chainNode("This agent", esc(agent ? agent.name : ""), "node-endpoint", ""));
+  // Vertical subway line
   const hops = t.hops || [];
-  for (const h of hops) {
-    chainEl.appendChild(chainArrow());
-    const anon = !h.host;
-    const cls = anon ? "node-anon"
-      : (h.ttl === t.failureHop && !t.reached) ? "node-fail"
-      : lossClass(h.lossPercent);
-    const host = anon ? "* * *" : h.host;
-    const sub = anon ? "no reply" : `${fmt(h.avgRttMs)} ms · ${fmt(h.lossPercent, 0)}% loss`;
-    chainEl.appendChild(chainNode(`Hop ${h.ttl}`, esc(host), cls, sub));
-  }
-  if (!t.reached) {
-    chainEl.appendChild(chainArrow(true));
-    chainEl.appendChild(chainNode("", esc(t.target), "node-unreached", "unreached"));
-  }
+  renderPathSubway(agent, hops, t);
 
-  // Per-hop latency chart
-  renderHopChart(hops, t);
-
-  // Hop table
+  // Hop table with latency range bars
+  const maxWorst = Math.max(0.1, ...hops.filter((h) => h.host).map((h) => h.worstRttMs || 0));
   for (const h of hops) {
     const tr = document.createElement("tr");
     const host = h.host ? `<span class="mono">${esc(h.host)}</span>` : '<span class="muted">* * *</span>';
+    const latencyCell = h.host ? renderLatencyBar(h.bestRttMs, h.avgRttMs, h.worstRttMs, maxWorst, h.lossPercent) : "–";
     tr.innerHTML = `
       <td class="num">${h.ttl}</td>
       <td>${host}</td>
       <td class="num">${lossCell(h.lossPercent)}</td>
       <td class="num">${h.host ? fmt(h.avgRttMs) : "–"}</td>
       <td class="num">${h.host ? fmt(h.bestRttMs) : "–"}</td>
-      <td class="num">${h.host ? fmt(h.worstRttMs) : "–"}</td>`;
+      <td class="num">${h.host ? fmt(h.worstRttMs) : "–"}</td>
+      <td>${latencyCell}</td>`;
     tbody.appendChild(tr);
   }
+
+  // Path history heatmap
+  renderPathHeatmap(historyResults);
 }
 
-// renderHopChart draws a column per hop (avg RTT), coloured by loss, so
-// the hop where latency or loss jumps is obvious across the whole path.
-function renderHopChart(hops, t) {
-  const area = $("#pa-latency");
-  area.innerHTML = "";
-  if (!hops.length) return;
+// Render vertical subway line for path visualization
+function renderPathSubway(agent, hops, t) {
+  const container = $("#pa-subway");
 
-  const NS = "http://www.w3.org/2000/svg";
-  const W = Math.max(area.clientWidth || 600, 320);
-  const H = 220;
-  const M = { l: 44, r: 12, t: 12, b: 40 };
-  const maxV = niceMax(Math.max(0.1, ...hops.map((h) => h.avgRttMs || 0)) * 1.1);
-  const plotW = W - M.l - M.r;
-  const plotH = H - M.t - M.b;
-  const band = plotW / hops.length;
-  const barW = Math.min(24, band - 6);
-  const y = (v) => M.t + (1 - v / maxV) * plotH;
+  // Station: this agent
+  const agentStation = document.createElement("div");
+  agentStation.className = "path-station path-station-start";
+  agentStation.innerHTML = `
+    <div class="path-dot path-dot-endpoint"></div>
+    <div class="path-label">This agent</div>
+    <div class="path-host"><span class="mono">${esc(agent ? agent.name : "")}</span></div>`;
+  container.appendChild(agentStation);
+
+  // Hop stations
+  for (let i = 0; i < hops.length; i++) {
+    const h = hops[i];
+    const anon = !h.host;
+    const isFailed = h.ttl === t.failureHop && !t.reached;
+    const dotClass = anon ? "path-dot-anon" : isFailed ? "path-dot-bad" : lossClass(h.lossPercent).replace("node-", "path-dot-");
+    const railBroken = isFailed;
+
+    const station = document.createElement("div");
+    station.className = "path-station" + (railBroken ? " path-station-broken" : "");
+    const host = anon ? "* * *" : h.host;
+    const hostSpan = anon ? `<span class="muted">${host}</span>` : `<span class="mono">${esc(host)}</span>`;
+    const sub = anon ? "no reply" : `${fmt(h.avgRttMs)} ms · ${fmt(h.lossPercent, 0)}% loss`;
+
+    station.innerHTML = `
+      <div class="path-dot ${dotClass}"></div>
+      <div class="path-label">Hop ${h.ttl}</div>
+      <div class="path-host">${hostSpan}</div>
+      <div class="path-sub">${sub}</div>`;
+    container.appendChild(station);
+  }
+
+  // Target station (unreached)
+  if (!t.reached) {
+    const targetStation = document.createElement("div");
+    targetStation.className = "path-station path-station-unreached";
+    targetStation.innerHTML = `
+      <div class="path-dot path-dot-unreached"></div>
+      <div class="path-label">Target</div>
+      <div class="path-host"><span class="muted">${esc(t.target)}</span></div>
+      <div class="path-sub">unreached</div>`;
+    container.appendChild(targetStation);
+  }
+}
+
+// Render latency range bar for a hop
+function renderLatencyBar(best, avg, worst, maxWorst, loss) {
+  if (!best || !avg || !worst) return "–";
+
+  const bestPct = (best / maxWorst) * 100;
+  const worstPct = (worst / maxWorst) * 100;
+  const avgPct = (avg / maxWorst) * 100;
+  const barColor = loss >= 60 ? "var(--bad)" : loss >= 20 ? "var(--warn)" : "var(--ok)";
+
+  return `<div class="latency-bar-container">
+    <div class="latency-track">
+      <div class="latency-range" style="left: ${bestPct}%; width: ${worstPct - bestPct}%; background: ${barColor};"></div>
+      <div class="latency-avg" style="left: ${avgPct}%;"></div>
+    </div>
+  </div>`;
+}
+
+// Render path history heatmap using ECharts
+async function renderPathHeatmap(results) {
+  const container = $("#pa-history");
+
+  if (!results || results.length < 2) {
+    if (paHeatmapInstance) {
+      paHeatmapInstance.dispose();
+      paHeatmapInstance = null;
+      container.style.height = "";
+    }
+    container.innerHTML = '<p class="empty">Need at least 2 results to show history.</p>';
+    return;
+  }
+
+  // Reverse results so newest is on the right
+  const reversed = [...results].reverse();
+
+  // Collect all hops across all results
+  const allHops = new Set();
+  const heatmapData = [];
+  let maxAvgRtt = 0;
+
+  for (const r of reversed) {
+    const t = r.payload && r.payload.traceroute;
+    if (!t || !t.hops) continue;
+
+    for (const h of t.hops) {
+      if (h.host) {
+        allHops.add(h.ttl);
+        heatmapData.push([
+          new Date(r.time).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+          h.ttl,
+          h.avgRttMs,
+        ]);
+        maxAvgRtt = Math.max(maxAvgRtt, h.avgRttMs || 0);
+      }
+    }
+  }
+
+  const maxTtl = Math.max(...Array.from(allHops));
+  const sortedHops = Array.from(allHops).sort((a, b) => a - b).reverse();  // inverted
 
   const style = getComputedStyle(document.documentElement);
-  const col = {
-    ok: style.getPropertyValue("--series-1").trim(),
-    warn: "#d98a00",
-    bad: style.getPropertyValue("--bad").trim(),
-    muted: style.getPropertyValue("--border").trim(),
-    accent: style.getPropertyValue("--accent").trim(),
-  };
-  const surface = style.getPropertyValue("--surface").trim();
+  const okColor = style.getPropertyValue("--ok").trim();
+  const badColor = style.getPropertyValue("--bad").trim();
+  const textColor = style.getPropertyValue("--fg").trim();
+  const mutedColor = style.getPropertyValue("--muted-solid").trim();
 
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.setAttribute("class", "chart-svg");
-  svg.setAttribute("height", H);
-  const el = (name, attrs, parent = svg) => {
-    const n = document.createElementNS(NS, name);
-    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
-    parent.appendChild(n);
-    return n;
-  };
-
-  // Grid + y ticks (ms)
-  for (let i = 0; i <= 4; i++) {
-    const v = (maxV / 4) * i;
-    el("line", { class: "grid", x1: M.l, x2: W - M.r, y1: y(v), y2: y(v) });
-    const lab = el("text", { x: M.l - 6, y: y(v) + 4, "text-anchor": "end" });
-    lab.textContent = v >= 100 ? Math.round(v) : +v.toFixed(0);
-  }
-  const unit = el("text", { x: M.l - 6, y: M.t - 2, "text-anchor": "end" });
-  unit.textContent = "ms";
-
-  const tip = document.createElement("div");
-  tip.className = "chart-tip hidden";
-  area.style.position = "relative";
-  area.appendChild(tip);
-
-  hops.forEach((h, i) => {
-    const cx = M.l + band * i + band / 2;
-    const anon = !h.host;
-    const isTarget = !anon && (h.host === t.targetIp || h.host === t.target);
-    let color = col.ok;
-    if (h.lossPercent >= 60) color = col.bad;
-    else if (h.lossPercent >= 20) color = col.warn;
-    if (isTarget && t.reached) color = col.accent;
-
-    // x label: hop number
-    const lab = el("text", { x: cx, y: H - 24, "text-anchor": "middle" });
-    lab.textContent = h.ttl;
-
-    if (anon) {
-      // no reply: a muted baseline tick with a star
-      const star = el("text", { x: cx, y: y(0) - 4, "text-anchor": "middle", fill: col.muted });
-      star.textContent = "✳";
-      return;
-    }
-
-    const barH = Math.max(2, y(0) - y(h.avgRttMs));
-    el("rect", {
-      x: cx - barW / 2, y: y(h.avgRttMs), width: barW, height: barH,
-      rx: 4, fill: color,
-    });
-
-    // Hover hit area (full band) + tooltip
-    const hit = el("rect", { x: M.l + band * i, y: M.t, width: band, height: plotH, fill: "transparent" });
-    hit.addEventListener("pointermove", (ev) => {
-      tip.textContent = "";
-      const head = document.createElement("div");
-      head.className = "tip-time";
-      head.textContent = `Hop ${h.ttl} · ${h.host}`;
-      tip.appendChild(head);
-      const rows = [
-        ["avg", `${fmt(h.avgRttMs)} ms`],
-        ["best / worst", `${fmt(h.bestRttMs)} / ${fmt(h.worstRttMs)} ms`],
-        ["loss", `${fmt(h.lossPercent, 0)} %`],
-      ];
-      for (const [k, v] of rows) {
-        const row = document.createElement("div");
-        row.className = "tip-row";
-        const val = document.createElement("span");
-        val.className = "val";
-        val.textContent = v;
-        const name = document.createElement("span");
-        name.className = "name";
-        name.textContent = k;
-        row.append(val, name);
-        tip.appendChild(row);
+  const maxNice = niceMax(maxAvgRtt * 1.1);
+  const option = {
+    tooltip: {
+      position: "top",
+      formatter: function (params) {
+        if (!params.data) return "";
+        const time = params.data[0];
+        const ttl = params.data[1];
+        // Find the original result to get host info
+        const result = reversed.find((r) => {
+          const t = r.payload && r.payload.traceroute;
+          return t && new Date(r.time).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) === time;
+        });
+        let hopInfo = "";
+        if (result) {
+          const t = result.payload.traceroute;
+          const hop = (t.hops || []).find((h) => h.ttl === ttl);
+          if (hop && hop.host) {
+            hopInfo = `<br/>Host: ${hop.host}<br/>Best: ${fmt(hop.bestRttMs)} ms<br/>Worst: ${fmt(hop.worstRttMs)} ms<br/>Loss: ${fmt(hop.lossPercent, 0)}%`;
+          }
+        }
+        return `Time: ${time}<br/>Hop: ${ttl}${hopInfo}`;
       }
-      tip.classList.remove("hidden");
-      const rect = area.getBoundingClientRect();
-      const tx = ev.clientX - rect.left + 14;
-      const flip = tx + tip.offsetWidth + 10 > rect.width;
-      tip.style.left = (flip ? tx - tip.offsetWidth - 28 : tx) + "px";
-      tip.style.top = (ev.clientY - rect.top - 10) + "px";
+    },
+    grid: { height: "70%", top: 40, bottom: 60, left: 40, right: 20 },
+    xAxis: {
+      type: "category",
+      data: [...new Set(heatmapData.map((d) => d[0]))],
+      splitArea: { show: true },
+      axisLabel: { color: mutedColor, fontSize: 11 },
+      axisLine: { lineStyle: { color: mutedColor } },
+    },
+    yAxis: {
+      type: "category",
+      data: sortedHops,
+      splitArea: { show: true },
+      axisLabel: { color: mutedColor, fontSize: 11 },
+      axisLine: { lineStyle: { color: mutedColor } },
+    },
+    visualMap: {
+      min: 0,
+      max: maxNice,
+      orient: "horizontal",
+      bottom: 10,
+      left: "center",
+      inRange: { color: [okColor, "#ffd000", badColor] },
+      textStyle: { color: mutedColor, fontSize: 11 },
+    },
+    series: [
+      {
+        name: "Avg RTT (ms)",
+        type: "heatmap",
+        data: heatmapData,
+        itemStyle: { borderWidth: 0 },
+        emphasis: { itemStyle: { borderColor: textColor, borderWidth: 1 } },
+      }
+    ],
+    textStyle: { color: textColor },
+  };
+
+  // Init chart if needed
+  if (!paHeatmapInstance) {
+    container.innerHTML = "";
+    container.style.height = "400px";
+    paHeatmapInstance = window.echarts.init(container);
+    window.addEventListener("resize", () => {
+      if (paHeatmapInstance && currentSection() === "path") {
+        paHeatmapInstance.resize();
+      }
     });
-    hit.addEventListener("pointerleave", () => tip.classList.add("hidden"));
-  });
+  }
 
-  // x-axis caption
-  const cap = el("text", { x: M.l + plotW / 2, y: H - 6, "text-anchor": "middle", fill: col.muted });
-  cap.textContent = "hop";
-
-  area.appendChild(svg);
-}
-
-function chainNode(label, host, cls, sub) {
-  const node = document.createElement("div");
-  node.className = "hop-node " + cls;
-  node.innerHTML = `<div class="hop-label">${label}</div>` +
-    `<div class="hop-host">${host}</div>` +
-    (sub ? `<div class="hop-sub">${sub}</div>` : "");
-  return node;
-}
-
-function chainArrow(broken) {
-  const a = document.createElement("div");
-  a.className = "hop-arrow" + (broken ? " broken" : "");
-  a.textContent = broken ? "✕" : "›";
-  return a;
+  paHeatmapInstance.setOption(option, true);
 }
 
 function lossClass(loss) {

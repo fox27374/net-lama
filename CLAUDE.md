@@ -48,7 +48,9 @@ a test type or command means touching the proto, `make proto`, then both sides.
   with `?tenantId=`, tenant users are scoped automatically
 - `internal/web` — the UI is a single embedded static page
   (`static/index.html` + `app.js`, vanilla JS, no build step); it talks only to
-  the JSON API, so every UI feature needs an API endpoint first
+  the JSON API, so every UI feature needs an API endpoint first. Vendored
+  third-party libs live in `static/vendor/` (currently ECharts 5.6.0 for the
+  path history heatmap)
 
 Multi-tenant data model: tenant → sites → agents; **tests** are named reusable
 definitions assigned to sites; every agent of a site runs the site's tests.

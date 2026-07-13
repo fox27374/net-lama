@@ -257,6 +257,36 @@ What has been done so far, in chronological order. Planned work lives in
   hover effects (surface shift on tiles, muted→accent color transition on
   "View all" links) and focus-visible outlines.
 
+## 2026-07-13 — Path view rework (vertical subway line, MTR-style latency bars, ECharts heatmap)
+
+- **Path view redesign** (UI-only, no Go changes): replaced the horizontal
+  hop-chain box-and-arrow visualization with a vertical "subway line" —
+  left rail with station dots colored by loss class, showing hop number,
+  host (mono), and inline avg/loss. Failed hops (stalled path) show a
+  dashed rail break below; unreached target shows as muted/dashed station.
+  Pure CSS with no SVG or library.
+- **MTR-style latency range bars**: added a new "Latency" column to the
+  Hops table. Each cell holds an inline range bar (track + best→worst span +
+  avg marker) positioned as percent of max worst RTT across all hops. Bar
+  color follows the loss class (ok/warn/bad). No SVG math, just percent-
+  positioned divs.
+- **Path history heatmap** (NEW): third card fetches last 48 results
+  (in reverse for display), renders an ECharts 5.6.0 heatmap with x-axis =
+  result time (HH:MM), y-axis = hop TTL (inverted so hop 1 at top), cell
+  value = avgRttMs. No-reply hops produce no data points. Tooltip shows
+  host, avg/best/worst ms, loss %. visualMap: continuous, min 0, max =
+  nice-rounded max of avg RTTs; green→amber→red ramp from --ok/--bad CSS
+  tokens read at render time. Fewer than 2 results shows empty state.
+  Chart instance is lazily initialized (section visible), cached and
+  re-rendered on theme toggle (results cached in module scope), and
+  resized on window resize (only when path section visible).
+- **ECharts wiring**: added `<script src="vendor/echarts.min.js"></script>`
+  before app.js in index.html. Vendored ECharts 5.6.0 is already present at
+  internal/web/static/vendor/echarts.min.js (no re-download, no Go changes).
+- **Documentation**: ROADMAP checked off "Modify the path view to look more
+  professional"; CLAUDE.md amended to note vendored third-party libs
+  (currently ECharts for the path history heatmap); PROGRESS.md entry added.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
