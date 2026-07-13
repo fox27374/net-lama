@@ -383,6 +383,20 @@ What has been done so far, in chronological order. Planned work lives in
 - **No-reply hops fix**: anonymous hops (no host) now render "no reply" in the
   Loss cell instead of "100%", which reads as an outage. Subway diagram and
   charts already handled this correctly.
+- **Path view polish**: removed the redundant subway (vertical hop diagram) that
+  duplicated the hops table; moved the status banner into the waterfall card
+  above the chart; reordered cards (waterfall → hops table → history); fixed
+  waterfall axis clipping with proper grid sizing (`top: 44, bottom: 24, left:
+  140, right: 30`) and visible top-axis labels + units in all three metric modes
+  (ms for latency/jitter, % for loss); rendered negative-delta hops (jitter
+  artifacts where a hop's avg RTT is lower than the previous hop) as thin tick
+  marks (scatter series, symbol "rect", 3×16px) instead of misleading gray bars;
+  rebuilt the hops table with columns `# | Host | Latency | Loss | Jitter`
+  (dropped Avg/Best/Worst), each metric cell containing right-aligned value text
+  + inline bar (latency shows best–worst range with avg marker, loss is a
+  0–100% bar, jitter is a 0–max bar). All no-reply hops show "* * *" and "–"
+  for metric values. Updated chart height formula to `rows*28 + 100` for
+  proper spacing.
 
 ## Known issues
 

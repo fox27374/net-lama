@@ -1518,10 +1518,8 @@ async function renderPath() {
   paHistoryResults = historyResults;  // cache for theme re-render
 
   const statusEl = $("#pa-status");
-  const subwayEl = $("#pa-subway");
   const tbody = $("#pa-hop-table tbody");
   statusEl.innerHTML = "";
-  subwayEl.innerHTML = "";
   tbody.innerHTML = "";
   $("#pa-meta").textContent = "";
 
@@ -1538,18 +1536,16 @@ async function renderPath() {
   renderPathHeatmap(historyResults);
 }
 
-// Render one path result (status, subway, hops table, waterfall)
+// Render one path result (status, hops table, waterfall)
 function renderPathResult(r, agent) {
   paDisplayedResult = r;  // cache for theme re-render
 
   const t = r.payload && r.payload.traceroute;
   const statusEl = $("#pa-status");
-  const subwayEl = $("#pa-subway");
   const tbody = $("#pa-hop-table tbody");
 
   if (!t) {
     statusEl.innerHTML = '<p class="empty">No path data in this result.</p>';
-    subwayEl.innerHTML = "";
     tbody.innerHTML = "";
     return;
   }
@@ -1584,81 +1580,28 @@ function renderPathResult(r, agent) {
   }
   $("#pa-meta").textContent = new Date(r.time).toLocaleString();
 
-  // Vertical subway line
+  // Hop table with latency, loss, and jitter inline bars
   const hops = t.hops || [];
-  renderPathSubway(agent, hops, t);
-
-  // Hop table with latency range bars
   const maxWorst = Math.max(0.1, ...hops.filter((h) => h.host).map((h) => h.worstRttMs || 0));
+  const maxJitter = Math.max(0.1, ...hops.filter((h) => h.host).map((h) => h.jitterMs || 0));
   tbody.innerHTML = "";
   for (const h of hops) {
     const tr = document.createElement("tr");
     const host = h.host ? `<span class="mono">${esc(h.host)}</span>` : '<span class="muted">* * *</span>';
-    const latencyCell = h.host ? renderLatencyBar(h.bestRttMs, h.avgRttMs, h.worstRttMs, maxWorst, h.lossPercent) : "–";
-    const lossDisplay = h.host ? lossCell(h.lossPercent) : '<span class="muted">no reply</span>';
+    const latencyCell = h.host ? renderLatencyBarWithValue(h.bestRttMs, h.avgRttMs, h.worstRttMs, maxWorst, h.lossPercent) : '<span class="muted">no reply</span>';
+    const lossBarCell = h.host ? renderLossBar(h.lossPercent) : '<span class="muted">–</span>';
+    const jitterBarCell = h.host && h.jitterMs ? renderJitterBar(h.jitterMs, maxJitter) : '<span class="muted">–</span>';
     tr.innerHTML = `
       <td class="num">${h.ttl}</td>
       <td>${host}</td>
-      <td class="num">${lossDisplay}</td>
-      <td class="num">${h.host ? fmt(h.avgRttMs) : "–"}</td>
-      <td class="num">${h.host ? fmt(h.bestRttMs) : "–"}</td>
-      <td class="num">${h.host ? fmt(h.worstRttMs) : "–"}</td>
-      <td class="num">${h.host && h.jitterMs ? fmt(h.jitterMs) : "–"}</td>
-      <td>${latencyCell}</td>`;
+      <td>${latencyCell}</td>
+      <td>${lossBarCell}</td>
+      <td>${jitterBarCell}</td>`;
     tbody.appendChild(tr);
   }
 
   // Waterfall chart
   renderPathWaterfall(hops);
-}
-
-// Render vertical subway line for path visualization
-function renderPathSubway(agent, hops, t) {
-  const container = $("#pa-subway");
-  container.innerHTML = "";
-
-  // Station: this agent
-  const agentStation = document.createElement("div");
-  agentStation.className = "path-station path-station-start";
-  agentStation.innerHTML = `
-    <div class="path-dot path-dot-endpoint"></div>
-    <div class="path-label">This agent</div>
-    <div class="path-host"><span class="mono">${esc(agent ? agent.name : "")}</span></div>`;
-  container.appendChild(agentStation);
-
-  // Hop stations
-  for (let i = 0; i < hops.length; i++) {
-    const h = hops[i];
-    const anon = !h.host;
-    const isFailed = h.ttl === t.failureHop && !t.reached;
-    const dotClass = anon ? "path-dot-anon" : isFailed ? "path-dot-bad" : lossClass(h.lossPercent).replace("node-", "path-dot-");
-    const railBroken = isFailed;
-
-    const station = document.createElement("div");
-    station.className = "path-station" + (railBroken ? " path-station-broken" : "");
-    const host = anon ? "* * *" : h.host;
-    const hostSpan = anon ? `<span class="muted">${host}</span>` : `<span class="mono">${esc(host)}</span>`;
-    const sub = anon ? "no reply" : `${fmt(h.avgRttMs)} ms · ${fmt(h.lossPercent, 0)}% loss`;
-
-    station.innerHTML = `
-      <div class="path-dot ${dotClass}"></div>
-      <div class="path-label">Hop ${h.ttl}</div>
-      <div class="path-host">${hostSpan}</div>
-      <div class="path-sub">${sub}</div>`;
-    container.appendChild(station);
-  }
-
-  // Target station (unreached)
-  if (!t.reached) {
-    const targetStation = document.createElement("div");
-    targetStation.className = "path-station path-station-unreached";
-    targetStation.innerHTML = `
-      <div class="path-dot path-dot-unreached"></div>
-      <div class="path-label">Target</div>
-      <div class="path-host"><span class="muted">${esc(t.target)}</span></div>
-      <div class="path-sub">unreached</div>`;
-    container.appendChild(targetStation);
-  }
 }
 
 // Render waterfall chart showing latency contribution by hop (horizontal APM-style)
@@ -1721,15 +1664,26 @@ function renderPathWaterfall(hops) {
     // Prepare data for horizontal stacked bars (waterfall effect)
     const baseData = [];
     const deltaData = [];
+    const negativeDeltaTicks = [];
 
     for (let i = 0; i < waterfallData.length; i++) {
       const d = waterfallData[i];
       // Base: invisible bar to position the visible bar
       baseData.push(Math.min(d.prevCumulative, d.cumulative));
-      // Delta: visible portion
-      const barHeight = Math.abs(d.delta);
-      deltaData.push(barHeight);
+      // Delta: visible portion (0 for negative deltas)
+      if (d.delta < 0) {
+        deltaData.push(0);
+        negativeDeltaTicks.push([d.cumulative, i]);
+      } else {
+        const barHeight = Math.abs(d.delta);
+        deltaData.push(barHeight);
+      }
     }
+
+    // Convert scatter data to full array aligned with waterfallData (with nulls for non-negative deltas)
+    const scatterDataFull = waterfallData.map((d, i) =>
+      d.delta < 0 ? [d.cumulative, i] : null
+    );
 
     const maxCum = Math.max(...waterfallData.map((d) => d.cumulative));
     const maxNice = niceMax(maxCum * 1.1);
@@ -1758,13 +1712,14 @@ function renderPathWaterfall(hops) {
             `Cumulative: ${fmt(d.cumulative)} ms`;
         }
       },
-      grid: { height: "70%", top: 10, bottom: 60, left: 140, right: 20 },
+      grid: { top: 44, bottom: 24, left: 140, right: 30 },
       xAxis: {
         type: "value",
         position: "top",
         min: 0,
         max: maxNice,
-        name: "Latency (ms)",
+        name: "ms",
+        nameGap: 6,
         nameTextStyle: { color: mutedColor, fontSize: 11 },
         axisLabel: { color: mutedColor, fontSize: 11 },
         axisLine: { lineStyle: { color: mutedColor } },
@@ -1798,6 +1753,15 @@ function renderPathWaterfall(hops) {
             }
           })),
           itemStyle: { borderWidth: 0 },
+        },
+        {
+          name: "negative-delta-tick",
+          type: "scatter",
+          symbol: "rect",
+          symbolSize: [3, 16],
+          data: scatterDataFull,
+          itemStyle: { color: mutedColor },
+          label: { show: false },
         }
       ],
       textStyle: { color: textColor },
@@ -1840,13 +1804,14 @@ function renderPathWaterfall(hops) {
             `Avg RTT: ${fmt(d.avgRtt)} ms`;
         }
       },
-      grid: { height: "70%", top: 10, bottom: 60, left: 140, right: 20 },
+      grid: { top: 44, bottom: 24, left: 140, right: 30 },
       xAxis: {
         type: "value",
         position: "top",
         min: 0,
         max: maxNice,
-        name: "Jitter (ms)",
+        name: "ms",
+        nameGap: 6,
         nameTextStyle: { color: mutedColor, fontSize: 11 },
         axisLabel: { color: mutedColor, fontSize: 11 },
         axisLine: { lineStyle: { color: mutedColor } },
@@ -1905,13 +1870,14 @@ function renderPathWaterfall(hops) {
             `Avg RTT: ${fmt(d.avgRtt)} ms`;
         }
       },
-      grid: { height: "70%", top: 10, bottom: 60, left: 140, right: 20 },
+      grid: { top: 44, bottom: 24, left: 140, right: 30 },
       xAxis: {
         type: "value",
         position: "top",
         min: 0,
         max: 100,
-        name: "Loss (%)",
+        name: "%",
+        nameGap: 6,
         nameTextStyle: { color: mutedColor, fontSize: 11 },
         axisLabel: { color: mutedColor, fontSize: 11 },
         axisLine: { lineStyle: { color: mutedColor } },
@@ -1938,7 +1904,7 @@ function renderPathWaterfall(hops) {
   }
 
   // Set chart height based on number of rows
-  const chartHeight = Math.max(180, respondingHops.length * 28 + 70);
+  const chartHeight = Math.max(180, respondingHops.length * 28 + 100);
 
   // Init chart if needed
   if (!paWaterfallInstance) {
@@ -1958,8 +1924,8 @@ function renderPathWaterfall(hops) {
   paWaterfallInstance.setOption(option, true);
 }
 
-// Render latency range bar for a hop
-function renderLatencyBar(best, avg, worst, maxWorst, loss) {
+// Render latency range bar with value text for a hop
+function renderLatencyBarWithValue(best, avg, worst, maxWorst, loss) {
   if (!best || !avg || !worst) return "–";
 
   const bestPct = (best / maxWorst) * 100;
@@ -1967,10 +1933,44 @@ function renderLatencyBar(best, avg, worst, maxWorst, loss) {
   const avgPct = (avg / maxWorst) * 100;
   const barColor = loss >= 60 ? "var(--bad)" : loss >= 20 ? "var(--warn)" : "var(--ok)";
 
-  return `<div class="latency-bar-container">
-    <div class="latency-track">
-      <div class="latency-range" style="left: ${bestPct}%; width: ${worstPct - bestPct}%; background: ${barColor};"></div>
-      <div class="latency-avg" style="left: ${avgPct}%;"></div>
+  return `<div style="display: flex; align-items: center; gap: 8px;">
+    <span style="font-size: var(--text-xs); font-family: var(--mono); font-weight: 550; width: 40px; text-align: right;">${fmt(avg)} ms</span>
+    <div class="latency-bar-container">
+      <div class="latency-track">
+        <div class="latency-range" style="left: ${bestPct}%; width: ${worstPct - bestPct}%; background: ${barColor};"></div>
+        <div class="latency-avg" style="left: ${avgPct}%;"></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Render loss bar for a hop
+function renderLossBar(loss) {
+  if (loss == null) return "–";
+  const lossColor = loss >= 60 ? "var(--bad)" : loss >= 20 ? "var(--warn)" : "var(--ok)";
+  const lossPercentValue = (loss / 100) * 100;
+
+  return `<div style="display: flex; align-items: center; gap: 8px;">
+    <span style="font-size: var(--text-xs); font-family: var(--mono); font-weight: 550; width: 30px; text-align: right;">${fmt(loss, 0)}%</span>
+    <div class="latency-bar-container">
+      <div class="latency-track">
+        <div style="position: absolute; height: 100%; width: ${lossPercentValue}%; background: ${lossColor}; border-radius: var(--radius-xs);"></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Render jitter bar for a hop
+function renderJitterBar(jitter, maxJitter) {
+  if (jitter == null || maxJitter == null) return "–";
+  const jitterPercentValue = (jitter / maxJitter) * 100;
+
+  return `<div style="display: flex; align-items: center; gap: 8px;">
+    <span style="font-size: var(--text-xs); font-family: var(--mono); font-weight: 550; width: 40px; text-align: right;">${fmt(jitter)} ms</span>
+    <div class="latency-bar-container">
+      <div class="latency-track">
+        <div style="position: absolute; height: 100%; width: ${jitterPercentValue}%; background: var(--accent); border-radius: var(--radius-xs);"></div>
+      </div>
     </div>
   </div>`;
 }
