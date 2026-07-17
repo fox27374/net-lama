@@ -100,3 +100,30 @@ func TestParseIWScan(t *testing.T) {
 		t.Errorf("AP3 (hidden) wrong: %+v", aps[3])
 	}
 }
+
+func TestPhyInfoSupportsMonitor(t *testing.T) {
+	withMonitor := `	Supported interface modes:
+		 * IBSS
+		 * managed
+		 * AP
+		 * monitor
+		 * mesh point
+	Band 1:
+		Capabilities: 0x1ff`
+	withoutMonitor := `	Supported interface modes:
+		 * IBSS
+		 * managed
+		 * AP
+		 * P2P-client
+	Band 1:
+		Capabilities: 0x1022`
+	if !phyInfoSupportsMonitor(withMonitor) {
+		t.Error("expected monitor support to be detected")
+	}
+	if phyInfoSupportsMonitor(withoutMonitor) {
+		t.Error("did not expect monitor support")
+	}
+	if phyInfoSupportsMonitor("") {
+		t.Error("empty input must not report monitor support")
+	}
+}

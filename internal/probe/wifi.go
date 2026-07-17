@@ -47,7 +47,9 @@ func WirelessInterfaces(ctx context.Context) []WirelessInterface {
 	if err != nil {
 		return nil
 	}
-	return parseIWDev(string(out))
+	ifaces := parseIWDev(string(out))
+	enhanceMonitorCapability(ctx, ifaces)
+	return ifaces
 }
 
 // Scan performs a managed-mode scan of nearby access points on iface.
@@ -99,28 +101,58 @@ func parseIWDev(out string) []WirelessInterface {
 		}
 	}
 	flush()
-
-	// Enhance with phy-level monitor capability detection (Phase 2)
-	enhanceMonitorCapability(ifaces, phyMonitorSupport)
-
 	return ifaces
 }
 
-// enhanceMonitorCapability extends the interface list with phy-level monitor support detection.
-func enhanceMonitorCapability(ifaces []WirelessInterface, phyMonitorSupport map[string]bool) {
-	// For each phy we've seen, if none of its interfaces already report monitor support,
-	// check via `iw phy <phy> info` for "Supported interface modes" line containing "monitor".
-	phyList := make(map[string]bool)
-	for _, iface := range ifaces {
-		if iface.SupportsMonitor {
-			phyMonitorSupport[iface.PHY] = true
+// enhanceMonitorCapability fills in SupportsMonitor for interfaces whose phy
+// advertises monitor mode in `iw phy <phy> info` (the interface itself is
+// usually in managed mode, so the interface-level check in parseIWDev only
+// catches adapters already switched to monitor). Queries each phy once.
+func enhanceMonitorCapability(ctx context.Context, ifaces []WirelessInterface) {
+	monitorByPhy := make(map[string]bool)
+	for i := range ifaces {
+		if ifaces[i].SupportsMonitor {
+			monitorByPhy[ifaces[i].PHY] = true
 		}
-		phyList[iface.PHY] = true
 	}
+	for i := range ifaces {
+		phy := ifaces[i].PHY
+		if ifaces[i].SupportsMonitor || phy == "" {
+			continue
+		}
+		support, seen := monitorByPhy[phy]
+		if !seen {
+			out, err := exec.CommandContext(ctx, "iw", "phy", phy, "info").Output()
+			support = err == nil && phyInfoSupportsMonitor(string(out))
+			monitorByPhy[phy] = support
+		}
+		ifaces[i].SupportsMonitor = support
+	}
+}
 
-	// Note: Full phy capability detection requires executing `iw phy <phy> info`.
-	// For now, we rely on interface-level detection (if any interface is in monitor mode).
-	// Deeper phy inspection can be added when needed.
+// phyInfoSupportsMonitor reports whether an `iw phy <phy> info` dump lists
+// "monitor" under "Supported interface modes".
+func phyInfoSupportsMonitor(out string) bool {
+	scanner := bufio.NewScanner(strings.NewReader(out))
+	inModes := false
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "Supported interface modes:") {
+			inModes = true
+			continue
+		}
+		if inModes {
+			// Mode entries look like "* monitor"; the section ends at the
+			// next line that isn't such an entry.
+			if !strings.HasPrefix(line, "*") {
+				break
+			}
+			if strings.TrimSpace(strings.TrimPrefix(line, "*")) == "monitor" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // parseIWScan parses `iw dev <iface> scan` output into access points.
