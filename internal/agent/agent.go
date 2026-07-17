@@ -158,8 +158,9 @@ func (a *Agent) runStream(ctx context.Context) error {
 		return fmt.Errorf("opening stream: %w", err)
 	}
 
+	detectedIfaces := probe.WirelessInterfaces(streamCtx)
 	var wifaces []*pb.WirelessInterface
-	for _, iface := range probe.WirelessInterfaces(streamCtx) {
+	for _, iface := range detectedIfaces {
 		wifaces = append(wifaces, &pb.WirelessInterface{
 			Name:            iface.Name,
 			Phy:             iface.PHY,
@@ -167,7 +168,7 @@ func (a *Agent) runStream(ctx context.Context) error {
 		})
 	}
 
-	capabilities := probe.DetectCapabilities(len(wifaces) > 0)
+	capabilities := probe.DetectCapabilities(len(wifaces) > 0, detectedIfaces)
 
 	register := &pb.AgentMessage{
 		Payload: &pb.AgentMessage_Register{

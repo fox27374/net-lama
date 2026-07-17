@@ -260,6 +260,28 @@
           </table>
           <p id="wl-empty" class="empty hidden">No scan results yet. Assign a "WLAN scan" test to this agent's site.</p>
         </div>
+
+        <!-- Monitor-mode sensing (wlan_sense) -->
+        <div id="wl-sense" class="hidden">
+          <div class="card table-card">
+            <div class="section-head">
+              <h3>Channel utilization</h3>
+              <span class="muted" id="wl-sense-meta"></span>
+            </div>
+            <div id="wl-chan-bars"></div>
+          </div>
+          <div class="card table-card">
+            <div class="section-head">
+              <h3>Client stations</h3>
+              <span class="muted" id="wl-sta-count"></span>
+            </div>
+            <table id="wl-sta-table">
+              <thead><tr><th>MAC</th><th>SSID</th><th class="num">RSSI (dBm)</th><th class="num">Rate (Mbps)</th><th class="num">MCS</th><th class="num">Frames</th><th>Seen</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <p id="wl-sta-empty" class="empty hidden">No stations sensed in the last sweep.</p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -460,6 +482,7 @@
           <option value="tcp">TCP connect</option>
           <option value="traceroute">Traceroute (path)</option>
           <option value="wlan_scan">WLAN scan</option>
+          <option value="wlan_sense">WLAN sensing (monitor mode)</option>
           <option value="speedtest">Speedtest</option>
         </select>
       </label>
@@ -491,6 +514,15 @@
     <div id="t-params-wlan" class="hidden">
       <p class="muted">Scans nearby access points on each agent's selected wireless
       interface (set per agent on the Wireless page).</p>
+    </div>
+    <div id="t-params-wlansense" class="hidden">
+      <p class="muted">Passively senses client stations and channel airtime in
+      monitor mode. Needs a monitor-capable adapter and a privileged (root)
+      agent; runs on the agent's selected wireless interface.</p>
+      <div class="grid2">
+        <label>Channels <input type="text" id="t-ws-channels" placeholder="e.g. 1,6,11,36 — blank = all"></label>
+        <label>Dwell per channel (ms) <input type="number" id="t-ws-dwell" min="100" max="2000" value="400"></label>
+      </div>
     </div>
     <div id="t-params-speedtest" class="hidden">
       <label>Provider

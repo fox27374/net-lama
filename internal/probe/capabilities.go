@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"os"
 	"os/exec"
 )
 
@@ -10,7 +11,8 @@ import (
 // wireless interface inventory result (see WirelessInterfaces), so it
 // is not re-enumerated here; that inventory is already empty when `iw`
 // is missing and non-empty in WLAN demo mode.
-func DetectCapabilities(hasWireless bool) []string {
+// wifaces contains the full wireless interface details including monitor support info.
+func DetectCapabilities(hasWireless bool, wifaces []WirelessInterface) []string {
 	caps := []string{"ping", "dns", "http", "tcp", "speedtest"}
 
 	// traceroute: needs mtr in PATH or demo mode enabled
@@ -24,5 +26,30 @@ func DetectCapabilities(hasWireless bool) []string {
 		caps = append(caps, "wlan_scan")
 	}
 
+	// wlan_sense: needs monitor-capable interface and privilege, or demo mode
+	if wlanSenseDemo() || hasMonitorCapableIface(wifaces) && isPrivileged() {
+		caps = append(caps, "wlan_sense")
+	}
+
 	return caps
+}
+
+// hasMonitorCapableIface checks if any wireless interface supports monitor mode.
+func hasMonitorCapableIface(wifaces []WirelessInterface) bool {
+	for _, iface := range wifaces {
+		if iface.SupportsMonitor {
+			return true
+		}
+	}
+	return false
+}
+
+// isPrivileged checks if the process has NET_ADMIN capability or is root.
+func isPrivileged() bool {
+	// Simple check: running as root (euid 0)
+	if os.Geteuid() == 0 {
+		return true
+	}
+	// TODO: Check for CAP_NET_ADMIN capability when available
+	return false
 }

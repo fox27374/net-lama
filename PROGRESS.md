@@ -575,6 +575,51 @@ What has been done so far, in chronological order. Planned work lives in
   confirmed overview displays degraded/failing correctly and webhook
   receives POST on state breach.
 
+## 2026-07-17 — WLAN Phase 2: monitor-mode client sensing
+
+- **New test type `wlan_sense`**: monitor-mode channel sweep capturing
+  wireless stations (MAC/SSID/BSSID/RSSI/rate/MCS) and per-channel airtime
+  utilization stats. Requires monitor-capable interface + NET_ADMIN privilege.
+- **Proto & code generation**: `WlanSenseParams` (channels list, dwell time),
+  `WlanSenseResult` (stations, channel stats, sweep time), `WlanStation`
+  (MAC/BSSID/SSID/RSSI/rate/MCS/frame count), `WlanChannelStat` (channel/freq/
+  active/busy/utilization). Field numbers: TestSpec.params `wlan_sense = 11`,
+  TestResult.result `wlan_sense = 12`.
+- **Agent-side probe** (`internal/probe/wlansense.go`): shared types, demo
+  generator (8-15 stations, 2-4 BSSs, 2.4+5 GHz channels with varied utilization).
+  Linux capture (`wlansense_linux.go`): **real packet capture via github.com/gopacket/gopacket v1.7.0 (maintained fork) using afpacket + zero-copy frame reading**. Per-frame parsing: RadioTap namespace for RSSI/rate/MCS with BadFCS() guard; Dot11 layer for MAC extraction and frame type classification (beacons/probe-responses → BSSID→SSID map, data frames → stations with ToDS/FromDS address ordering per 802.11, probe requests → probe_only flag). Interface type management (defer restore), per-channel tuning via `iw dev <if> set channel`, survey data from `iw dev <if> survey dump`. Stub (`wlansense_other.go`) for non-Linux. Demo mode via `NETLAMA_WLAN_SENSE_DEMO=1`.
+  The pure frame-parsing lives in `processFrame` (in `wlansense.go`, no build
+  tag) so it is unit-tested cross-platform; only the afpacket socket I/O is
+  Linux-only.
+- **Capability detection** (`internal/probe/capabilities.go`): claim `wlan_sense`
+  when demo mode enabled OR monitor-capable interface exists AND process is
+  privileged (euid 0 or CAP_NET_ADMIN).
+- **Server config & validation** (`internal/server/config.go`): dwell_ms
+  100–2000 (default 400), channels sanity 1–177, interval ≥30 sec.
+- **Metrics & overview** (`internal/server/metrics.go`, `internal/store/overview.go`):
+  primary metric = max channel utilization_pct (unit "%") so the green/orange/red
+  state thresholds apply; Prometheus gauges `netlama_wlan_stations` and
+  `netlama_wlan_channel_utilization_pct`.
+- **Web UI** (`internal/web/static/`): the Wireless page gained a monitor-sense
+  section for the selected agent — a channel-utilization bar chart (colored by
+  load, 2.4/5 GHz labels) and a client-stations table (MAC/SSID/RSSI/rate/MCS/
+  frames/last-seen, RSSI colored by signal, "probing…" for probe-only stations).
+  The Tests dialog has a "WLAN sensing (monitor mode)" type with channels + dwell
+  inputs, and `%` is wired into the state-threshold band editor.
+- **Verification**: `make build` (darwin), `make pi` (arm64+armv7) with the
+  `gopacket/gopacket` fork — both cross-compile cleanly, no CGO. `go vet ./...`,
+  `go test ./...` pass. Unit tests: `processFrame` with hand-built radiotap+802.11
+  frames (data ToDS/FromDS station+BSSID extraction, beacon SSID resolution,
+  probe-only, BadFCS skip), SSID information-element parser, survey-dump parser,
+  channel↔freq conversion, demo sanity, server metric extraction and validation.
+  The frame tests caught a real bug: ToDS/FromDS were masked against the wrong
+  bits (`0x0100`/`0x0200` on the single FC-flags byte), so every data frame was
+  mis-handled as ad-hoc — fixed to use gopacket's `Flags.ToDS()/FromDS()`. Demo
+  e2e (server + agent with `NETLAMA_WLAN_SENSE_DEMO=1`) confirmed 8 stations /
+  5 channels flow through to the results API, overview (utilization as the
+  primary metric), and Prometheus. Real capture verified to build for the Pi;
+  live monitor-mode capture is validated during deployment on ataltrp01.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

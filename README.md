@@ -78,7 +78,7 @@ The UI (login with username/password, dark/light theme) has a fixed left sidebar
 * **Dashboard** — the tenant landing page with a site filter; shows stat tiles (sites,
   agents, tests, active alerts), a sites table, active & recent alerts, tests with
   inline sparklines showing metric trends, and the latest wireless scans
-* **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_scan/speedtest) with interval and parameters
+* **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_scan/wlan_sense/speedtest) with interval and parameters
   * `speedtest` tests pick a **provider**: `ookla` (default, speedtest.net via the
     unofficial `showwin/speedtest-go` client against volunteer-run servers — the
     most widely available but occasionally untrustworthy, so results are
@@ -256,10 +256,16 @@ traceroute shows only hops that return ICMP for TCP-SYN probes — many networks
 answer for ICMP-mode traceroute but not TCP, so an ICMP test often shows a fuller
 path while a TCP test better reflects the real application path and port reachability.
 
-Until the above is in place, set `NETLAMA_WLAN_DEMO=1` and/or
-`NETLAMA_TRACEROUTE_DEMO=1` to emit synthetic data so you can use the Wireless and
-Path UIs on a host without a radio or raw-socket access. Monitor-mode client
-sensing and native-Go traceroute are later phases — see [ROADMAP.md](ROADMAP.md).
+Until the above is in place, set `NETLAMA_WLAN_DEMO=1`, `NETLAMA_WLAN_SENSE_DEMO=1`
+and/or `NETLAMA_TRACEROUTE_DEMO=1` to emit synthetic data so you can use the
+Wireless and Path UIs on a host without a radio or raw-socket access.
+
+The `wlan_sense` test does passive **monitor-mode** client sensing: it channel-hops,
+captures 802.11 frames (via `gopacket`/`afpacket`, no CGO), and reports per-station
+MAC/RSSI/rate/MCS grouped by SSID plus per-channel airtime utilization. It needs a
+monitor-capable adapter and a **privileged (root) agent with a host-network,
+`NET_ADMIN`/`NET_RAW` container** — the agent switches the interface into monitor
+mode and back. Native-Go traceroute is a later phase — see [ROADMAP.md](ROADMAP.md).
 
 ## TLS
 

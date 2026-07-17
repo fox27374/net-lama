@@ -61,7 +61,7 @@ services:
     network_mode: host
     cap_add:
       - NET_RAW    # traceroute: custom-TTL packets + receiving ICMP
-      - NET_ADMIN  # WLAN scanning via iw
+      - NET_ADMIN  # WLAN scanning + monitor-mode sensing via iw
     environment:
       # Host networking → reach the server on the published host port.
       NETLAMA_SERVER: ${NETLAMA_SERVER:-127.0.0.1:50051}
@@ -76,6 +76,7 @@ services:
       NETLAMA_TLS_CERT: ${NETLAMA_TLS_CERT:-}
       NETLAMA_TLS_KEY: ${NETLAMA_TLS_KEY:-}
       NETLAMA_WLAN_DEMO: ${NETLAMA_WLAN_DEMO:-}
+      NETLAMA_WLAN_SENSE_DEMO: ${NETLAMA_WLAN_SENSE_DEMO:-}
       NETLAMA_TRACEROUTE_DEMO: ${NETLAMA_TRACEROUTE_DEMO:-}
     depends_on:
       - server

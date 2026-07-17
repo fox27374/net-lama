@@ -619,6 +619,10 @@ function paramsSummary(t) {
   if (t.type === "http") return p.url || "";
   if (t.type === "tcp") return (p.targets || []).join(", ");
   if (t.type === "wlan_scan") return "nearby access points";
+  if (t.type === "wlan_sense") {
+    const ch = (p.channels || []).length ? (p.channels || []).join(",") : "all channels";
+    return `monitor sense · ${ch} · ${p.dwellMs || 400}ms`;
+  }
   if (t.type === "traceroute") {
     const proto = (p.protocol || "tcp").toUpperCase();
     const port = (p.protocol === "icmp") ? "" : `:${p.port || 443}`;
@@ -674,6 +678,7 @@ function updateTestParamFields() {
   $("#t-params-http").classList.toggle("hidden", type !== "http");
   $("#t-params-tcp").classList.toggle("hidden", type !== "tcp");
   $("#t-params-wlan").classList.toggle("hidden", type !== "wlan_scan");
+  $("#t-params-wlansense").classList.toggle("hidden", type !== "wlan_sense");
   $("#t-params-traceroute").classList.toggle("hidden", type !== "traceroute");
   $("#t-params-speedtest").classList.toggle("hidden", type !== "speedtest");
   // Re-filter alert rules when test type changes
@@ -709,7 +714,7 @@ function populateAlertRuleSelect(testType) {
 // Backed by the same {warn, crit} model: warn is the green|orange boundary,
 // crit the orange|red one. For speedtest lower is worse, so the band order
 // flips (green on top) and warn > crit.
-const BAND_UNIT = { ping: "ms", dns: "ms", http: "ms", tcp: "ms", speedtest: "Mbps", traceroute: "hops", wlan_scan: "APs" };
+const BAND_UNIT = { ping: "ms", dns: "ms", http: "ms", tcp: "ms", speedtest: "Mbps", traceroute: "hops", wlan_scan: "APs", wlan_sense: "%" };
 // null = band absent, "" = band added but value not typed yet, "40" = value
 let bandTh = { warn: null, crit: null };
 let bandType = "ping";
@@ -852,6 +857,8 @@ function openTestDialog(test) {
   $("#t-tr-maxhops").value = (test && test.type === "traceroute" && p.maxHops) || 30;
   $("#t-tr-probes").value = (test && test.type === "traceroute" && p.probesPerHop) || 5;
   $("#t-st-provider").value = (test && test.type === "speedtest" && p.provider) || "ookla";
+  $("#t-ws-channels").value = (test && test.type === "wlan_sense" ? (p.channels || []) : []).join(",");
+  $("#t-ws-dwell").value = (test && test.type === "wlan_sense" && p.dwellMs) || 400;
   updateTestParamFields();
 
   // State thresholds band editor
@@ -908,6 +915,9 @@ $("#form-test").addEventListener("submit", async (e) => {
     };
   } else if (type === "speedtest") {
     params = { provider: $("#t-st-provider").value };
+  } else if (type === "wlan_sense") {
+    const channels = $("#t-ws-channels").value.split(",").map((s) => +s.trim()).filter((n) => n > 0);
+    params = { channels, dwellMs: +$("#t-ws-dwell").value };
   }
   // Build thresholds from the band editor (undefined => validation error)
   const thresholds = readThresholdBands();
@@ -1519,6 +1529,83 @@ async function renderWirelessAgent() {
   if (tid) params.set("tenantId", tid.split("=")[1]);
   const results = await api("GET", "/api/v1/results?" + params.toString());
   renderScan(results[0]);
+
+  // Latest monitor-mode sense result for this agent (separate test type)
+  const sparams = new URLSearchParams({ agentId: agent.id, type: "wlan_sense", limit: "1" });
+  if (tid) sparams.set("tenantId", tid.split("=")[1]);
+  const sresults = await api("GET", "/api/v1/results?" + sparams.toString());
+  renderSense(sresults[0]);
+}
+
+// signalClass buckets an RSSI (dBm) into a health color: >=-60 ok,
+// -75..-60 warn, <-75 bad.
+function signalClass(rssi) {
+  if (rssi >= -60) return "healthy";
+  if (rssi >= -75) return "degraded";
+  return "failing";
+}
+
+function renderSense(result) {
+  const box = $("#wl-sense");
+  const w = result && result.payload && result.payload.wlanSense;
+  // Hide the whole block when this agent has no sense results at all
+  box.classList.toggle("hidden", !result);
+  if (!result) return;
+
+  const meta = $("#wl-sense-meta");
+  meta.innerHTML = "";
+  if (w && w.demo) {
+    const badge = document.createElement("span");
+    badge.className = "demo-badge";
+    badge.textContent = "DEMO DATA";
+    meta.appendChild(badge);
+  }
+  if (result.error) {
+    meta.appendChild(document.createTextNode("Last sweep failed: " + result.error));
+  } else if (w) {
+    meta.appendChild(document.createTextNode(
+      `${(w.channels || []).length} channels · ${w.sweepMs || 0}ms sweep · ${new Date(result.time).toLocaleString()}`));
+  }
+
+  // Channel utilization bars (highest utilization first)
+  const bars = $("#wl-chan-bars");
+  bars.innerHTML = "";
+  const channels = ((w && w.channels) || []).slice().sort((a, b) => b.utilizationPct - a.utilizationPct);
+  for (const c of channels) {
+    const pct = Math.max(0, Math.min(100, c.utilizationPct || 0));
+    const cls = pct >= 75 ? "failing" : pct >= 40 ? "degraded" : "healthy";
+    const band = c.freqMhz >= 5000 ? "5 GHz" : "2.4 GHz";
+    const row = document.createElement("div");
+    row.className = "chan-bar";
+    row.innerHTML =
+      `<span class="chan-label">ch ${c.channel} <span class="muted">${band}</span></span>` +
+      `<span class="chan-track"><span class="chan-fill ${cls}" style="width:${pct}%"></span></span>` +
+      `<span class="chan-val">${pct.toFixed(0)}% <span class="muted">· ${c.frames || 0} fr</span></span>`;
+    bars.appendChild(row);
+  }
+  if (!channels.length) {
+    bars.innerHTML = '<p class="muted">No channel data in the last sweep.</p>';
+  }
+
+  // Client stations, strongest signal first
+  const tbody = $("#wl-sta-table tbody");
+  tbody.innerHTML = "";
+  const stations = ((w && w.stations) || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
+  $("#wl-sta-count").textContent = stations.length ? `${stations.length} stations` : "";
+  $("#wl-sta-empty").classList.toggle("hidden", stations.length > 0);
+  for (const s of stations) {
+    const ssid = s.probeOnly ? '<span class="muted">probing…</span>' : (s.ssid ? esc(s.ssid) : '<span class="muted">—</span>');
+    const rate = s.rateMbps ? (+s.rateMbps).toFixed(0) : "—";
+    const mcs = (s.mcs != null && s.mcs >= 0) ? s.mcs : "—";
+    const seen = s.lastSeenMs ? new Date(+s.lastSeenMs).toLocaleTimeString() : "";
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      `<td class="mono">${esc(s.mac)}</td><td>${ssid}</td>` +
+      `<td class="num"><span class="health ${signalClass(s.rssiDbm)}">${s.rssiDbm}</span></td>` +
+      `<td class="num">${rate}</td><td class="num">${mcs}</td>` +
+      `<td class="num">${s.frames || 0}</td><td class="muted nowrap">${seen}</td>`;
+    tbody.appendChild(tr);
+  }
 }
 
 function renderScan(result) {
@@ -2425,7 +2512,7 @@ const METRIC_LABEL = {
 
 // Metric applicability map: which test types can use which metrics
 const METRIC_APPLICABILITY = {
-  unhealthy: ["ping", "dns", "http", "tcp", "traceroute", "wlan_scan", "speedtest"],
+  unhealthy: ["ping", "dns", "http", "tcp", "traceroute", "wlan_scan", "wlan_sense", "speedtest"],
   latency_ms: ["ping", "dns", "http", "tcp", "traceroute", "speedtest"],
   loss_percent: ["ping"],
   download_mbps: ["speedtest"],

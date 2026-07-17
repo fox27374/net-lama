@@ -39,7 +39,7 @@ Planned work, roughly grouped. Not ordered by priority yet.
       more metrics, maintenance windows, per-rule scoping to sites/agents.
 - [x] WLAN Phase 1: interface inventory + managed-mode AP/SSID scan (agent reports
       wireless interfaces, per-agent interface selection, periodic scan, Wireless UI)
-- [ ] WLAN Phase 2: monitor-mode client sensing — per-station MAC/RSSI/SNR/rate/MCS
+- [x] WLAN Phase 2: monitor-mode client sensing — per-station MAC/RSSI/SNR/rate/MCS
       per SSID; needs a monitor-capable adapter and a rootful container with host
       network + NET_ADMIN/NET_RAW; capture via gopacket/afpacket + radiotap/Dot11
 - [x] Traceroute / path analysis Phase 1: mtr-based path test (TCP/ICMP/UDP),

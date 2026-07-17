@@ -1,6 +1,8 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	pb "github.com/fox27374/net-lama/proto"
@@ -39,6 +41,9 @@ type Metrics struct {
 	tcpUp      *prometheus.GaugeVec
 
 	wlanApsVisible *prometheus.GaugeVec
+
+	wlanStations            *prometheus.GaugeVec
+	wlanChannelUtilization  *prometheus.GaugeVec
 
 	pathRtt     *prometheus.GaugeVec
 	pathHops    *prometheus.GaugeVec
@@ -101,6 +106,9 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		tcpUp:      newGauge("tcp_up", "1 if the last TCP connect succeeded", append(base, "target")...),
 
 		wlanApsVisible: newGauge("wlan_aps_visible", "Number of access points seen in the last WLAN scan", append(base, "interface")...),
+
+		wlanStations:           newGauge("wlan_stations", "Number of wireless stations detected in the last WLAN sense scan", append(base, "interface")...),
+		wlanChannelUtilization: newGauge("wlan_channel_utilization_pct", "WLAN channel utilization percentage", append(base, "channel")...),
 
 		pathRtt:     newGauge("path_rtt_ms", "Round-trip time to the traceroute destination in ms", append(base, "target")...),
 		pathHops:    newGauge("path_hops", "Number of hops on the traceroute path", append(base, "target")...),
@@ -217,6 +225,18 @@ func (m *Metrics) Record(tenant, site, client string, result *pb.TestResult) {
 			return
 		}
 		m.wlanApsVisible.WithLabelValues(append(base, r.WlanScan.Interface)...).Set(float64(len(r.WlanScan.AccessPoints)))
+
+	case *pb.TestResult_WlanSense:
+		m.resultsTotal.WithLabelValues(append(base, "wlan_sense")...).Inc()
+		if result.Error != "" {
+			m.errorsTotal.WithLabelValues(append(base, "wlan_sense")...).Inc()
+			return
+		}
+		m.wlanStations.WithLabelValues(append(base, r.WlanSense.Interface)...).Set(float64(len(r.WlanSense.Stations)))
+		for _, ch := range r.WlanSense.Channels {
+			channelLabel := append(base, fmt.Sprintf("%d", ch.Channel))
+			m.wlanChannelUtilization.WithLabelValues(channelLabel...).Set(ch.UtilizationPct)
+		}
 
 	case *pb.TestResult_Traceroute:
 		m.resultsTotal.WithLabelValues(append(base, "traceroute")...).Inc()

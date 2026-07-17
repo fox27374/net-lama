@@ -772,6 +772,23 @@ button.stat-tile:focus-visible {
 .band-add { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .band-add button { font-size: var(--text-sm); }
 
+/* WLAN sense: channel utilization bars */
+#wl-chan-bars { display: flex; flex-direction: column; gap: var(--space-2); }
+.chan-bar { display: flex; align-items: center; gap: var(--space-3); }
+.chan-label { width: 120px; flex-shrink: 0; font-size: var(--text-sm); }
+.chan-track {
+  flex: 1;
+  height: 16px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.chan-fill { display: block; height: 100%; border-radius: var(--radius-sm); }
+.chan-fill.healthy { background: var(--ok); }
+.chan-fill.degraded { background: var(--warn); }
+.chan-fill.failing { background: var(--bad); }
+.chan-val { width: 110px; flex-shrink: 0; text-align: right; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+
 /* Wireless page */
 .mono { font-family: var(--mono); font-size: 0.86em; }
 .demo-badge {

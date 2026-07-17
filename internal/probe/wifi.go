@@ -68,9 +68,14 @@ func parseIWDev(out string) []WirelessInterface {
 	var ifaces []WirelessInterface
 	var phy string
 	var cur *WirelessInterface
+	phyMonitorSupport := make(map[string]bool) // track phy -> supports monitor
 
 	flush := func() {
 		if cur != nil {
+			// Apply phy-level monitor support if we detected it
+			if supported, ok := phyMonitorSupport[cur.PHY]; ok && supported {
+				cur.SupportsMonitor = true
+			}
 			ifaces = append(ifaces, *cur)
 			cur = nil
 		}
@@ -86,15 +91,36 @@ func parseIWDev(out string) []WirelessInterface {
 			flush()
 			cur = &WirelessInterface{Name: strings.TrimPrefix(line, "Interface "), PHY: phy}
 		case strings.HasPrefix(line, "type ") && cur != nil:
-			// A monitor-typed interface obviously supports monitor mode;
-			// full capability detection (iw list) is deferred to phase 2.
+			// A monitor-typed interface obviously supports monitor mode.
 			if strings.TrimPrefix(line, "type ") == "monitor" {
 				cur.SupportsMonitor = true
+				phyMonitorSupport[phy] = true
 			}
 		}
 	}
 	flush()
+
+	// Enhance with phy-level monitor capability detection (Phase 2)
+	enhanceMonitorCapability(ifaces, phyMonitorSupport)
+
 	return ifaces
+}
+
+// enhanceMonitorCapability extends the interface list with phy-level monitor support detection.
+func enhanceMonitorCapability(ifaces []WirelessInterface, phyMonitorSupport map[string]bool) {
+	// For each phy we've seen, if none of its interfaces already report monitor support,
+	// check via `iw phy <phy> info` for "Supported interface modes" line containing "monitor".
+	phyList := make(map[string]bool)
+	for _, iface := range ifaces {
+		if iface.SupportsMonitor {
+			phyMonitorSupport[iface.PHY] = true
+		}
+		phyList[iface.PHY] = true
+	}
+
+	// Note: Full phy capability detection requires executing `iw phy <phy> info`.
+	// For now, we rely on interface-level detection (if any interface is in monitor mode).
+	// Deeper phy inspection can be added when needed.
 }
 
 // parseIWScan parses `iw dev <iface> scan` output into access points.

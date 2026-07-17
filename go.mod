@@ -3,6 +3,7 @@ module github.com/fox27374/net-lama
 go 1.25.5
 
 require (
+	github.com/gopacket/gopacket v1.7.0
 	github.com/gosnmp/gosnmp v1.43.2
 	github.com/m-lab/ndt7-client-go v0.10.1
 	github.com/prometheus-community/pro-bing v0.9.1

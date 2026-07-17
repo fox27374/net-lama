@@ -71,6 +71,7 @@ message TestSpec {
     TcpParams tcp = 8;
     WlanScanParams wlan_scan = 9;
     TracerouteParams traceroute = 10;
+    WlanSenseParams wlan_sense = 11;
   }
 }
 
@@ -106,6 +107,13 @@ message TcpParams {
 // The interface is per-agent (Config.wlan_interface), not part of the test.
 message WlanScanParams {}
 
+// WlanSenseParams configures a monitor-mode sweep. The interface is the
+// per-agent Config.wlan_interface (must be monitor-capable).
+message WlanSenseParams {
+  repeated uint32 channels = 1; // empty = all channels the phy supports
+  uint32 dwell_ms = 2;          // per-channel capture time, default 400
+}
+
 message TracerouteParams {
   string target = 1;        // host or IP
   string protocol = 2;      // "icmp" | "tcp" | "udp"
@@ -139,6 +147,7 @@ message TestResult {
     TcpResult tcp = 9;
     WlanScanResult wlan_scan = 10;
     TracerouteResult traceroute = 11;
+    WlanSenseResult wlan_sense = 12;
   }
 }
 
@@ -207,6 +216,36 @@ message AccessPoint {
   string band = 5;      // "2.4 GHz" / "5 GHz" / "6 GHz"
   double rssi_dbm = 6;
   string security = 7;  // "Open" / "WEP" / "WPA" / "WPA2" / "WPA3"
+}
+
+message WlanSenseResult {
+  string interface = 1;
+  bool demo = 2;                    // synthetic (NETLAMA_WLAN_SENSE_DEMO)
+  repeated WlanStation stations = 3;
+  repeated WlanChannelStat channels = 4;
+  uint32 sweep_ms = 5;              // total sweep duration
+}
+
+message WlanStation {
+  string mac = 1;
+  string bssid = 2;        // empty for probe-only stations
+  string ssid = 3;         // resolved from beacons when known
+  int32 rssi_dbm = 4;      // last seen
+  int32 rssi_avg_dbm = 5;
+  double rate_mbps = 6;    // last observed data rate (0 = unknown)
+  int32 mcs = 7;           // -1 = unknown/legacy
+  uint32 frames = 8;
+  bool probe_only = 9;     // only seen probing, not associated
+  int64 last_seen_ms = 10; // unix ms
+}
+
+message WlanChannelStat {
+  uint32 channel = 1;
+  uint32 freq_mhz = 2;
+  uint64 active_ms = 3;
+  uint64 busy_ms = 4;
+  double utilization_pct = 5; // busy/active*100, 0 if survey unavailable
+  uint32 frames = 6;
 }
 
 message TracerouteResult {

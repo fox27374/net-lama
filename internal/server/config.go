@@ -39,6 +39,11 @@ type SpeedtestParams struct {
 	Provider string `json:"provider"`
 }
 
+type WlanSenseParams struct {
+	Channels []uint32 `json:"channels"` // empty = all channels supported by the phy
+	DwellMs  uint32   `json:"dwellMs"`  // per-channel dwell time, default 400
+}
+
 type TracerouteParams struct {
 	Target       string `json:"target"`
 	Protocol     string `json:"protocol"`
@@ -168,6 +173,32 @@ func ValidateTestDef(t *store.TestDef) error {
 		}
 		t.Params = json.RawMessage(`{}`)
 
+	case "wlan_sense":
+		if t.IntervalSeconds < 30 {
+			return fmt.Errorf("wlan sense interval must be at least 30 seconds")
+		}
+		var p WlanSenseParams
+		if len(t.Params) > 0 {
+			if err := json.Unmarshal(t.Params, &p); err != nil {
+				return fmt.Errorf("invalid wlan_sense parameters: %w", err)
+			}
+		}
+		// Validate dwell_ms: 100-2000 ms, default 400
+		if p.DwellMs == 0 {
+			p.DwellMs = 400
+		}
+		if p.DwellMs < 100 || p.DwellMs > 2000 {
+			return fmt.Errorf("dwell_ms must be between 100 and 2000")
+		}
+		// Validate channels: 1-177 are valid channel numbers
+		for _, ch := range p.Channels {
+			if ch < 1 || ch > 177 {
+				return fmt.Errorf("channel %d out of range (1-177)", ch)
+			}
+		}
+		normalized, _ := json.Marshal(p)
+		t.Params = normalized
+
 	case "traceroute":
 		var p TracerouteParams
 		if err := json.Unmarshal(t.Params, &p); err != nil {
@@ -256,6 +287,17 @@ func TestSpec(t *store.TestDef) (*pb.TestSpec, error) {
 		}}
 	case "wlan_scan":
 		spec.Params = &pb.TestSpec_WlanScan{WlanScan: &pb.WlanScanParams{}}
+	case "wlan_sense":
+		var p WlanSenseParams
+		if len(t.Params) > 0 {
+			if err := json.Unmarshal(t.Params, &p); err != nil {
+				return nil, err
+			}
+		}
+		spec.Params = &pb.TestSpec_WlanSense{WlanSense: &pb.WlanSenseParams{
+			Channels: p.Channels,
+			DwellMs:  p.DwellMs,
+		}}
 	case "traceroute":
 		var p TracerouteParams
 		if err := json.Unmarshal(t.Params, &p); err != nil {
