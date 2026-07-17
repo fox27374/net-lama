@@ -40,6 +40,16 @@ type WlanChannelStat struct {
 	Frames        uint32  // frame count on this channel
 }
 
+// WlanNetwork is an access point heard from its beacons/probe responses.
+type WlanNetwork struct {
+	BSSID   string // access point MAC
+	SSID    string // network name, empty = hidden
+	Channel uint32 // channel it was heard on (stamped by the sweep)
+	FreqMHz uint32
+	RSSIdBm int32  // strongest beacon RSSI
+	Beacons uint32 // beacon/probe-response frames seen
+}
+
 // wlanSenseDemo reports whether to emit synthetic WLAN sense data.
 func wlanSenseDemo() bool {
 	return envEnabled("NETLAMA_WLAN_SENSE_DEMO")
@@ -50,10 +60,11 @@ func DemoModeWlanSense() bool {
 	return wlanSenseDemo()
 }
 
-// Sense performs a monitor-mode sweep, capturing stations and per-channel utilization.
-// Returns interface name, stations, channel stats, total sweep time, and error.
+// Sense performs a monitor-mode sweep, capturing stations, per-channel
+// utilization, and the networks (APs) heard from beacons. Returns interface
+// name, stations, channel stats, networks, total sweep time, and error.
 // Requires monitor-capable interface, NET_ADMIN + NET_RAW.
-func Sense(ctx context.Context, iface string, channels []uint32, dwellMs uint32) (string, []WlanStation, []WlanChannelStat, uint32, error) {
+func Sense(ctx context.Context, iface string, channels []uint32, dwellMs uint32) (string, []WlanStation, []WlanChannelStat, []WlanNetwork, uint32, error) {
 	if wlanSenseDemo() {
 		return demoSense(iface)
 	}
@@ -179,7 +190,27 @@ func isUnicastMAC(mac string) bool {
 	return first&0x01 == 0
 }
 
-func processFrame(data []byte, stations map[string]*WlanStation, ssidMap map[string]string, nowMs int64) {
+// recordNetwork upserts an AP heard from a beacon/probe-response, keeping the
+// strongest RSSI and a non-empty SSID once seen.
+func recordNetwork(networks map[string]*WlanNetwork, bssid, ssid string, rssi int32) {
+	if !isUnicastMAC(bssid) {
+		return // broadcast/multicast BSSID isn't a real AP
+	}
+	n := networks[bssid]
+	if n == nil {
+		n = &WlanNetwork{BSSID: bssid, RSSIdBm: rssi}
+		networks[bssid] = n
+	}
+	if ssid != "" {
+		n.SSID = ssid
+	}
+	if rssi > n.RSSIdBm {
+		n.RSSIdBm = rssi
+	}
+	n.Beacons++
+}
+
+func processFrame(data []byte, stations map[string]*WlanStation, networks map[string]*WlanNetwork, nowMs int64) {
 	// Parse RadioTap + Dot11
 	packet := gopacket.NewPacket(data, layers.LayerTypeRadioTap, gopacket.NoCopy)
 
@@ -225,26 +256,23 @@ func processFrame(data []byte, stations map[string]*WlanStation, ssidMap map[str
 	// Process based on frame type
 	switch dot11.Type {
 	case layers.Dot11TypeMgmtBeacon:
-		// Beacon frame - extract BSSID (Address3) and parse for SSID
+		// Beacon frame - Address3 is the BSSID; the fixed body (timestamp,
+		// interval, capability = 12 bytes) precedes the tagged SSID element.
 		bssid := dot11.Address3.String()
-		payload := dot11Layer.LayerPayload()
-		if len(payload) > 12 { // Skip beacon-specific fields (timestamp, interval, flags)
-			ssid := parseSSIDFromElements(payload[12:])
-			if ssid != "" {
-				ssidMap[bssid] = ssid
-			}
+		ssid := ""
+		if payload := dot11Layer.LayerPayload(); len(payload) > 12 {
+			ssid = parseSSIDFromElements(payload[12:])
 		}
+		recordNetwork(networks, bssid, ssid, rssi)
 
 	case layers.Dot11TypeMgmtProbeResp:
-		// Probe response - extract BSSID and parse for SSID
+		// Probe response - same fixed-body layout as a beacon.
 		bssid := dot11.Address3.String()
-		payload := dot11Layer.LayerPayload()
-		if len(payload) > 12 {
-			ssid := parseSSIDFromElements(payload[12:])
-			if ssid != "" {
-				ssidMap[bssid] = ssid
-			}
+		ssid := ""
+		if payload := dot11Layer.LayerPayload(); len(payload) > 12 {
+			ssid = parseSSIDFromElements(payload[12:])
 		}
+		recordNetwork(networks, bssid, ssid, rssi)
 
 	case layers.Dot11TypeMgmtProbeReq:
 		// Probe request - station is transmitter (Address2)

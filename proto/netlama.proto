@@ -224,6 +224,16 @@ message WlanSenseResult {
   repeated WlanStation stations = 3;
   repeated WlanChannelStat channels = 4;
   uint32 sweep_ms = 5;              // total sweep duration
+  repeated WlanNetwork networks = 6; // APs/SSIDs heard from beacons
+}
+
+message WlanNetwork {
+  string bssid = 1;
+  string ssid = 2;        // empty = hidden network
+  uint32 channel = 3;     // channel it was heard on
+  uint32 freq_mhz = 4;
+  int32 rssi_dbm = 5;     // strongest beacon RSSI
+  uint32 beacons = 6;     // beacon/probe-response frames seen
 }
 
 message WlanStation {

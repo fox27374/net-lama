@@ -1519,7 +1519,7 @@ async function renderWirelessAgent() {
       const selected = w.name === agent.wlanInterface ? "selected" : "";
       return `<option value="${esc(w.name)}" ${selected}>${esc(w.name)} (${esc(w.phy)})${mon}</option>`;
     }).join("");
-    $("#wl-iface-hint").textContent = "The interface used for WLAN scan tests on this agent.";
+    $("#wl-iface-hint").textContent = "The interface used for WLAN scan and monitor-mode sensing tests on this agent.";
   }
   $("#wl-iface-msg").textContent = "";
 
@@ -1585,6 +1585,40 @@ function renderSense(result) {
   }
   if (!channels.length) {
     bars.innerHTML = '<p class="muted">No channel data in the last sweep.</p>';
+  }
+
+  // Networks heard from beacons feed the shared "SSIDs seen" and "Access
+  // points nearby" boxes (a monitor sensor doesn't run a managed WLAN scan).
+  const networks = ((w && w.networks) || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
+  if (networks.length) {
+    const ssidBox = $("#wl-ssids");
+    ssidBox.innerHTML = "";
+    const bySsid = new Map();
+    for (const n of networks) {
+      const name = n.ssid || "— hidden —";
+      bySsid.set(name, (bySsid.get(name) || 0) + 1);
+    }
+    for (const [name, count] of [...bySsid.entries()].sort()) {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = count > 1 ? `${name} ×${count}` : name;
+      ssidBox.appendChild(chip);
+    }
+    const apBody = $("#wl-ap-table tbody");
+    apBody.innerHTML = "";
+    for (const n of networks) {
+      const band = n.freqMhz >= 5000 ? "5 GHz" : "2.4 GHz";
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td>${n.ssid ? esc(n.ssid) : '<span class="muted">— hidden —</span>'}</td>` +
+        `<td class="mono">${esc(n.bssid)}</td><td>${band}</td>` +
+        `<td class="num">${n.channel || "—"}</td>` +
+        `<td class="num"><span class="health ${signalClass(n.rssiDbm)}">${n.rssiDbm}</span></td>` +
+        `<td class="muted">from beacons</td>`;
+      apBody.appendChild(tr);
+    }
+    $("#wl-empty").classList.add("hidden");
+    $("#wl-scan-meta").textContent = `${networks.length} networks sensed`;
   }
 
   // Client stations, strongest signal first

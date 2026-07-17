@@ -8,7 +8,7 @@ import (
 // Synthetic WLAN monitor-mode sensing data for pipeline testing on hosts without
 // a monitor-capable radio, enabled with NETLAMA_WLAN_SENSE_DEMO.
 
-func demoSense(iface string) (string, []WlanStation, []WlanChannelStat, uint32, error) {
+func demoSense(iface string) (string, []WlanStation, []WlanChannelStat, []WlanNetwork, uint32, error) {
 	now := time.Now().UnixMilli()
 
 	// Realistic synthetic stations: ~8-15 across 2-4 BSSs
@@ -162,6 +162,15 @@ func demoSense(iface string) (string, []WlanStation, []WlanChannelStat, uint32, 
 		}
 	}
 
+	// Synthetic networks (APs) matching the stations' BSSIDs.
+	networks := []WlanNetwork{
+		{BSSID: "a0:f8:49:74:8b:20", SSID: "corp-wifi", Channel: 6, FreqMHz: 2437, RSSIdBm: int32(-44 - rand.Intn(8)), Beacons: uint32(30 + rand.Intn(20))},
+		{BSSID: "a0:f8:49:74:8b:22", SSID: "corp-guest", Channel: 6, FreqMHz: 2437, RSSIdBm: int32(-48 - rand.Intn(8)), Beacons: uint32(28 + rand.Intn(20))},
+		{BSSID: "c0:25:5c:ec:bb:40", SSID: "corp-wifi", Channel: 36, FreqMHz: 5180, RSSIdBm: int32(-50 - rand.Intn(10)), Beacons: uint32(25 + rand.Intn(20))},
+		{BSSID: "2c:3a:fd:8b:1e:56", SSID: "IoT-Net", Channel: 11, FreqMHz: 2462, RSSIdBm: int32(-68 - rand.Intn(10)), Beacons: uint32(20 + rand.Intn(15))},
+		{BSSID: "e8:9f:80:11:22:33", SSID: "", Channel: 1, FreqMHz: 2412, RSSIdBm: int32(-72 - rand.Intn(10)), Beacons: uint32(10 + rand.Intn(10))},
+	}
+
 	sweepMs := uint32(400 * len(channels)) // dwell per channel + small overhead
-	return iface, stations, channels, sweepMs, nil
+	return iface, stations, channels, networks, sweepMs, nil
 }

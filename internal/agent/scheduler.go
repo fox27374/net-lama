@@ -356,7 +356,7 @@ func (a *Agent) runWlanSense(ctx context.Context, spec *pb.TestSpec, params *pb.
 		dwell = 400
 	}
 
-	usedIface, stations, channelStats, sweepMs, err := probe.Sense(ctx, iface, channels, dwell)
+	usedIface, stations, channelStats, networks, sweepMs, err := probe.Sense(ctx, iface, channels, dwell)
 	if err != nil {
 		if ctx.Err() != nil {
 			return
@@ -397,14 +397,27 @@ func (a *Agent) runWlanSense(ctx context.Context, spec *pb.TestSpec, params *pb.
 		})
 	}
 
+	pbNetworks := make([]*pb.WlanNetwork, 0, len(networks))
+	for _, n := range networks {
+		pbNetworks = append(pbNetworks, &pb.WlanNetwork{
+			Bssid:   n.BSSID,
+			Ssid:    n.SSID,
+			Channel: n.Channel,
+			FreqMhz: n.FreqMHz,
+			RssiDbm: n.RSSIdBm,
+			Beacons: n.Beacons,
+		})
+	}
+
 	a.Logger.Info("WLAN sense done",
 		slog.String("test", spec.Name), slog.String("interface", usedIface),
 		slog.Int("stations", len(pbStations)), slog.Int("channels", len(pbChannels)),
-		slog.Uint64("sweepMs", uint64(sweepMs)))
+		slog.Int("networks", len(pbNetworks)), slog.Uint64("sweepMs", uint64(sweepMs)))
 	result.Result = &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{
 		Interface: usedIface,
 		Stations:  pbStations,
 		Channels:  pbChannels,
+		Networks:  pbNetworks,
 		SweepMs:   sweepMs,
 		Demo:      probe.DemoModeWlanSense(),
 	}}

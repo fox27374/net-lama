@@ -620,6 +620,21 @@ What has been done so far, in chronological order. Planned work lives in
   primary metric), and Prometheus. Real capture verified to build for the Pi;
   live monitor-mode capture is validated during deployment on ataltrp01.
 
+## 2026-07-17 — WLAN sense: discovered networks (SSIDs/APs from beacons)
+
+- **`wlan_sense` now reports the networks it hears**: beacons/probe-responses
+  captured during the sweep are aggregated into a `networks` list (BSSID, SSID,
+  channel, freq, strongest RSSI, beacon count) on `WlanSenseResult` (new
+  `WlanNetwork` proto message, field 6). Previously the beacon SSIDs were only
+  used to label stations and then discarded, so the Wireless page's "SSIDs seen"
+  and "Access points nearby" boxes (fed only by the managed-mode `wlan_scan`)
+  stayed empty on a monitor-only sensor. The Wireless UI now fills both boxes
+  from the sense networks ("from beacons"), and associated client stations show
+  their resolved SSID (only genuine probe-only stations read "probing…").
+- Capture change is in the cross-platform `processFrame`/`recordNetwork`
+  (unit-tested: RSSI-max, beacon count, hidden SSID, broadcast-BSSID skip);
+  `senseImpl` stamps each network with the channel it was strongest on.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

@@ -12,7 +12,7 @@ func TestWlanSenseDemoMode(t *testing.T) {
 	defer os.Unsetenv("NETLAMA_WLAN_SENSE_DEMO")
 
 	ctx := context.Background()
-	iface, stations, channels, sweepMs, err := Sense(ctx, "wlan0", nil, 0)
+	iface, stations, channels, networks, sweepMs, err := Sense(ctx, "wlan0", nil, 0)
 
 	if err != nil {
 		t.Fatalf("Sense failed: %v", err)
@@ -28,6 +28,10 @@ func TestWlanSenseDemoMode(t *testing.T) {
 
 	if len(channels) == 0 {
 		t.Error("expected channels in demo mode, got 0")
+	}
+
+	if len(networks) == 0 {
+		t.Error("expected networks in demo mode, got 0")
 	}
 
 	if sweepMs == 0 {
@@ -204,7 +208,7 @@ func dot11(fc0, fcFlags byte, a1, a2, a3 []byte, body ...byte) []byte {
 
 func TestProcessFrameDataToDS(t *testing.T) {
 	stations := map[string]*WlanStation{}
-	ssid := map[string]string{}
+	ssid := map[string]*WlanNetwork{}
 	// ToDS (0x01): STA transmits to AP. STA=Address2, BSSID=Address1.
 	frame := append(rtHeader(0x00, 48, -57), dot11(0x08, 0x01, mac(0xAA), mac(0xBB), mac(0xAA))...)
 	processFrame(frame, stations, ssid, 1000)
@@ -236,28 +240,32 @@ func TestProcessFrameDataFromDS(t *testing.T) {
 	stations := map[string]*WlanStation{}
 	// FromDS (0x02): AP transmits to STA. STA=Address1, BSSID=Address2.
 	frame := append(rtHeader(0x00, 0, -60), dot11(0x08, 0x02, mac(0x11), mac(0x22), mac(0x22))...)
-	processFrame(frame, stations, map[string]string{}, 1000)
+	processFrame(frame, stations, map[string]*WlanNetwork{}, 1000)
 	if _, ok := stations["02:00:00:00:00:11"]; !ok {
 		t.Fatalf("expected STA at Address1 (02:00:00:00:00:11), got %v", stations)
 	}
 }
 
 func TestProcessFrameBeaconSSID(t *testing.T) {
-	ssid := map[string]string{}
+	networks := map[string]*WlanNetwork{}
 	// Beacon body: 8 timestamp + 2 interval + 2 capability, then SSID IE.
 	body := make([]byte, 12)
 	body = append(body, 0x00, 0x04, 'c', 'o', 'r', 'p') // IE tag 0, len 4, "corp"
 	frame := append(rtHeader(0x00, 0, -40), dot11(0x80, 0x00, mac(0xFF), mac(0x01), mac(0x01), body...)...)
-	processFrame(frame, map[string]*WlanStation{}, ssid, 1000)
-	if ssid["02:00:00:00:00:01"] != "corp" {
-		t.Fatalf("ssidMap = %v, want BSSID -> corp", ssid)
+	processFrame(frame, map[string]*WlanStation{}, networks, 1000)
+	n := networks["02:00:00:00:00:01"]
+	if n == nil || n.SSID != "corp" {
+		t.Fatalf("networks = %v, want BSSID 02:00:00:00:00:01 -> corp", networks)
+	}
+	if n.Beacons != 1 {
+		t.Errorf("beacons = %d, want 1", n.Beacons)
 	}
 }
 
 func TestProcessFrameProbeRequest(t *testing.T) {
 	stations := map[string]*WlanStation{}
 	frame := append(rtHeader(0x00, 0, -70), dot11(0x40, 0x00, mac(0xFF), mac(0x33), mac(0xFF))...)
-	processFrame(frame, stations, map[string]string{}, 1000)
+	processFrame(frame, stations, map[string]*WlanNetwork{}, 1000)
 	sta := stations["02:00:00:00:00:33"]
 	if sta == nil || !sta.ProbeOnly {
 		t.Fatalf("expected probe-only station 02:00:00:00:00:33, got %v", stations)
@@ -268,7 +276,7 @@ func TestProcessFrameBadFCSSkipped(t *testing.T) {
 	stations := map[string]*WlanStation{}
 	// Flags byte 0x40 = BadFCS: the frame must be dropped entirely.
 	frame := append(rtHeader(0x40, 48, -50), dot11(0x08, 0x01, mac(0xAA), mac(0xBB), mac(0xAA))...)
-	processFrame(frame, stations, map[string]string{}, 1000)
+	processFrame(frame, stations, map[string]*WlanNetwork{}, 1000)
 	if len(stations) != 0 {
 		t.Fatalf("BadFCS frame must be skipped, got stations %v", stations)
 	}
@@ -297,8 +305,40 @@ func TestProcessFrameDropsBroadcastStation(t *testing.T) {
 	// broadcast address — must NOT be recorded as a station.
 	bcast := []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 	frame := append(rtHeader(0x00, 0, -62), dot11(0x08, 0x02, bcast, mac(0xAA), mac(0xAA))...)
-	processFrame(frame, stations, map[string]string{}, 1000)
+	processFrame(frame, stations, map[string]*WlanNetwork{}, 1000)
 	if len(stations) != 0 {
 		t.Fatalf("broadcast destination must not be a station, got %v", stations)
+	}
+}
+
+func TestProcessFrameNetworkRSSIandBeacons(t *testing.T) {
+	networks := map[string]*WlanNetwork{}
+	body := make([]byte, 12)
+	body = append(body, 0x00, 0x05, 'a', 't', 'a', 'l', 't') // SSID "atalt"
+	// Two beacons from the same BSSID at different RSSI; keep the strongest.
+	weak := append(rtHeader(0x00, 0, -70), dot11(0x80, 0x00, mac(0xFF), mac(0x0A), mac(0x0A), body...)...)
+	strong := append(rtHeader(0x00, 0, -42), dot11(0x80, 0x00, mac(0xFF), mac(0x0A), mac(0x0A), body...)...)
+	processFrame(weak, map[string]*WlanStation{}, networks, 1000)
+	processFrame(strong, map[string]*WlanStation{}, networks, 1001)
+	n := networks["02:00:00:00:00:0a"]
+	if n == nil {
+		t.Fatal("expected network 02:00:00:00:00:0a")
+	}
+	if n.SSID != "atalt" {
+		t.Errorf("ssid = %q, want atalt", n.SSID)
+	}
+	if n.RSSIdBm != -42 {
+		t.Errorf("rssi = %d, want -42 (strongest)", n.RSSIdBm)
+	}
+	if n.Beacons != 2 {
+		t.Errorf("beacons = %d, want 2", n.Beacons)
+	}
+}
+
+func TestRecordNetworkSkipsBroadcastBSSID(t *testing.T) {
+	networks := map[string]*WlanNetwork{}
+	recordNetwork(networks, "ff:ff:ff:ff:ff:ff", "x", -50)
+	if len(networks) != 0 {
+		t.Fatalf("broadcast BSSID must be skipped, got %v", networks)
 	}
 }

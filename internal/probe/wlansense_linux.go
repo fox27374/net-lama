@@ -16,7 +16,7 @@ import (
 
 // senseImpl performs a monitor-mode sweep on Linux using afpacket + gopacket
 // for frame capture and parsing (stations, rates, RSSI) via RadioTap + Dot11.
-func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uint32) (string, []WlanStation, []WlanChannelStat, uint32, error) {
+func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uint32) (string, []WlanStation, []WlanChannelStat, []WlanNetwork, uint32, error) {
 	if dwellMs == 0 {
 		dwellMs = 400
 	}
@@ -24,13 +24,13 @@ func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uin
 	// Get the interface's current type so we can restore it
 	originalType, err := getInterfaceType(ctx, iface)
 	if err != nil {
-		return iface, nil, nil, 0, fmt.Errorf("failed to detect interface type: %w", err)
+		return iface, nil, nil, nil, 0, fmt.Errorf("failed to detect interface type: %w", err)
 	}
 
 	// Set to monitor mode
 	if originalType != "monitor" {
 		if err := setInterfaceType(ctx, iface, "monitor"); err != nil {
-			return iface, nil, nil, 0, fmt.Errorf("failed to set monitor mode: %w", err)
+			return iface, nil, nil, nil, 0, fmt.Errorf("failed to set monitor mode: %w", err)
 		}
 	}
 
@@ -53,7 +53,7 @@ func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uin
 
 	startTime := time.Now()
 	stations := make(map[string]*WlanStation) // key: MAC address
-	ssidMap := make(map[string]string)         // BSSID -> SSID mapping
+	networks := make(map[string]*WlanNetwork)  // BSSID -> AP heard from beacons
 	channelStats := make(map[uint32]*WlanChannelStat)
 
 	// Initialize channel stats
@@ -71,7 +71,7 @@ func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uin
 	for _, ch := range channels {
 		select {
 		case <-ctx.Done():
-			return iface, nil, nil, 0, ctx.Err()
+			return iface, nil, nil, nil, 0, ctx.Err()
 		default:
 		}
 
@@ -82,15 +82,31 @@ func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uin
 		}
 
 		// Capture for dwell_ms
-		capturedStations, capturedFrames, capturedSSIDs, err := captureOnChannel(ctx, iface, time.Duration(dwellMs)*time.Millisecond)
+		capturedStations, capturedFrames, capturedNetworks, err := captureOnChannel(ctx, iface, time.Duration(dwellMs)*time.Millisecond)
 		if err != nil {
 			slog.Warn("Failed to capture on channel", "channel", ch, "error", err)
 			continue
 		}
 
-		// Merge SSID map
-		for bssid, ssid := range capturedSSIDs {
-			ssidMap[bssid] = ssid
+		// Merge networks, stamping the channel they were heard on.
+		_, chFreq := channelToFreq(ch)
+		for bssid, n := range capturedNetworks {
+			existing := networks[bssid]
+			if existing == nil {
+				n.Channel = ch
+				n.FreqMHz = chFreq
+				networks[bssid] = n
+				continue
+			}
+			existing.Beacons += n.Beacons
+			if n.SSID != "" {
+				existing.SSID = n.SSID
+			}
+			if n.RSSIdBm > existing.RSSIdBm {
+				existing.RSSIdBm = n.RSSIdBm
+				existing.Channel = ch // strongest beacon wins the channel
+				existing.FreqMHz = chFreq
+			}
 		}
 
 		// Merge stations
@@ -131,8 +147,8 @@ func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uin
 	// Resolve SSIDs for stations
 	for mac, station := range stations {
 		if station.BSSID != "" {
-			if ssid, ok := ssidMap[station.BSSID]; ok {
-				station.SSID = ssid
+			if n, ok := networks[station.BSSID]; ok {
+				station.SSID = n.SSID
 			}
 		}
 		stations[mac] = station
@@ -165,14 +181,22 @@ func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uin
 		}
 	}
 
+	networkList := make([]WlanNetwork, 0, len(networks))
+	for _, n := range networks {
+		networkList = append(networkList, *n)
+		if len(networkList) >= 256 {
+			break
+		}
+	}
+
 	sweepTime := uint32(time.Since(startTime).Milliseconds())
-	return iface, stationList, channelList, sweepTime, nil
+	return iface, stationList, channelList, networkList, sweepTime, nil
 }
 
 // captureOnChannel captures frames on the current channel for a given duration
 // using afpacket. Returns a map of MAC -> station data, total frame count,
 // and BSSID -> SSID mappings.
-func captureOnChannel(ctx context.Context, iface string, duration time.Duration) (map[string]*WlanStation, uint32, map[string]string, error) {
+func captureOnChannel(ctx context.Context, iface string, duration time.Duration) (map[string]*WlanStation, uint32, map[string]*WlanNetwork, error) {
 	// Open packet handle with AF_PACKET socket (zero-copy)
 	handle, err := afpacket.NewTPacket(
 		afpacket.OptInterface(iface),
@@ -186,7 +210,7 @@ func captureOnChannel(ctx context.Context, iface string, duration time.Duration)
 	defer handle.Close()
 
 	stations := make(map[string]*WlanStation)
-	ssidMap := make(map[string]string) // BSSID -> SSID
+	networks := make(map[string]*WlanNetwork) // BSSID -> AP
 	frameCount := uint32(0)
 	now := time.Now().UnixMilli()
 
@@ -197,7 +221,7 @@ func captureOnChannel(ctx context.Context, iface string, duration time.Duration)
 	for {
 		select {
 		case <-timeoutCtx.Done():
-			return stations, frameCount, ssidMap, nil
+			return stations, frameCount, networks, nil
 		default:
 		}
 
@@ -210,7 +234,7 @@ func captureOnChannel(ctx context.Context, iface string, duration time.Duration)
 				if err != nil {
 					select {
 					case <-timeoutCtx.Done():
-						return stations, frameCount, ssidMap, nil
+						return stations, frameCount, networks, nil
 					default:
 						continue
 					}
@@ -218,7 +242,7 @@ func captureOnChannel(ctx context.Context, iface string, duration time.Duration)
 			} else {
 				select {
 				case <-timeoutCtx.Done():
-					return stations, frameCount, ssidMap, nil
+					return stations, frameCount, networks, nil
 				default:
 					continue
 				}
@@ -228,7 +252,7 @@ func captureOnChannel(ctx context.Context, iface string, duration time.Duration)
 		frameCount++
 
 		// Process frame using the cross-platform testable function
-		processFrame(data, stations, ssidMap, now)
+		processFrame(data, stations, networks, now)
 	}
 }
 
