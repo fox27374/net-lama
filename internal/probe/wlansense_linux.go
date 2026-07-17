@@ -306,18 +306,9 @@ func getPhyChannels(ctx context.Context, iface string) ([]uint32, error) {
 		return nil, err
 	}
 
-	phy := ""
-	scanner := bufio.NewScanner(strings.NewReader(string(out)))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "phy#") {
-			phy = "phy" + strings.TrimPrefix(line, "phy#")
-			break
-		}
-	}
-
+	phy := parsePhyName(string(out))
 	if phy == "" {
-		return nil, fmt.Errorf("could not determine phy")
+		return nil, fmt.Errorf("could not determine phy for %s", iface)
 	}
 
 	// Get channels for this phy

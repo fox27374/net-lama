@@ -372,3 +372,24 @@ Band 2:
 		t.Errorf("expected 2.4 GHz channels first, got %v", got)
 	}
 }
+
+func TestParsePhyName(t *testing.T) {
+	// `iw dev <iface> info` format (what getPhyChannels feeds it)
+	devInfo := `Interface wlan1
+	ifindex 5
+	wdev 0x100000001
+	addr 96:fe:ac:54:10:ac
+	wiphy 1
+	type managed`
+	if got := parsePhyName(devInfo); got != "phy1" {
+		t.Errorf("wiphy form: got %q, want phy1", got)
+	}
+	// bare `iw dev` format
+	bare := "phy#0\n\tInterface wlan0"
+	if got := parsePhyName(bare); got != "phy0" {
+		t.Errorf("phy# form: got %q, want phy0", got)
+	}
+	if got := parsePhyName("no phy here"); got != "" {
+		t.Errorf("no match: got %q, want empty", got)
+	}
+}

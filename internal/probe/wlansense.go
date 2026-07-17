@@ -72,6 +72,22 @@ func Sense(ctx context.Context, iface string, channels []uint32, dwellMs uint32)
 	return senseImpl(ctx, iface, channels, dwellMs)
 }
 
+// parsePhyName finds the wiphy a interface belongs to. `iw dev <iface> info`
+// reports "wiphy N" (→ "phyN"); bare `iw dev` uses "phy#N". Handle both.
+func parsePhyName(iwDevInfo string) string {
+	scanner := bufio.NewScanner(strings.NewReader(iwDevInfo))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if v, ok := strings.CutPrefix(line, "wiphy "); ok {
+			return "phy" + strings.TrimSpace(v)
+		}
+		if v, ok := strings.CutPrefix(line, "phy#"); ok {
+			return "phy" + strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
 // parseIWPhyChannels extracts available channels from `iw phy <phy> channels` output.
 // Returns sorted list (2.4 GHz first, then 5 GHz) and omits disabled/radar-only channels.
 func parseIWPhyChannels(out string) []uint32 {
