@@ -1530,12 +1530,145 @@ async function renderWirelessAgent() {
   const results = await api("GET", "/api/v1/results?" + params.toString());
   renderScan(results[0]);
 
-  // Latest monitor-mode sense result for this agent (separate test type)
-  const sparams = new URLSearchParams({ agentId: agent.id, type: "wlan_sense", limit: "1" });
+  // Latest monitor-mode sense results. The one-off discovery sweep shares the
+  // wlan_sense type, so fetch a few and split them: the recurring panel shows
+  // the newest non-discovery sweep, the discovery panel the reserved one.
+  const sparams = new URLSearchParams({ agentId: agent.id, type: "wlan_sense", limit: "10" });
   if (tid) sparams.set("tenantId", tid.split("=")[1]);
   const sresults = await api("GET", "/api/v1/results?" + sparams.toString());
-  renderSense(sresults[0]);
+  renderSense(sresults.find((r) => r.testId !== WLAN_DISCOVERY_TEST_ID));
+
+  const dparams = new URLSearchParams({ agentId: agent.id, type: "wlan_sense", testId: WLAN_DISCOVERY_TEST_ID, limit: "1" });
+  if (tid) dparams.set("tenantId", tid.split("=")[1]);
+  const dresults = await api("GET", "/api/v1/results?" + dparams.toString());
+  renderDiscovery(dresults[0], agent);
 }
+
+// Sentinel test id for the automatic full-spectrum discovery sweep
+// (mirrors proto.WlanDiscoveryTestID on the server side).
+const WLAN_DISCOVERY_TEST_ID = "__wlan_discovery__";
+
+// discoveredChannels holds the "interesting" channels from the last rendered
+// discovery result — the ones that had access points (or, failing that, any
+// captured frames). The apply button fills the recurring test with these.
+let discoveredChannels = [];
+let discoveryAgent = null;
+
+function renderDiscovery(result, agent) {
+  const box = $("#wl-discovery");
+  const w = result && result.payload && result.payload.wlanSense;
+  box.classList.toggle("hidden", !result);
+  if (!result) return;
+  discoveryAgent = agent;
+
+  const channels = (w && w.channels) || [];
+  const networks = (w && w.networks) || [];
+  const stations = (w && w.stations) || [];
+
+  // Group networks by channel so each row can show its APs / SSIDs.
+  const byChannel = new Map();
+  for (const n of networks) {
+    const c = n.channel || 0;
+    if (!byChannel.has(c)) byChannel.set(c, []);
+    byChannel.get(c).push(n);
+  }
+
+  // Active channels: those with an AP; fall back to channels with frames.
+  const active = channels
+    .filter((c) => byChannel.has(c.channel) || (c.frames || 0) > 0)
+    .map((c) => c.channel);
+  discoveredChannels = [...new Set([...byChannel.keys(), ...active].filter((c) => c > 0))].sort((a, b) => a - b);
+
+  const meta = $("#wl-disc-meta");
+  meta.innerHTML = "";
+  if (w && w.demo) {
+    const badge = document.createElement("span");
+    badge.className = "demo-badge";
+    badge.textContent = "DEMO DATA";
+    meta.appendChild(badge);
+  }
+  if (result.error) {
+    meta.appendChild(document.createTextNode("Discovery failed: " + result.error));
+  } else {
+    meta.appendChild(document.createTextNode(
+      `${channels.length} channels swept · ${networks.length} APs · ${stations.length} stations · ${((w && w.sweepMs) || 0) / 1000}s · ${new Date(result.time).toLocaleString()}`));
+  }
+  $("#wl-disc-apply").disabled = discoveredChannels.length === 0;
+
+  // All SSIDs seen across the whole spectrum.
+  const ssidBox = $("#wl-disc-ssids");
+  ssidBox.innerHTML = "";
+  const bySsid = new Map();
+  for (const n of networks) {
+    const name = n.ssid || "— hidden —";
+    bySsid.set(name, (bySsid.get(name) || 0) + 1);
+  }
+  for (const [name, count] of [...bySsid.entries()].sort()) {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = count > 1 ? `${name} ×${count}` : name;
+    ssidBox.appendChild(chip);
+  }
+  if (!bySsid.size) ssidBox.innerHTML = '<span class="muted">No SSIDs seen.</span>';
+
+  // One row per channel that had activity, strongest/ busiest context first.
+  const tbody = $("#wl-disc-table tbody");
+  tbody.innerHTML = "";
+  const rows = channels
+    .filter((c) => byChannel.has(c.channel) || (c.frames || 0) > 0 || (c.utilizationPct || 0) > 0)
+    .sort((a, b) => a.channel - b.channel);
+  for (const c of rows) {
+    const nets = byChannel.get(c.channel) || [];
+    const band = c.freqMhz >= 5000 ? "5 GHz" : "2.4 GHz";
+    const pct = Math.max(0, Math.min(100, c.utilizationPct || 0));
+    const ssids = [...new Set(nets.map((n) => n.ssid || "— hidden —"))].map(esc).join(", ") || '<span class="muted">—</span>';
+    const isActive = discoveredChannels.includes(c.channel);
+    const tr = document.createElement("tr");
+    if (isActive) tr.className = "row-active";
+    tr.innerHTML =
+      `<td class="num">${c.channel}</td><td>${band}</td>` +
+      `<td class="num">${nets.length || "—"}</td>` +
+      `<td class="num">${pct.toFixed(0)}%</td>` +
+      `<td class="num">${c.frames || 0}</td>` +
+      `<td>${ssids}</td>`;
+    tbody.appendChild(tr);
+  }
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="muted">No activity found on any channel.</td></tr>';
+  }
+}
+
+// Apply the discovered active channels to the site's recurring wlan_sense
+// test, opening the test editor prefilled so the operator can review and save.
+async function applyDiscoveredChannels() {
+  if (!discoveryAgent || !discoveredChannels.length) return;
+  // Refresh tests + sites so we can locate the recurring sense test.
+  [tests, sites] = await Promise.all([
+    api("GET", "/api/v1/tests" + tenantParam()),
+    api("GET", "/api/v1/sites" + tenantParam()),
+  ]);
+  const site = sites.find((s) => s.id === discoveryAgent.siteId);
+  const wsTest =
+    tests.find((t) => t.type === "wlan_sense" && site && (site.testIds || []).includes(t.id)) ||
+    tests.find((t) => t.type === "wlan_sense");
+
+  if (wsTest) {
+    const clone = JSON.parse(JSON.stringify(wsTest));
+    clone.params = clone.params || {};
+    clone.params.channels = discoveredChannels;
+    openTestDialog(clone);
+  } else {
+    // No recurring sense test yet — open a fresh one prefilled.
+    openTestDialog(null);
+    $("#t-type").value = "wlan_sense";
+    $("#t-name").value = "WLAN sense";
+    updateTestParamFields();
+    initThresholdBands("wlan_sense", {});
+    $("#t-ws-channels").value = discoveredChannels.join(",");
+  }
+}
+
+$("#wl-disc-apply").addEventListener("click", applyDiscoveredChannels);
 
 // signalClass buckets an RSSI (dBm) into a health color: >=-60 ok,
 // -75..-60 warn, <-75 bad.

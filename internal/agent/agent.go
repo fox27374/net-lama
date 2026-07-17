@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -87,6 +88,11 @@ type Agent struct {
 
 	// statsCollector gathers CPU, memory, and disk statistics.
 	statsCollector *probe.StatsCollector
+
+	// wlanMu serializes access to the monitor interface so a one-off
+	// discovery sweep and the recurring wlan_sense test never fight over
+	// the radio (both retune it channel by channel).
+	wlanMu sync.Mutex
 }
 
 // Run connects to the server and keeps the control stream alive,

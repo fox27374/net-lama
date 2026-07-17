@@ -45,10 +45,15 @@ func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-c
 
 		case cmd := <-cmdCh:
 			if cmd.Type == pb.Command_RUN_TEST {
-				if spec, ok := specs[cmd.TestId]; ok {
-					go a.runTest(ctx, spec, wlanIface, results)
-				} else {
-					a.Logger.Warn("Command for unknown test", slog.String("testId", cmd.TestId))
+				switch {
+				case cmd.TestId == pb.WlanDiscoveryTestID:
+					go a.runWlanDiscovery(ctx, wlanIface, results)
+				default:
+					if spec, ok := specs[cmd.TestId]; ok {
+						go a.runTest(ctx, spec, wlanIface, results)
+					} else {
+						a.Logger.Warn("Command for unknown test", slog.String("testId", cmd.TestId))
+					}
 				}
 			}
 
@@ -356,7 +361,10 @@ func (a *Agent) runWlanSense(ctx context.Context, spec *pb.TestSpec, params *pb.
 		dwell = 400
 	}
 
+	// Serialize with any concurrent discovery sweep on the same radio.
+	a.wlanMu.Lock()
 	usedIface, stations, channelStats, networks, sweepMs, err := probe.Sense(ctx, iface, channels, dwell)
+	a.wlanMu.Unlock()
 	if err != nil {
 		if ctx.Err() != nil {
 			return
@@ -369,31 +377,97 @@ func (a *Agent) runWlanSense(ctx context.Context, spec *pb.TestSpec, params *pb.
 		return
 	}
 
+	a.Logger.Info("WLAN sense done",
+		slog.String("test", spec.Name), slog.String("interface", usedIface),
+		slog.Int("stations", len(stations)), slog.Int("channels", len(channelStats)),
+		slog.Int("networks", len(networks)), slog.Uint64("sweepMs", uint64(sweepMs)))
+	result.Result = wlanSenseResult(usedIface, stations, channelStats, networks, sweepMs)
+	sendResult(ctx, results, result)
+}
+
+// runWlanDiscovery performs a one-off full-spectrum sweep (all channels the
+// phy supports) and reports it under the reserved discovery test id. The
+// server triggers this once, on a monitor sensor's first connect, so the UI
+// can show the complete channel + SSID map before the operator narrows the
+// recurring test to the interesting channels.
+func (a *Agent) runWlanDiscovery(ctx context.Context, wlanIface string, results chan<- *pb.TestResult) {
+	iface := wlanIface
+	if iface == "" {
+		if detected := probe.WirelessInterfaces(ctx); len(detected) > 0 {
+			for _, d := range detected {
+				if d.SupportsMonitor {
+					iface = d.Name
+					break
+				}
+			}
+		}
+	}
+
+	result := &pb.TestResult{
+		Time:     timestamppb.Now(),
+		TestId:   pb.WlanDiscoveryTestID,
+		TestName: pb.WlanDiscoveryTestName,
+	}
+	if iface == "" && !probe.DemoModeWlanSense() {
+		a.Logger.Warn("WLAN discovery skipped: no monitor-capable interface")
+		result.Error = "no monitor-capable wireless interface available"
+		result.Result = &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{}}
+		sendResult(ctx, results, result)
+		return
+	}
+
+	a.Logger.Info("WLAN discovery starting (all channels)", slog.String("interface", iface))
+	// nil channels => probe.Sense enumerates every channel the phy supports.
+	a.wlanMu.Lock()
+	usedIface, stations, channelStats, networks, sweepMs, err := probe.Sense(ctx, iface, nil, pb.WlanDiscoveryDwellMs)
+	a.wlanMu.Unlock()
+	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		a.Logger.Error("WLAN discovery failed", slog.String("interface", iface), slog.Any("error", err))
+		result.Error = err.Error()
+		result.Result = &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{Interface: iface}}
+		sendResult(ctx, results, result)
+		return
+	}
+
+	a.Logger.Info("WLAN discovery done",
+		slog.String("interface", usedIface),
+		slog.Int("stations", len(stations)), slog.Int("channels", len(channelStats)),
+		slog.Int("networks", len(networks)), slog.Uint64("sweepMs", uint64(sweepMs)))
+	result.Result = wlanSenseResult(usedIface, stations, channelStats, networks, sweepMs)
+	sendResult(ctx, results, result)
+}
+
+// wlanSenseResult converts probe results into the protobuf WlanSenseResult
+// payload shared by the recurring wlan_sense test and the discovery sweep.
+func wlanSenseResult(iface string, stations []probe.WlanStation, channelStats []probe.WlanChannelStat, networks []probe.WlanNetwork, sweepMs uint32) *pb.TestResult_WlanSense {
 	pbStations := make([]*pb.WlanStation, 0, len(stations))
 	for _, st := range stations {
 		pbStations = append(pbStations, &pb.WlanStation{
-			Mac:         st.MAC,
-			Bssid:       st.BSSID,
-			Ssid:        st.SSID,
-			RssiDbm:     st.RSSIdBm,
-			RssiAvgDbm:  st.RSSIAvgdBm,
-			RateMbps:    st.RateMbps,
-			Mcs:         st.MCS,
-			Frames:      st.Frames,
-			ProbeOnly:   st.ProbeOnly,
-			LastSeenMs:  st.LastSeenMs,
+			Mac:        st.MAC,
+			Bssid:      st.BSSID,
+			Ssid:       st.SSID,
+			RssiDbm:    st.RSSIdBm,
+			RssiAvgDbm: st.RSSIAvgdBm,
+			RateMbps:   st.RateMbps,
+			Mcs:        st.MCS,
+			Frames:     st.Frames,
+			ProbeOnly:  st.ProbeOnly,
+			LastSeenMs: st.LastSeenMs,
 		})
 	}
 
 	pbChannels := make([]*pb.WlanChannelStat, 0, len(channelStats))
 	for _, ch := range channelStats {
 		pbChannels = append(pbChannels, &pb.WlanChannelStat{
-			Channel:         ch.Channel,
-			FreqMhz:         ch.FreqMHz,
-			ActiveMs:        ch.ActiveMs,
-			BusyMs:          ch.BusyMs,
-			UtilizationPct:  ch.UtilizationPct,
-			Frames:          ch.Frames,
+			Channel:        ch.Channel,
+			FreqMhz:        ch.FreqMHz,
+			ActiveMs:       ch.ActiveMs,
+			BusyMs:         ch.BusyMs,
+			UtilizationPct: ch.UtilizationPct,
+			Frames:         ch.Frames,
 		})
 	}
 
@@ -409,19 +483,14 @@ func (a *Agent) runWlanSense(ctx context.Context, spec *pb.TestSpec, params *pb.
 		})
 	}
 
-	a.Logger.Info("WLAN sense done",
-		slog.String("test", spec.Name), slog.String("interface", usedIface),
-		slog.Int("stations", len(pbStations)), slog.Int("channels", len(pbChannels)),
-		slog.Int("networks", len(pbNetworks)), slog.Uint64("sweepMs", uint64(sweepMs)))
-	result.Result = &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{
-		Interface: usedIface,
+	return &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{
+		Interface: iface,
 		Stations:  pbStations,
 		Channels:  pbChannels,
 		Networks:  pbNetworks,
 		SweepMs:   sweepMs,
 		Demo:      probe.DemoModeWlanSense(),
 	}}
-	sendResult(ctx, results, result)
 }
 
 func (a *Agent) runTraceroute(ctx context.Context, spec *pb.TestSpec, params *pb.TracerouteParams, results chan<- *pb.TestResult) {

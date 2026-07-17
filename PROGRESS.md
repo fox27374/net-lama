@@ -635,8 +635,38 @@ What has been done so far, in chronological order. Planned work lives in
   (unit-tested: RSSI-max, beacon count, hidden SSID, broadcast-BSSID skip);
   `senseImpl` stamps each network with the channel it was strongest on.
 
+## 2026-07-17 — WLAN discovery: full-spectrum first-connect sweep
+
+- **"all" channels now really means all channels.** Empty channels on a
+  `wlan_sense` test derive the list from the phy (`iw phy <phy> channels`). Two
+  bugs made it silently fall back to a hardcoded 11-channel list without DFS, so
+  5 GHz-DFS-only SSIDs were invisible: the channel parser read the leading `*`
+  marker instead of the frequency, and phy detection matched `phy#N` while
+  `iw dev <if> info` prints `wiphy N`. Fixed with `parsePhyName` (handles both)
+  and a rewritten `parseIWPhyChannels` (finds the `MHz` token, keeps DFS, skips
+  only `disabled`). Verified live on an MT7612U: "all" now sweeps 39 channels
+  incl. DFS 100/112 and captures both `atalt-iot` and `atalt-intern`.
+- **Automatic discovery on a sensor's first connect.** A monitor sensor
+  (advertises `wlan_sense`) runs one full-spectrum sweep the first time it ever
+  connects, so the operator can see every channel and SSID in range before
+  narrowing the recurring test. Server-driven via a reserved `RUN_TEST` sentinel
+  (`proto.WlanDiscoveryTestID`, no new command type); the result is stored like a
+  normal `wlan_sense` result under that test id. Runs exactly once — persisted in
+  a new nullable `agents.wlan_discovered_at`, guarded by an in-memory in-flight
+  set so a reconnect mid-sweep can retry but a completed one never repeats. The
+  agent serializes discovery against the recurring sense test on one `wlanMu` so
+  they never fight over the radio.
+- **Wireless page discovery panel + assisted narrowing.** A "Discovery — all
+  channels" card shows every channel swept (APs, utilization, frames, SSIDs),
+  highlighting the ones with activity, plus a "Use active channels for recurring
+  test" button that opens the site's `wlan_sense` test prefilled with those
+  channels for review and save.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
   message, before the server accepts it — a rejected agent briefly logs
   success. Pre-existing, not yet fixed.
+- A full "all channels" discovery/recurring sweep on a busy phy (~39 channels)
+  takes ~50 s; keep the recurring `wlan_sense` interval well above the sweep
+  time, or narrow it to the discovered channels (the reason discovery exists).

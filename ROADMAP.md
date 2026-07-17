@@ -42,6 +42,10 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] WLAN Phase 2: monitor-mode client sensing — per-station MAC/RSSI/SNR/rate/MCS
       per SSID; needs a monitor-capable adapter and a rootful container with host
       network + NET_ADMIN/NET_RAW; capture via gopacket/afpacket + radiotap/Dot11
+- [x] WLAN discovery: automatic full-spectrum sweep (every channel the phy
+      supports, incl. DFS) on a monitor sensor's first connect, with a Wireless
+      page panel and an assisted button to narrow the recurring test to the
+      channels that had activity
 - [x] Traceroute / path analysis Phase 1: mtr-based path test (TCP/ICMP/UDP),
       per-hop RTT and loss, failure localization, hop-chain Path visualization
 - [ ] SaaS / cloud service tests: reachability and quality checks for online

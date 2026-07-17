@@ -154,6 +154,27 @@ func (s *Store) UpdateAgent(id, name, siteID, wlanInterface string) error {
 	return nil
 }
 
+// AgentWlanDiscovered reports whether the agent has already completed its
+// one-off full-spectrum WLAN discovery sweep.
+func (s *Store) AgentWlanDiscovered(id string) (bool, error) {
+	var done bool
+	err := s.db.QueryRow(
+		`SELECT wlan_discovered_at IS NOT NULL FROM agents WHERE id = ?`, id).Scan(&done)
+	if err == sql.ErrNoRows {
+		return false, ErrNotFound
+	}
+	return done, err
+}
+
+// MarkWlanDiscovered records that the agent has completed WLAN discovery.
+// It only stamps the time on the first successful discovery.
+func (s *Store) MarkWlanDiscovered(id string) error {
+	_, err := s.db.Exec(
+		`UPDATE agents SET wlan_discovered_at = CURRENT_TIMESTAMP
+		 WHERE id = ? AND wlan_discovered_at IS NULL`, id)
+	return err
+}
+
 // SetAgentInterfaces records the wireless interfaces an agent reported.
 func (s *Store) SetAgentInterfaces(id string, interfaces json.RawMessage) error {
 	_, err := s.db.Exec(`UPDATE agents SET wireless_interfaces = ? WHERE id = ?`, string(interfaces), id)

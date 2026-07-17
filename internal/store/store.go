@@ -167,6 +167,11 @@ func (s *Store) migrate() error {
 	if err := s.addColumnIfMissing("agents", "stats", "TEXT"); err != nil {
 		return err
 	}
+	// Set once a monitor sensor has completed its first full-spectrum WLAN
+	// discovery sweep, so it is never re-triggered on later reconnects.
+	if err := s.addColumnIfMissing("agents", "wlan_discovered_at", "TIMESTAMP"); err != nil {
+		return err
+	}
 	if err := s.addColumnIfMissing("logs", "scope", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}

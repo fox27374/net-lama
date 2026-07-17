@@ -234,6 +234,21 @@
       </div>
       <div id="wl-noagents" class="empty hidden">No agents yet. Create an agent, then it reports its wireless interfaces here.</div>
       <div id="wl-body" class="hidden">
+        <!-- Full-spectrum discovery sweep (runs once on a sensor's first connect) -->
+        <div id="wl-discovery" class="card table-card hidden">
+          <div class="section-head">
+            <h3>Discovery — all channels</h3>
+            <span class="muted" id="wl-disc-meta"></span>
+            <span class="spacer"></span>
+            <button id="wl-disc-apply" class="primary" title="Fill the recurring WLAN sense test with the channels that had activity">Use active channels for recurring test</button>
+          </div>
+          <p class="muted">A one-off sweep across every channel this sensor's radio supports, run automatically the first time it connected. Use it to see everything in range, then narrow the recurring test to the channels that matter.</p>
+          <div id="wl-disc-ssids" class="ssid-list"></div>
+          <table id="wl-disc-table">
+            <thead><tr><th class="num">Ch</th><th>Band</th><th class="num">APs</th><th class="num">Utilization</th><th class="num">Frames</th><th>SSIDs</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
         <div class="columns">
           <div class="card">
             <h3>Sensor interface</h3>
