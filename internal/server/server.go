@@ -441,26 +441,35 @@ func (s *Server) handleAgentLog(logger *slog.Logger, conn *connectedAgent, log *
 	}
 }
 
+// resultTestType maps a result's payload oneof to its stored test-type
+// string. Keep every TestResult_* variant covered — an omission stores
+// "unknown", which then fails the `?type=` filter the UI queries by.
+func resultTestType(result *pb.TestResult) string {
+	switch result.Result.(type) {
+	case *pb.TestResult_Speedtest:
+		return "speedtest"
+	case *pb.TestResult_Ping:
+		return "ping"
+	case *pb.TestResult_Dns:
+		return "dns"
+	case *pb.TestResult_Http:
+		return "http"
+	case *pb.TestResult_Tcp:
+		return "tcp"
+	case *pb.TestResult_WlanScan:
+		return "wlan_scan"
+	case *pb.TestResult_WlanSense:
+		return "wlan_sense"
+	case *pb.TestResult_Traceroute:
+		return "traceroute"
+	}
+	return "unknown"
+}
+
 func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result *pb.TestResult) {
 	s.Metrics.Record(conn.tenant, conn.agent.SiteName, conn.agent.Name, result)
 
-	testType := "unknown"
-	switch result.Result.(type) {
-	case *pb.TestResult_Speedtest:
-		testType = "speedtest"
-	case *pb.TestResult_Ping:
-		testType = "ping"
-	case *pb.TestResult_Dns:
-		testType = "dns"
-	case *pb.TestResult_Http:
-		testType = "http"
-	case *pb.TestResult_Tcp:
-		testType = "tcp"
-	case *pb.TestResult_WlanScan:
-		testType = "wlan_scan"
-	case *pb.TestResult_Traceroute:
-		testType = "traceroute"
-	}
+	testType := resultTestType(result)
 
 	// Persist the result. EmitDefaultValues keeps zero-valued fields
 	// (reached=false, loss=0, ...) in the JSON so the UI can rely on them.
