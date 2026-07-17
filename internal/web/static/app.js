@@ -1530,228 +1530,18 @@ async function renderWirelessAgent() {
   const results = await api("GET", "/api/v1/results?" + params.toString());
   renderScan(results[0]);
 
-  // Latest monitor-mode sense results. The one-off discovery sweep shares the
-  // wlan_sense type, so fetch a few and split them: the recurring panel shows
-  // the newest non-discovery sweep, the discovery panel the reserved one.
+  // Latest monitor-mode sense result. The one-off first-connect discovery
+  // sweep shares the wlan_sense type under a reserved test id — skip it so
+  // it doesn't get shown as if it were the latest recurring sweep.
   const sparams = new URLSearchParams({ agentId: agent.id, type: "wlan_sense", limit: "10" });
   if (tid) sparams.set("tenantId", tid.split("=")[1]);
   const sresults = await api("GET", "/api/v1/results?" + sparams.toString());
   renderSense(sresults.find((r) => r.testId !== WLAN_DISCOVERY_TEST_ID));
-
-  const dparams = new URLSearchParams({ agentId: agent.id, type: "wlan_sense", testId: WLAN_DISCOVERY_TEST_ID, limit: "1" });
-  if (tid) dparams.set("tenantId", tid.split("=")[1]);
-  const dresults = await api("GET", "/api/v1/results?" + dparams.toString());
-  renderDiscovery(dresults[0], agent);
 }
 
 // Sentinel test id for the automatic full-spectrum discovery sweep
 // (mirrors proto.WlanDiscoveryTestID on the server side).
 const WLAN_DISCOVERY_TEST_ID = "__wlan_discovery__";
-
-// discoveredChannels holds the "interesting" channels from the last rendered
-// discovery result — the ones that had access points (or, failing that, any
-// captured frames). The apply button fills the recurring test with these.
-let discoveredChannels = [];
-let discoveryAgent = null;
-
-// bandOf classifies a center frequency into 2.4/5/6 GHz (mirrors channelAndBand in Go).
-function bandOf(freqMhz) {
-  if (!freqMhz) return "";
-  if (freqMhz === 2484 || (freqMhz >= 2412 && freqMhz <= 2472)) return "2.4 GHz";
-  if (freqMhz >= 5160 && freqMhz <= 5885) return "5 GHz";
-  if (freqMhz >= 5955 && freqMhz <= 7115) return "6 GHz";
-  return "";
-}
-
-const DISC_CHANNEL_PAGE = 10;
-let discChannelExpanded = false;
-let lastDiscovery = null; // { channels, networks, stations }
-
-function selectedDiscBands() {
-  const bands = new Set();
-  if ($("#wl-disc-band-24").checked) bands.add("2.4 GHz");
-  if ($("#wl-disc-band-5").checked) bands.add("5 GHz");
-  if ($("#wl-disc-band-6").checked) bands.add("6 GHz");
-  return bands;
-}
-
-function renderDiscovery(result, agent) {
-  const box = $("#wl-discovery");
-  const w = result && result.payload && result.payload.wlanSense;
-  box.classList.toggle("hidden", !result);
-  if (!result) return;
-  discoveryAgent = agent;
-  discChannelExpanded = false;
-
-  const channels = (w && w.channels) || [];
-  const networks = (w && w.networks) || [];
-  const stations = (w && w.stations) || [];
-  lastDiscovery = { channels, networks, stations };
-
-  // Group networks by channel so each row can show its APs / SSIDs.
-  const byChannel = new Map();
-  for (const n of networks) {
-    const c = n.channel || 0;
-    if (!byChannel.has(c)) byChannel.set(c, []);
-    byChannel.get(c).push(n);
-  }
-
-  // Active channels: those with an AP; fall back to channels with frames.
-  const active = channels
-    .filter((c) => byChannel.has(c.channel) || (c.frames || 0) > 0)
-    .map((c) => c.channel);
-  discoveredChannels = [...new Set([...byChannel.keys(), ...active].filter((c) => c > 0))].sort((a, b) => a - b);
-
-  const meta = $("#wl-disc-meta");
-  meta.innerHTML = "";
-  if (w && w.demo) {
-    const badge = document.createElement("span");
-    badge.className = "demo-badge";
-    badge.textContent = "DEMO DATA";
-    meta.appendChild(badge);
-  }
-  if (result.error) {
-    meta.appendChild(document.createTextNode("Discovery failed: " + result.error));
-  } else {
-    meta.appendChild(document.createTextNode(
-      `${channels.length} channels swept · ${networks.length} APs · ${stations.length} stations · ${((w && w.sweepMs) || 0) / 1000}s · ${new Date(result.time).toLocaleString()}`));
-  }
-  $("#wl-disc-apply").disabled = discoveredChannels.length === 0;
-
-  renderDiscoveryFiltered();
-}
-
-// renderDiscoveryFiltered re-renders the SSID and channel tables from
-// lastDiscovery applying the current band / active-only checkbox state.
-// Runs on every filter change without refetching data.
-function renderDiscoveryFiltered() {
-  if (!lastDiscovery) return;
-  const { channels, networks } = lastDiscovery;
-  const bands = selectedDiscBands();
-  const activeOnly = $("#wl-disc-active-only").checked;
-
-  const byChannel = new Map();
-  for (const n of networks) {
-    const c = n.channel || 0;
-    if (!byChannel.has(c)) byChannel.set(c, []);
-    byChannel.get(c).push(n);
-  }
-
-  // SSID table: one row per SSID, aggregating across all its APs/bands.
-  const bySsid = new Map();
-  for (const n of networks) {
-    const band = bandOf(n.freqMhz);
-    if (!bands.has(band)) continue;
-    const name = n.ssid || "— hidden —";
-    let e = bySsid.get(name);
-    if (!e) {
-      e = { name, aps: new Set(), bands: new Set(), security: new Set(), standards: new Set(), bestRssi: -999 };
-      bySsid.set(name, e);
-    }
-    e.aps.add(n.bssid);
-    if (band) e.bands.add(band);
-    if (n.security) e.security.add(n.security);
-    if (n.standards) e.standards.add(n.standards);
-    if (n.rssiDbm > e.bestRssi) e.bestRssi = n.rssiDbm;
-  }
-  const ssidTbody = $("#wl-disc-ssid-table tbody");
-  ssidTbody.innerHTML = "";
-  const ssidRows = [...bySsid.values()].sort((a, b) => a.name.localeCompare(b.name));
-  for (const e of ssidRows) {
-    const tr = document.createElement("tr");
-    tr.innerHTML =
-      `<td>${esc(e.name)}</td>` +
-      `<td>${[...e.security].join(", ") || '<span class="muted">—</span>'}</td>` +
-      `<td>${[...e.standards].join(", ") || '<span class="muted">—</span>'}</td>` +
-      `<td>${[...e.bands].sort().join(", ")}</td>` +
-      `<td class="num">${e.aps.size}</td>` +
-      `<td class="num">${e.bestRssi > -999 ? e.bestRssi : "—"}</td>`;
-    ssidTbody.appendChild(tr);
-  }
-  if (!ssidRows.length) {
-    ssidTbody.innerHTML = '<tr><td colspan="6" class="muted">No SSIDs match the current filters.</td></tr>';
-  }
-
-  // Channel table: filter by band + (optionally) activity, sorted by
-  // utilization desc so the busiest channels lead; collapsed to top 10.
-  let rows = channels
-    .filter((c) => bands.has(bandOf(c.freqMhz)))
-    .filter((c) => !activeOnly || byChannel.has(c.channel) || (c.frames || 0) > 0 || (c.utilizationPct || 0) > 0)
-    .sort((a, b) => (b.utilizationPct || 0) - (a.utilizationPct || 0) || a.channel - b.channel);
-
-  const total = rows.length;
-  const shown = discChannelExpanded ? rows : rows.slice(0, DISC_CHANNEL_PAGE);
-
-  const tbody = $("#wl-disc-table tbody");
-  tbody.innerHTML = "";
-  for (const c of [...shown].sort((a, b) => a.channel - b.channel)) {
-    const nets = byChannel.get(c.channel) || [];
-    const band = bandOf(c.freqMhz) || "—";
-    const pct = Math.max(0, Math.min(100, c.utilizationPct || 0));
-    const ssids = [...new Set(nets.map((n) => n.ssid || "— hidden —"))].map(esc).join(", ") || '<span class="muted">—</span>';
-    const isActive = discoveredChannels.includes(c.channel);
-    const tr = document.createElement("tr");
-    if (isActive) tr.className = "row-active";
-    tr.innerHTML =
-      `<td class="num">${c.channel}</td><td>${band}</td>` +
-      `<td class="num">${nets.length || "—"}</td>` +
-      `<td class="num">${pct.toFixed(0)}%</td>` +
-      `<td class="num">${c.frames || 0}</td>` +
-      `<td>${ssids}</td>`;
-    tbody.appendChild(tr);
-  }
-  if (!total) {
-    tbody.innerHTML = '<tr><td colspan="6" class="muted">No channels match the current filters.</td></tr>';
-  }
-
-  const more = $("#wl-disc-more");
-  if (total > DISC_CHANNEL_PAGE) {
-    more.classList.remove("hidden");
-    more.textContent = discChannelExpanded ? "Show top 10 only" : `Show all ${total} channels`;
-  } else {
-    more.classList.add("hidden");
-  }
-}
-
-for (const id of ["#wl-disc-band-24", "#wl-disc-band-5", "#wl-disc-band-6", "#wl-disc-active-only"]) {
-  $(id).addEventListener("change", renderDiscoveryFiltered);
-}
-$("#wl-disc-more").addEventListener("click", () => {
-  discChannelExpanded = !discChannelExpanded;
-  renderDiscoveryFiltered();
-});
-
-// Apply the discovered active channels to the site's recurring wlan_sense
-// test, opening the test editor prefilled so the operator can review and save.
-async function applyDiscoveredChannels() {
-  if (!discoveryAgent || !discoveredChannels.length) return;
-  // Refresh tests + sites so we can locate the recurring sense test.
-  [tests, sites] = await Promise.all([
-    api("GET", "/api/v1/tests" + tenantParam()),
-    api("GET", "/api/v1/sites" + tenantParam()),
-  ]);
-  const site = sites.find((s) => s.id === discoveryAgent.siteId);
-  const wsTest =
-    tests.find((t) => t.type === "wlan_sense" && site && (site.testIds || []).includes(t.id)) ||
-    tests.find((t) => t.type === "wlan_sense");
-
-  if (wsTest) {
-    const clone = JSON.parse(JSON.stringify(wsTest));
-    clone.params = clone.params || {};
-    clone.params.channels = discoveredChannels;
-    openTestDialog(clone);
-  } else {
-    // No recurring sense test yet — open a fresh one prefilled.
-    openTestDialog(null);
-    $("#t-type").value = "wlan_sense";
-    $("#t-name").value = "WLAN sense";
-    updateTestParamFields();
-    initThresholdBands("wlan_sense", {});
-    $("#t-ws-channels").value = discoveredChannels.join(",");
-  }
-}
-
-$("#wl-disc-apply").addEventListener("click", applyDiscoveredChannels);
 
 // signalClass buckets an RSSI (dBm) into a health color: >=-60 ok,
 // -75..-60 warn, <-75 bad.
@@ -1796,30 +1586,46 @@ function renderSense(result) {
     row.innerHTML =
       `<span class="chan-label">ch ${c.channel} <span class="muted">${band}</span></span>` +
       `<span class="chan-track"><span class="chan-fill ${cls}" style="width:${pct}%"></span></span>` +
-      `<span class="chan-val">${pct.toFixed(0)}% <span class="muted">· ${c.frames || 0} fr</span></span>`;
+      `<span class="chan-val">${pct.toFixed(0)}%</span>`;
     bars.appendChild(row);
   }
   if (!channels.length) {
     bars.innerHTML = '<p class="muted">No channel data in the last sweep.</p>';
   }
 
-  // Networks heard from beacons feed the shared "SSIDs seen" and "Access
-  // points nearby" boxes (a monitor sensor doesn't run a managed WLAN scan).
+  // Networks heard from beacons feed the shared "SSIDs" and "Accesspoints"
+  // boxes (a monitor sensor doesn't run a managed WLAN scan).
   const networks = ((w && w.networks) || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
   if (networks.length) {
+    // SSID list: one entry per SSID with its security + PHY standards,
+    // aggregated across every BSSID/channel it was heard on.
     const ssidBox = $("#wl-ssids");
     ssidBox.innerHTML = "";
     const bySsid = new Map();
     for (const n of networks) {
       const name = n.ssid || "— hidden —";
-      bySsid.set(name, (bySsid.get(name) || 0) + 1);
+      let e = bySsid.get(name);
+      if (!e) {
+        e = { name, aps: 0, security: new Set(), standards: new Set() };
+        bySsid.set(name, e);
+      }
+      e.aps++;
+      if (n.security) e.security.add(n.security);
+      if (n.standards) e.standards.add(n.standards);
     }
-    for (const [name, count] of [...bySsid.entries()].sort()) {
-      const chip = document.createElement("span");
-      chip.className = "chip";
-      chip.textContent = count > 1 ? `${name} ×${count}` : name;
-      ssidBox.appendChild(chip);
+    for (const e of [...bySsid.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+      const row = document.createElement("div");
+      row.className = "ssid-detail-row";
+      const capBits = [];
+      if (e.security.size) capBits.push([...e.security].join(", "));
+      if (e.standards.size) capBits.push("802.11" + [...e.standards].join("/"));
+      capBits.push(e.aps > 1 ? `${e.aps} APs` : "1 AP");
+      row.innerHTML =
+        `<span class="ssid-detail-name">${esc(e.name)}</span>` +
+        `<span class="muted ssid-detail-caps">${capBits.map(esc).join(" · ")}</span>`;
+      ssidBox.appendChild(row);
     }
+
     const apBody = $("#wl-ap-table tbody");
     apBody.innerHTML = "";
     for (const n of networks) {
@@ -1829,12 +1635,10 @@ function renderSense(result) {
         `<td>${n.ssid ? esc(n.ssid) : '<span class="muted">— hidden —</span>'}</td>` +
         `<td class="mono">${esc(n.bssid)}</td><td>${band}</td>` +
         `<td class="num">${n.channel || "—"}</td>` +
-        `<td class="num"><span class="health ${signalClass(n.rssiDbm)}">${n.rssiDbm}</span></td>` +
-        `<td class="muted">from beacons</td>`;
+        `<td class="num"><span class="health ${signalClass(n.rssiDbm)}">${n.rssiDbm}</span></td>`;
       apBody.appendChild(tr);
     }
     $("#wl-empty").classList.add("hidden");
-    $("#wl-scan-meta").textContent = `${networks.length} networks sensed`;
   }
 
   // Client stations, strongest signal first
@@ -1886,17 +1690,29 @@ function renderScan(result) {
   }
   if (!aps.length) return;
 
-  // SSID summary (grouped, hidden networks folded together)
+  // SSID list (grouped, hidden networks folded together), with security
+  // shown as a capability since a managed-mode scan reports it per AP.
   const bySsid = new Map();
   for (const ap of aps) {
     const name = ap.ssid || "— hidden —";
-    bySsid.set(name, (bySsid.get(name) || 0) + 1);
+    let e = bySsid.get(name);
+    if (!e) {
+      e = { name, aps: 0, security: new Set() };
+      bySsid.set(name, e);
+    }
+    e.aps++;
+    if (ap.security) e.security.add(ap.security);
   }
-  for (const [name, count] of [...bySsid.entries()].sort()) {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    chip.textContent = count > 1 ? `${name} ×${count}` : name;
-    ssidBox.appendChild(chip);
+  for (const e of [...bySsid.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+    const row = document.createElement("div");
+    row.className = "ssid-detail-row";
+    const capBits = [];
+    if (e.security.size) capBits.push([...e.security].join(", "));
+    capBits.push(e.aps > 1 ? `${e.aps} APs` : "1 AP");
+    row.innerHTML =
+      `<span class="ssid-detail-name">${esc(e.name)}</span>` +
+      `<span class="muted ssid-detail-caps">${capBits.map(esc).join(" · ")}</span>`;
+    ssidBox.appendChild(row);
   }
 
   // AP table, strongest signal first
@@ -1908,8 +1724,7 @@ function renderScan(result) {
       <td class="muted mono">${esc(ap.bssid)}</td>
       <td>${esc(ap.band || "")}</td>
       <td class="num">${ap.channel || "–"}</td>
-      <td class="num">${signalCell(ap.rssiDbm)}</td>
-      <td>${esc(ap.security || "")}</td>`;
+      <td class="num">${signalCell(ap.rssiDbm)}</td>`;
     tbody.appendChild(tr);
   }
 }

@@ -164,7 +164,6 @@ body {
 
 h2 { font-size: var(--text-xl); letter-spacing: -0.01em; }
 h3 { font-size: var(--text-lg); letter-spacing: -0.01em; margin: 0 0 var(--space-3); }
-h4 { font-size: var(--text-sm); letter-spacing: -0.01em; margin: var(--space-4) 0 var(--space-2); color: var(--muted-solid); text-transform: uppercase; }
 
 /* Brand */
 .brand {
@@ -776,7 +775,7 @@ button.stat-tile:focus-visible {
 /* WLAN sense: channel utilization bars */
 #wl-chan-bars { display: flex; flex-direction: column; gap: var(--space-2); }
 .chan-bar { display: flex; align-items: center; gap: var(--space-3); }
-.chan-label { width: 120px; flex-shrink: 0; font-size: var(--text-sm); }
+.chan-label { width: 140px; flex-shrink: 0; font-size: var(--text-sm); white-space: nowrap; }
 .chan-track {
   flex: 1;
   height: 16px;
@@ -788,13 +787,10 @@ button.stat-tile:focus-visible {
 .chan-fill.healthy { background: var(--ok); }
 .chan-fill.degraded { background: var(--warn); }
 .chan-fill.failing { background: var(--bad); }
-.chan-val { width: 110px; flex-shrink: 0; text-align: right; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.chan-val { width: 48px; flex-shrink: 0; text-align: right; font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Wireless page */
 .mono { font-family: var(--mono); font-size: 0.86em; }
-#wl-disc-table tr.row-active > td { background: color-mix(in srgb, var(--ok) 12%, transparent); }
-#wl-disc-table tr.row-active > td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
-#wl-disc-ssids { margin-bottom: var(--space-3); }
 .demo-badge {
   display: inline-block;
   margin-right: var(--space-2);
@@ -815,17 +811,25 @@ button.stat-tile:focus-visible {
   padding: var(--space-3) var(--space-4) var(--space-2);
   margin-bottom: 0;
 }
-.table-card > p, .table-card > h4, .table-card > .row {
+.table-card > p {
   padding: 0 var(--space-4);
 }
-.table-card > h4:first-child { margin-top: var(--space-3); }
-.table-card > button.ghost { margin: var(--space-2) var(--space-4) var(--space-3); }
 /* select + button rows (e.g. sensor interface): button keeps its size,
    the control takes the rest, both vertically centered. */
 .card .row select { flex: 1; width: auto; }
 .card .row button { flex: none; }
-.ssid-list { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.ssid-list:empty::after { content: "No SSIDs seen yet."; color: var(--muted-solid); font-size: var(--text-md); }
+.ssid-detail-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.ssid-detail-list:empty::after { content: "No SSIDs seen yet."; color: var(--muted-solid); font-size: var(--text-md); }
+.ssid-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.ssid-detail-row:last-child { border-bottom: none; }
+.ssid-detail-name { font-weight: 600; }
+.ssid-detail-caps { font-size: var(--text-sm); }
 .sig-good { color: var(--ok); font-weight: 650; }
 .sig-ok { color: var(--warn); font-weight: 650; }
 .sig-weak { color: var(--bad); font-weight: 650; }
