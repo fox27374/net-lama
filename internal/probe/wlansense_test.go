@@ -273,3 +273,32 @@ func TestProcessFrameBadFCSSkipped(t *testing.T) {
 		t.Fatalf("BadFCS frame must be skipped, got stations %v", stations)
 	}
 }
+
+func TestIsUnicastMAC(t *testing.T) {
+	cases := map[string]bool{
+		"02:00:00:00:00:bb": true,  // locally-administered unicast
+		"a0:f8:49:74:8b:20": true,  // normal unicast
+		"ff:ff:ff:ff:ff:ff": false, // broadcast
+		"01:00:5e:00:00:fb": false, // IPv4 multicast
+		"33:33:00:00:00:01": false, // IPv6 multicast
+		"00:00:00:00:00:00": false, // all-zero
+		"":                  false,
+	}
+	for mac, want := range cases {
+		if got := isUnicastMAC(mac); got != want {
+			t.Errorf("isUnicastMAC(%q) = %v, want %v", mac, got, want)
+		}
+	}
+}
+
+func TestProcessFrameDropsBroadcastStation(t *testing.T) {
+	stations := map[string]*WlanStation{}
+	// FromDS broadcast data frame from an AP: Address1 (destination) is the
+	// broadcast address — must NOT be recorded as a station.
+	bcast := []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	frame := append(rtHeader(0x00, 0, -62), dot11(0x08, 0x02, bcast, mac(0xAA), mac(0xAA))...)
+	processFrame(frame, stations, map[string]string{}, 1000)
+	if len(stations) != 0 {
+		t.Fatalf("broadcast destination must not be a station, got %v", stations)
+	}
+}

@@ -165,6 +165,20 @@ func parseIWSurveyDump(out string) map[uint32]WlanChannelStat {
 // processFrame parses a single 802.11 frame (RadioTap + Dot11) and updates
 // the station and SSID maps. This is the core frame-parsing logic, extracted
 // for testability (no build tags, works cross-platform with gopacket).
+// isUnicastMAC reports whether a MAC string is a real per-station address:
+// not empty, not all-zero, and not group-addressed (the multicast/broadcast
+// bit — the low bit of the first octet — must be clear).
+func isUnicastMAC(mac string) bool {
+	if len(mac) < 2 || mac == "00:00:00:00:00:00" {
+		return false
+	}
+	first, err := strconv.ParseUint(mac[0:2], 16, 8)
+	if err != nil {
+		return false
+	}
+	return first&0x01 == 0
+}
+
 func processFrame(data []byte, stations map[string]*WlanStation, ssidMap map[string]string, nowMs int64) {
 	// Parse RadioTap + Dot11
 	packet := gopacket.NewPacket(data, layers.LayerTypeRadioTap, gopacket.NoCopy)
@@ -235,6 +249,9 @@ func processFrame(data []byte, stations map[string]*WlanStation, ssidMap map[str
 	case layers.Dot11TypeMgmtProbeReq:
 		// Probe request - station is transmitter (Address2)
 		mac := dot11.Address2.String()
+		if !isUnicastMAC(mac) {
+			return
+		}
 		if _, ok := stations[mac]; !ok {
 			stations[mac] = &WlanStation{
 				MAC:        mac,
@@ -273,6 +290,11 @@ func processFrame(data []byte, stations map[string]*WlanStation, ssidMap map[str
 				bssidMAC = dot11.Address3.String()
 			}
 
+			// Broadcast/multicast destinations (e.g. an AP's broadcast data
+			// frame in FromDS) are not client stations.
+			if !isUnicastMAC(stationMAC) {
+				return
+			}
 			if _, ok := stations[stationMAC]; !ok {
 				stations[stationMAC] = &WlanStation{
 					MAC:        stationMAC,
