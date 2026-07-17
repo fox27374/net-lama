@@ -342,3 +342,33 @@ func TestRecordNetworkSkipsBroadcastBSSID(t *testing.T) {
 		t.Fatalf("broadcast BSSID must be skipped, got %v", networks)
 	}
 }
+
+func TestParseIWPhyChannels(t *testing.T) {
+	// Real `iw phy <phy> channels` format: leading "*", DFS/radar and
+	// "No IR" channels are usable for passive monitoring; "disabled" is not.
+	out := `Band 1:
+	* 2412 MHz [1] 
+	  Maximum TX power: 20.0 dBm
+	* 2437 MHz [6] 
+	* 2462 MHz [11] 
+Band 2:
+	* 5180 MHz [36] 
+	  5500 MHz [100] (radar detection)
+	  5560 MHz [112] (radar detection)
+	  5300 MHz [60] (disabled)
+	* 5745 MHz [149] `
+	got := parseIWPhyChannels(out)
+	want := map[uint32]bool{1: true, 6: true, 11: true, 36: true, 100: true, 112: true, 149: true}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want channels %v", got, want)
+	}
+	for _, ch := range got {
+		if !want[ch] {
+			t.Errorf("unexpected channel %d (disabled ch 60 must be excluded)", ch)
+		}
+	}
+	// 2.4 GHz must sort before 5 GHz.
+	if got[0] > 14 {
+		t.Errorf("expected 2.4 GHz channels first, got %v", got)
+	}
+}

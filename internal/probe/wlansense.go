@@ -82,23 +82,28 @@ func parseIWPhyChannels(out string) []uint32 {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		// Look for lines like: Band 2GHz, Channels 1..11 (some disabled)
-		// or just: 2412 MHz [1] (20 MHz, no HT)
-		if strings.HasPrefix(line, "Band ") || strings.Contains(line, "MHz [") {
-			// Parse frequency from lines like "2412 MHz [1]"
-			parts := strings.Fields(line)
-			if len(parts) > 0 {
-				if freqStr := parts[0]; strings.HasSuffix(freqStr, "MHz") {
-					if freq, err := strconv.ParseUint(strings.TrimSuffix(freqStr, "MHz"), 10, 32); err == nil {
-						ch, _ := channelAndBand(uint32(freq))
-						if ch > 0 && !seen[ch] {
-							// Skip disabled or radar channels (would need to parse more)
-							channels = append(channels, ch)
-							seen[ch] = true
-						}
-					}
-				}
+		// Frequency lines from `iw phy <phy> channels` look like:
+		//   "* 2412 MHz [1] "  or  "5500 MHz [100] (radar detection)".
+		// The frequency is the token immediately before "MHz" (a leading
+		// "*" marks a usable channel). Skip only explicitly disabled ones;
+		// DFS/"No IR"/radar channels are fine for passive monitor capture.
+		if !strings.Contains(line, "MHz [") || strings.Contains(line, "disabled") {
+			continue
+		}
+		fields := strings.Fields(line)
+		for i, f := range fields {
+			if f != "MHz" || i == 0 {
+				continue
 			}
+			freq, err := strconv.ParseUint(fields[i-1], 10, 32)
+			if err != nil {
+				break
+			}
+			if ch, _ := channelAndBand(uint32(freq)); ch > 0 && !seen[ch] {
+				channels = append(channels, ch)
+				seen[ch] = true
+			}
+			break
 		}
 	}
 
