@@ -474,12 +474,14 @@ func wlanSenseResult(iface string, stations []probe.WlanStation, channelStats []
 	pbNetworks := make([]*pb.WlanNetwork, 0, len(networks))
 	for _, n := range networks {
 		pbNetworks = append(pbNetworks, &pb.WlanNetwork{
-			Bssid:   n.BSSID,
-			Ssid:    n.SSID,
-			Channel: n.Channel,
-			FreqMhz: n.FreqMHz,
-			RssiDbm: n.RSSIdBm,
-			Beacons: n.Beacons,
+			Bssid:     n.BSSID,
+			Ssid:      n.SSID,
+			Channel:   n.Channel,
+			FreqMhz:   n.FreqMHz,
+			RssiDbm:   n.RSSIdBm,
+			Beacons:   n.Beacons,
+			Security:  n.Security,
+			Standards: n.Standards,
 		})
 	}
 

@@ -164,6 +164,7 @@ body {
 
 h2 { font-size: var(--text-xl); letter-spacing: -0.01em; }
 h3 { font-size: var(--text-lg); letter-spacing: -0.01em; margin: 0 0 var(--space-3); }
+h4 { font-size: var(--text-sm); letter-spacing: -0.01em; margin: var(--space-4) 0 var(--space-2); color: var(--muted-solid); text-transform: uppercase; }
 
 /* Brand */
 .brand {
@@ -814,6 +815,11 @@ button.stat-tile:focus-visible {
   padding: var(--space-3) var(--space-4) var(--space-2);
   margin-bottom: 0;
 }
+.table-card > p, .table-card > h4, .table-card > .row {
+  padding: 0 var(--space-4);
+}
+.table-card > h4:first-child { margin-top: var(--space-3); }
+.table-card > button.ghost { margin: var(--space-2) var(--space-4) var(--space-3); }
 /* select + button rows (e.g. sensor interface): button keeps its size,
    the control takes the rest, both vertically centered. */
 .card .row select { flex: 1; width: auto; }

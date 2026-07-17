@@ -2052,6 +2052,8 @@ type WlanNetwork struct {
 	FreqMhz       uint32                 `protobuf:"varint,4,opt,name=freq_mhz,json=freqMhz,proto3" json:"freq_mhz,omitempty"`
 	RssiDbm       int32                  `protobuf:"varint,5,opt,name=rssi_dbm,json=rssiDbm,proto3" json:"rssi_dbm,omitempty"` // strongest beacon RSSI
 	Beacons       uint32                 `protobuf:"varint,6,opt,name=beacons,proto3" json:"beacons,omitempty"`                // beacon/probe-response frames seen
+	Security      string                 `protobuf:"bytes,7,opt,name=security,proto3" json:"security,omitempty"`               // "Open", "WEP", "WPA2", "WPA2/WPA3", "WPA3", ...
+	Standards     string                 `protobuf:"bytes,8,opt,name=standards,proto3" json:"standards,omitempty"`             // PHY generations from IEs, e.g. "n/ac/ax"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2126,6 +2128,20 @@ func (x *WlanNetwork) GetBeacons() uint32 {
 		return x.Beacons
 	}
 	return 0
+}
+
+func (x *WlanNetwork) GetSecurity() string {
+	if x != nil {
+		return x.Security
+	}
+	return ""
+}
+
+func (x *WlanNetwork) GetStandards() string {
+	if x != nil {
+		return x.Standards
+	}
+	return ""
 }
 
 type WlanStation struct {
@@ -2888,14 +2904,16 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bstations\x18\x03 \x03(\v2\x17.netlama.v1.WlanStationR\bstations\x127\n" +
 	"\bchannels\x18\x04 \x03(\v2\x1b.netlama.v1.WlanChannelStatR\bchannels\x12\x19\n" +
 	"\bsweep_ms\x18\x05 \x01(\rR\asweepMs\x123\n" +
-	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xa1\x01\n" +
+	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xdb\x01\n" +
 	"\vWlanNetwork\x12\x14\n" +
 	"\x05bssid\x18\x01 \x01(\tR\x05bssid\x12\x12\n" +
 	"\x04ssid\x18\x02 \x01(\tR\x04ssid\x12\x18\n" +
 	"\achannel\x18\x03 \x01(\rR\achannel\x12\x19\n" +
 	"\bfreq_mhz\x18\x04 \x01(\rR\afreqMhz\x12\x19\n" +
 	"\brssi_dbm\x18\x05 \x01(\x05R\arssiDbm\x12\x18\n" +
-	"\abeacons\x18\x06 \x01(\rR\abeacons\"\x8e\x02\n" +
+	"\abeacons\x18\x06 \x01(\rR\abeacons\x12\x1a\n" +
+	"\bsecurity\x18\a \x01(\tR\bsecurity\x12\x1c\n" +
+	"\tstandards\x18\b \x01(\tR\tstandards\"\x8e\x02\n" +
 	"\vWlanStation\x12\x10\n" +
 	"\x03mac\x18\x01 \x01(\tR\x03mac\x12\x14\n" +
 	"\x05bssid\x18\x02 \x01(\tR\x05bssid\x12\x12\n" +

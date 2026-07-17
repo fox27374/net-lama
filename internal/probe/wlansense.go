@@ -42,12 +42,14 @@ type WlanChannelStat struct {
 
 // WlanNetwork is an access point heard from its beacons/probe responses.
 type WlanNetwork struct {
-	BSSID   string // access point MAC
-	SSID    string // network name, empty = hidden
-	Channel uint32 // channel it was heard on (stamped by the sweep)
-	FreqMHz uint32
-	RSSIdBm int32  // strongest beacon RSSI
-	Beacons uint32 // beacon/probe-response frames seen
+	BSSID     string // access point MAC
+	SSID      string // network name, empty = hidden
+	Channel   uint32 // channel it was heard on (stamped by the sweep)
+	FreqMHz   uint32
+	RSSIdBm   int32  // strongest beacon RSSI
+	Beacons   uint32 // beacon/probe-response frames seen
+	Security  string // "Open", "WEP", "WPA2", "WPA2/WPA3", "WPA3", ...
+	Standards string // PHY generations from IEs, e.g. "n/ac/ax"
 }
 
 // wlanSenseDemo reports whether to emit synthetic WLAN sense data.
@@ -212,8 +214,8 @@ func isUnicastMAC(mac string) bool {
 }
 
 // recordNetwork upserts an AP heard from a beacon/probe-response, keeping the
-// strongest RSSI and a non-empty SSID once seen.
-func recordNetwork(networks map[string]*WlanNetwork, bssid, ssid string, rssi int32) {
+// strongest RSSI and non-empty SSID/security/standards once seen.
+func recordNetwork(networks map[string]*WlanNetwork, bssid string, info beaconInfo, rssi int32) {
 	if !isUnicastMAC(bssid) {
 		return // broadcast/multicast BSSID isn't a real AP
 	}
@@ -222,8 +224,14 @@ func recordNetwork(networks map[string]*WlanNetwork, bssid, ssid string, rssi in
 		n = &WlanNetwork{BSSID: bssid, RSSIdBm: rssi}
 		networks[bssid] = n
 	}
-	if ssid != "" {
-		n.SSID = ssid
+	if info.SSID != "" {
+		n.SSID = info.SSID
+	}
+	if info.Security != "" {
+		n.Security = info.Security
+	}
+	if info.Standards != "" {
+		n.Standards = info.Standards
 	}
 	if rssi > n.RSSIdBm {
 		n.RSSIdBm = rssi
@@ -278,22 +286,12 @@ func processFrame(data []byte, stations map[string]*WlanStation, networks map[st
 	switch dot11.Type {
 	case layers.Dot11TypeMgmtBeacon:
 		// Beacon frame - Address3 is the BSSID; the fixed body (timestamp,
-		// interval, capability = 12 bytes) precedes the tagged SSID element.
-		bssid := dot11.Address3.String()
-		ssid := ""
-		if payload := dot11Layer.LayerPayload(); len(payload) > 12 {
-			ssid = parseSSIDFromElements(payload[12:])
-		}
-		recordNetwork(networks, bssid, ssid, rssi)
+		// interval, capability = 12 bytes) precedes the tagged elements.
+		recordNetwork(networks, dot11.Address3.String(), parseBeaconBody(dot11Layer.LayerPayload()), rssi)
 
 	case layers.Dot11TypeMgmtProbeResp:
 		// Probe response - same fixed-body layout as a beacon.
-		bssid := dot11.Address3.String()
-		ssid := ""
-		if payload := dot11Layer.LayerPayload(); len(payload) > 12 {
-			ssid = parseSSIDFromElements(payload[12:])
-		}
-		recordNetwork(networks, bssid, ssid, rssi)
+		recordNetwork(networks, dot11.Address3.String(), parseBeaconBody(dot11Layer.LayerPayload()), rssi)
 
 	case layers.Dot11TypeMgmtProbeReq:
 		// Probe request - station is transmitter (Address2)
@@ -372,22 +370,143 @@ func processFrame(data []byte, stations map[string]*WlanStation, networks map[st
 	}
 }
 
-// parseSSIDFromElements parses 802.11 information elements to extract SSID.
-// Elements are TLV encoded: Tag (1 byte), Length (1 byte), Value (Length bytes).
-func parseSSIDFromElements(data []byte) string {
-	for i := 0; i < len(data)-1; {
-		tag := data[i]
-		length := int(data[i+1])
+// beaconInfo is what parseBeaconBody extracts from a beacon/probe-response body.
+type beaconInfo struct {
+	SSID      string
+	Security  string // derived from RSN/WPA elements + privacy capability bit
+	Standards string // PHY generations from HT/VHT/HE/EHT elements, "n/ac/ax"
+}
+
+// parseBeaconBody parses a beacon/probe-response frame body: 12 fixed bytes
+// (timestamp 8, interval 2, capability 2), then TLV information elements
+// (Tag 1 byte, Length 1 byte, Value).
+func parseBeaconBody(body []byte) beaconInfo {
+	var info beaconInfo
+	if len(body) < 12 {
+		return info
+	}
+	privacy := body[10]&0x10 != 0 // capability bit 4
+	data := body[12:]
+
+	var hasRSN, hasWPA bool
+	var akms []byte
+	var ht, vht, he, eht bool
+
+	for i := 0; i+2 <= len(data); {
+		tag, length := data[i], int(data[i+1])
 		if i+2+length > len(data) {
 			break
 		}
-
-		// Tag 0 = SSID
-		if tag == 0 && length > 0 {
-			return string(data[i+2 : i+2+length])
+		v := data[i+2 : i+2+length]
+		switch tag {
+		case 0: // SSID
+			if length > 0 {
+				info.SSID = string(v)
+			}
+		case 45: // HT capabilities → 802.11n
+			ht = true
+		case 48: // RSN
+			hasRSN = true
+			akms = append(akms, parseRSNAKMs(v)...)
+		case 191: // VHT capabilities → 802.11ac
+			vht = true
+		case 221: // vendor: Microsoft WPA1 OUI 00:50:F2 type 1
+			if length >= 4 && v[0] == 0x00 && v[1] == 0x50 && v[2] == 0xF2 && v[3] == 0x01 {
+				hasWPA = true
+			}
+		case 255: // element ID extension
+			if length >= 1 {
+				switch v[0] {
+				case 35: // HE capabilities → 802.11ax
+					he = true
+				case 108: // EHT capabilities → 802.11be
+					eht = true
+				}
+			}
 		}
-
 		i += 2 + length
 	}
-	return ""
+
+	info.Security = securityLabel(privacy, hasWPA, hasRSN, akms)
+	var gens []string
+	if ht {
+		gens = append(gens, "n")
+	}
+	if vht {
+		gens = append(gens, "ac")
+	}
+	if he {
+		gens = append(gens, "ax")
+	}
+	if eht {
+		gens = append(gens, "be")
+	}
+	info.Standards = strings.Join(gens, "/")
+	return info
+}
+
+// parseRSNAKMs pulls the AKM suite-type bytes out of an RSN element body:
+// version(2) group-cipher(4) pairwise-count(2) pairwise(4n) akm-count(2)
+// akm(4m); the type is the 4th byte of each 00-0F-AC-XX suite.
+func parseRSNAKMs(v []byte) []byte {
+	off := 2 + 4
+	if off+2 > len(v) {
+		return nil
+	}
+	pairwise := int(v[off]) | int(v[off+1])<<8
+	off += 2 + 4*pairwise
+	if off+2 > len(v) {
+		return nil
+	}
+	akmCount := int(v[off]) | int(v[off+1])<<8
+	off += 2
+	var out []byte
+	for j := 0; j < akmCount && off+4 <= len(v); j++ {
+		out = append(out, v[off+3])
+		off += 4
+	}
+	return out
+}
+
+// securityLabel maps parsed security signals to a display string.
+func securityLabel(privacy, hasWPA, hasRSN bool, akms []byte) string {
+	if !hasRSN && !hasWPA {
+		if privacy {
+			return "WEP"
+		}
+		return "Open"
+	}
+	var psk, sae, dot1x, suiteB, owe bool
+	for _, a := range akms {
+		switch a {
+		case 1, 5: // 802.1X, 802.1X-SHA256
+			dot1x = true
+		case 2, 6: // PSK, PSK-SHA256
+			psk = true
+		case 8, 9: // SAE, FT-SAE
+			sae = true
+		case 12, 13: // Suite-B-192
+			suiteB = true
+		case 18: // OWE
+			owe = true
+		}
+	}
+	switch {
+	case owe:
+		return "OWE"
+	case sae && psk:
+		return "WPA2/WPA3"
+	case sae:
+		return "WPA3"
+	case suiteB:
+		return "WPA3-Ent"
+	case dot1x:
+		return "WPA2-Ent"
+	case psk && hasWPA:
+		return "WPA/WPA2"
+	case hasRSN:
+		return "WPA2"
+	default:
+		return "WPA"
+	}
 }

@@ -243,11 +243,24 @@
             <button id="wl-disc-apply" class="primary" title="Fill the recurring WLAN sense test with the channels that had activity">Use active channels for recurring test</button>
           </div>
           <p class="muted">A one-off sweep across every channel this sensor's radio supports, run automatically the first time it connected. Use it to see everything in range, then narrow the recurring test to the channels that matter.</p>
-          <div id="wl-disc-ssids" class="ssid-list"></div>
+          <div class="row wl-disc-filters">
+            <label class="check"><input type="checkbox" id="wl-disc-band-24" checked> 2.4 GHz</label>
+            <label class="check"><input type="checkbox" id="wl-disc-band-5" checked> 5 GHz</label>
+            <label class="check"><input type="checkbox" id="wl-disc-band-6" checked> 6 GHz</label>
+            <span class="spacer"></span>
+            <label class="check"><input type="checkbox" id="wl-disc-active-only"> Active channels only</label>
+          </div>
+          <h4>SSIDs seen</h4>
+          <table id="wl-disc-ssid-table">
+            <thead><tr><th>SSID</th><th>Security</th><th>Standards</th><th>Band</th><th class="num">APs</th><th class="num">Best RSSI</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <h4>Channel utilization</h4>
           <table id="wl-disc-table">
             <thead><tr><th class="num">Ch</th><th>Band</th><th class="num">APs</th><th class="num">Utilization</th><th class="num">Frames</th><th>SSIDs</th></tr></thead>
             <tbody></tbody>
           </table>
+          <button id="wl-disc-more" class="ghost hidden"></button>
         </div>
         <div class="columns">
           <div class="card">

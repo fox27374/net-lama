@@ -49,13 +49,17 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [ ] WLAN tests on a channel or SSID basis: define a wlan_sense test that
       targets a specific SSID (sensor follows it across channels) or a fixed
       channel set per test
-- [ ] Improve the channel and SSID overview on the Wireless page (clearer
-      per-band layout, channel occupancy at a glance, SSID grouping across
-      BSSIDs/bands)
+- [x] Improve the channel and SSID overview on the Wireless discovery panel:
+      2.4/5/6 GHz band filters, "active channels only" filter, a dedicated
+      SSID table (grouped across BSSIDs/bands), channel list sorted by
+      utilization and collapsed to the top 10 with a "show all" toggle
 - [ ] AP vendor info: resolve BSSID OUIs to manufacturer names in the
       Wireless views
-- [ ] SSID details: security (WPA2/WPA3, cipher/AKM), capabilities and
-      settings like 802.11r/k/v — parsed from beacon information elements
+- [x] SSID security + PHY standards: security (Open/WEP/WPA2/WPA3/WPA2-WPA3
+      transition/Enterprise/OWE) and PHY generation (n/ac/ax/be) parsed from
+      RSN/HT/VHT/HE/EHT beacon information elements, shown in the SSID table
+- [ ] SSID capabilities/settings like 802.11r/k/v, parsed from beacon
+      information elements
 - [x] Traceroute / path analysis Phase 1: mtr-based path test (TCP/ICMP/UDP),
       per-hop RTT and loss, failure localization, hop-chain Path visualization
 - [ ] SaaS / cloud service tests: reachability and quality checks for online

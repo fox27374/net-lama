@@ -141,41 +141,92 @@ func TestChannelAndBand(t *testing.T) {
 // which is tested below. Full frame parsing is tested via the Linux
 // captureOnChannel function in E2E scenarios with real packets.
 
-func TestParseSSIDFromElements(t *testing.T) {
+// fixedBody builds the 12-byte fixed beacon header (timestamp 8, interval 2,
+// capability 2) followed by the given TLV elements. privacy sets capability
+// bit 4 (0x0010).
+func fixedBody(privacy bool, elements ...byte) []byte {
+	cap0 := byte(0)
+	if privacy {
+		cap0 = 0x10
+	}
+	body := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, cap0, 0}
+	return append(body, elements...)
+}
+
+func ssidElem(ssid string) []byte {
+	return append([]byte{0, byte(len(ssid))}, []byte(ssid)...)
+}
+
+func TestParseBeaconBodySSID(t *testing.T) {
 	tests := []struct {
 		name     string
-		data     []byte
+		body     []byte
 		expected string
 	}{
-		{
-			name:     "simple SSID",
-			data:     []byte{0, 4, 't', 'e', 's', 't'},
-			expected: "test",
-		},
-		{
-			name:     "empty SSID",
-			data:     []byte{0, 0},
-			expected: "",
-		},
-		{
-			name:     "SSID with other elements",
-			data:     []byte{1, 2, 0x11, 0x22, 0, 5, 'n', 'e', 't', 'w', 'k'},
-			expected: "netwk",
-		},
-		{
-			name:     "truncated",
-			data:     []byte{0, 5, 't', 'e', 's'},
-			expected: "",
-		},
+		{"simple SSID", fixedBody(false, ssidElem("test")...), "test"},
+		{"empty SSID", fixedBody(false, 0, 0), ""},
+		{"SSID with other elements", fixedBody(false, append([]byte{1, 2, 0x11, 0x22}, ssidElem("netwk")...)...), "netwk"},
+		{"truncated", fixedBody(false, 0, 5, 't', 'e', 's'), ""},
+		{"short body", []byte{0, 0, 0}, ""},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := parseSSIDFromElements(test.data)
+			result := parseBeaconBody(test.body).SSID
 			if result != test.expected {
 				t.Errorf("expected '%s', got '%s'", test.expected, result)
 			}
 		})
+	}
+}
+
+// rsnElem builds an RSN element body: version, group cipher (4), pairwise
+// count+suites, akm count+suites (each AKM suite is 00-0F-AC-<type>).
+func rsnElem(akmTypes ...byte) []byte {
+	v := []byte{1, 0} // version
+	v = append(v, 0x00, 0x0F, 0xAC, 4)                       // group cipher: CCMP
+	v = append(v, 1, 0, 0x00, 0x0F, 0xAC, 4)                 // 1 pairwise: CCMP
+	v = append(v, byte(len(akmTypes)), 0)
+	for _, t := range akmTypes {
+		v = append(v, 0x00, 0x0F, 0xAC, t)
+	}
+	return append([]byte{48, byte(len(v))}, v...)
+}
+
+func TestParseBeaconBodySecurity(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     []byte
+		expected string
+	}{
+		{"open", fixedBody(false), "Open"},
+		{"wep", fixedBody(true), "WEP"},
+		{"wpa2 psk", fixedBody(true, rsnElem(2)...), "WPA2"},
+		{"wpa3 sae", fixedBody(true, rsnElem(8)...), "WPA3"},
+		{"wpa2/wpa3 transition", fixedBody(true, rsnElem(2, 8)...), "WPA2/WPA3"},
+		{"wpa2 enterprise", fixedBody(true, rsnElem(1)...), "WPA2-Ent"},
+		{"owe", fixedBody(true, rsnElem(18)...), "OWE"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := parseBeaconBody(test.body).Security
+			if result != test.expected {
+				t.Errorf("expected '%s', got '%s'", test.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseBeaconBodyStandards(t *testing.T) {
+	htElem := []byte{45, 2, 0, 0}
+	vhtElem := []byte{191, 2, 0, 0}
+	heElem := []byte{255, 1, 35}
+	body := fixedBody(false, append(append(append([]byte{}, htElem...), vhtElem...), heElem...)...)
+
+	result := parseBeaconBody(body).Standards
+	if result != "n/ac/ax" {
+		t.Errorf("expected 'n/ac/ax', got '%s'", result)
 	}
 }
 
@@ -337,7 +388,7 @@ func TestProcessFrameNetworkRSSIandBeacons(t *testing.T) {
 
 func TestRecordNetworkSkipsBroadcastBSSID(t *testing.T) {
 	networks := map[string]*WlanNetwork{}
-	recordNetwork(networks, "ff:ff:ff:ff:ff:ff", "x", -50)
+	recordNetwork(networks, "ff:ff:ff:ff:ff:ff", beaconInfo{SSID: "x"}, -50)
 	if len(networks) != 0 {
 		t.Fatalf("broadcast BSSID must be skipped, got %v", networks)
 	}

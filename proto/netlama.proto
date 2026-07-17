@@ -234,6 +234,8 @@ message WlanNetwork {
   uint32 freq_mhz = 4;
   int32 rssi_dbm = 5;     // strongest beacon RSSI
   uint32 beacons = 6;     // beacon/probe-response frames seen
+  string security = 7;    // "Open", "WEP", "WPA2", "WPA2/WPA3", "WPA3", ...
+  string standards = 8;   // PHY generations from IEs, e.g. "n/ac/ax"
 }
 
 message WlanStation {

@@ -1554,16 +1554,39 @@ const WLAN_DISCOVERY_TEST_ID = "__wlan_discovery__";
 let discoveredChannels = [];
 let discoveryAgent = null;
 
+// bandOf classifies a center frequency into 2.4/5/6 GHz (mirrors channelAndBand in Go).
+function bandOf(freqMhz) {
+  if (!freqMhz) return "";
+  if (freqMhz === 2484 || (freqMhz >= 2412 && freqMhz <= 2472)) return "2.4 GHz";
+  if (freqMhz >= 5160 && freqMhz <= 5885) return "5 GHz";
+  if (freqMhz >= 5955 && freqMhz <= 7115) return "6 GHz";
+  return "";
+}
+
+const DISC_CHANNEL_PAGE = 10;
+let discChannelExpanded = false;
+let lastDiscovery = null; // { channels, networks, stations }
+
+function selectedDiscBands() {
+  const bands = new Set();
+  if ($("#wl-disc-band-24").checked) bands.add("2.4 GHz");
+  if ($("#wl-disc-band-5").checked) bands.add("5 GHz");
+  if ($("#wl-disc-band-6").checked) bands.add("6 GHz");
+  return bands;
+}
+
 function renderDiscovery(result, agent) {
   const box = $("#wl-discovery");
   const w = result && result.payload && result.payload.wlanSense;
   box.classList.toggle("hidden", !result);
   if (!result) return;
   discoveryAgent = agent;
+  discChannelExpanded = false;
 
   const channels = (w && w.channels) || [];
   const networks = (w && w.networks) || [];
   const stations = (w && w.stations) || [];
+  lastDiscovery = { channels, networks, stations };
 
   // Group networks by channel so each row can show its APs / SSIDs.
   const byChannel = new Map();
@@ -1595,31 +1618,75 @@ function renderDiscovery(result, agent) {
   }
   $("#wl-disc-apply").disabled = discoveredChannels.length === 0;
 
-  // All SSIDs seen across the whole spectrum.
-  const ssidBox = $("#wl-disc-ssids");
-  ssidBox.innerHTML = "";
+  renderDiscoveryFiltered();
+}
+
+// renderDiscoveryFiltered re-renders the SSID and channel tables from
+// lastDiscovery applying the current band / active-only checkbox state.
+// Runs on every filter change without refetching data.
+function renderDiscoveryFiltered() {
+  if (!lastDiscovery) return;
+  const { channels, networks } = lastDiscovery;
+  const bands = selectedDiscBands();
+  const activeOnly = $("#wl-disc-active-only").checked;
+
+  const byChannel = new Map();
+  for (const n of networks) {
+    const c = n.channel || 0;
+    if (!byChannel.has(c)) byChannel.set(c, []);
+    byChannel.get(c).push(n);
+  }
+
+  // SSID table: one row per SSID, aggregating across all its APs/bands.
   const bySsid = new Map();
   for (const n of networks) {
+    const band = bandOf(n.freqMhz);
+    if (!bands.has(band)) continue;
     const name = n.ssid || "— hidden —";
-    bySsid.set(name, (bySsid.get(name) || 0) + 1);
+    let e = bySsid.get(name);
+    if (!e) {
+      e = { name, aps: new Set(), bands: new Set(), security: new Set(), standards: new Set(), bestRssi: -999 };
+      bySsid.set(name, e);
+    }
+    e.aps.add(n.bssid);
+    if (band) e.bands.add(band);
+    if (n.security) e.security.add(n.security);
+    if (n.standards) e.standards.add(n.standards);
+    if (n.rssiDbm > e.bestRssi) e.bestRssi = n.rssiDbm;
   }
-  for (const [name, count] of [...bySsid.entries()].sort()) {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    chip.textContent = count > 1 ? `${name} ×${count}` : name;
-    ssidBox.appendChild(chip);
+  const ssidTbody = $("#wl-disc-ssid-table tbody");
+  ssidTbody.innerHTML = "";
+  const ssidRows = [...bySsid.values()].sort((a, b) => a.name.localeCompare(b.name));
+  for (const e of ssidRows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      `<td>${esc(e.name)}</td>` +
+      `<td>${[...e.security].join(", ") || '<span class="muted">—</span>'}</td>` +
+      `<td>${[...e.standards].join(", ") || '<span class="muted">—</span>'}</td>` +
+      `<td>${[...e.bands].sort().join(", ")}</td>` +
+      `<td class="num">${e.aps.size}</td>` +
+      `<td class="num">${e.bestRssi > -999 ? e.bestRssi : "—"}</td>`;
+    ssidTbody.appendChild(tr);
   }
-  if (!bySsid.size) ssidBox.innerHTML = '<span class="muted">No SSIDs seen.</span>';
+  if (!ssidRows.length) {
+    ssidTbody.innerHTML = '<tr><td colspan="6" class="muted">No SSIDs match the current filters.</td></tr>';
+  }
 
-  // One row per channel that had activity, strongest/ busiest context first.
+  // Channel table: filter by band + (optionally) activity, sorted by
+  // utilization desc so the busiest channels lead; collapsed to top 10.
+  let rows = channels
+    .filter((c) => bands.has(bandOf(c.freqMhz)))
+    .filter((c) => !activeOnly || byChannel.has(c.channel) || (c.frames || 0) > 0 || (c.utilizationPct || 0) > 0)
+    .sort((a, b) => (b.utilizationPct || 0) - (a.utilizationPct || 0) || a.channel - b.channel);
+
+  const total = rows.length;
+  const shown = discChannelExpanded ? rows : rows.slice(0, DISC_CHANNEL_PAGE);
+
   const tbody = $("#wl-disc-table tbody");
   tbody.innerHTML = "";
-  const rows = channels
-    .filter((c) => byChannel.has(c.channel) || (c.frames || 0) > 0 || (c.utilizationPct || 0) > 0)
-    .sort((a, b) => a.channel - b.channel);
-  for (const c of rows) {
+  for (const c of [...shown].sort((a, b) => a.channel - b.channel)) {
     const nets = byChannel.get(c.channel) || [];
-    const band = c.freqMhz >= 5000 ? "5 GHz" : "2.4 GHz";
+    const band = bandOf(c.freqMhz) || "—";
     const pct = Math.max(0, Math.min(100, c.utilizationPct || 0));
     const ssids = [...new Set(nets.map((n) => n.ssid || "— hidden —"))].map(esc).join(", ") || '<span class="muted">—</span>';
     const isActive = discoveredChannels.includes(c.channel);
@@ -1633,10 +1700,26 @@ function renderDiscovery(result, agent) {
       `<td>${ssids}</td>`;
     tbody.appendChild(tr);
   }
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="muted">No activity found on any channel.</td></tr>';
+  if (!total) {
+    tbody.innerHTML = '<tr><td colspan="6" class="muted">No channels match the current filters.</td></tr>';
+  }
+
+  const more = $("#wl-disc-more");
+  if (total > DISC_CHANNEL_PAGE) {
+    more.classList.remove("hidden");
+    more.textContent = discChannelExpanded ? "Show top 10 only" : `Show all ${total} channels`;
+  } else {
+    more.classList.add("hidden");
   }
 }
+
+for (const id of ["#wl-disc-band-24", "#wl-disc-band-5", "#wl-disc-band-6", "#wl-disc-active-only"]) {
+  $(id).addEventListener("change", renderDiscoveryFiltered);
+}
+$("#wl-disc-more").addEventListener("click", () => {
+  discChannelExpanded = !discChannelExpanded;
+  renderDiscoveryFiltered();
+});
 
 // Apply the discovered active channels to the site's recurring wlan_sense
 // test, opening the test editor prefilled so the operator can review and save.

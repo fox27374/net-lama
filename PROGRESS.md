@@ -662,6 +662,24 @@ What has been done so far, in chronological order. Planned work lives in
   test" button that opens the site's `wlan_sense` test prefilled with those
   channels for review and save.
 
+## 2026-07-17 — Discovery panel filters, SSID table, security/standards
+
+- **Band + activity filters.** The discovery panel's channel list gained
+  2.4/5/6 GHz checkboxes and an "active channels only" toggle; both re-render
+  from the already-fetched sweep client-side, no refetch.
+- **SSID table.** "SSIDs seen" is now a table (SSID, Security, Standards,
+  Band, AP count, best RSSI) instead of a chip list, aggregating each SSID
+  across all the BSSIDs/bands it was heard on.
+- **Beacon security + PHY standards parsing** (`internal/probe/wlansense.go`,
+  `parseBeaconBody`). Reads the RSN element (AKM suites → Open/WEP/WPA2/WPA3/
+  WPA2-WPA3 transition/-Enterprise/OWE, using the privacy capability bit for
+  the WEP/Open split) and the WPA1 vendor element, plus HT/VHT/HE/EHT elements
+  for PHY generation (`n/ac/ax/be`). New `WlanNetwork.Security`/`.Standards`
+  proto fields (7/8); the synthetic demo generator was intentionally left
+  alone — verification uses the real rp01 sensor.
+- **Channel list: top 10 + collapse.** Rows now sort by utilization desc and
+  show only the top 10 by default, with a "Show all N channels" toggle.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
