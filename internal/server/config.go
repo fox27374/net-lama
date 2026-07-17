@@ -47,6 +47,12 @@ type TracerouteParams struct {
 	ProbesPerHop uint32 `json:"probesPerHop"`
 }
 
+// Thresholds represents warn/crit boundaries for a test.
+type Thresholds struct {
+	Warn float64 `json:"warn"`
+	Crit float64 `json:"crit"`
+}
+
 // ValidateTestDef checks type, interval and the type-specific parameters
 // and returns the definition with normalized params.
 func ValidateTestDef(t *store.TestDef) error {
@@ -55,6 +61,24 @@ func ValidateTestDef(t *store.TestDef) error {
 	}
 	if t.IntervalSeconds < 5 {
 		return fmt.Errorf("interval must be at least 5 seconds")
+	}
+
+	// Validate thresholds if present
+	if len(t.Thresholds) > 0 {
+		var th Thresholds
+		if err := json.Unmarshal(t.Thresholds, &th); err != nil {
+			return fmt.Errorf("invalid thresholds: %w", err)
+		}
+		if th.Warn > 0 && th.Crit > 0 {
+			// speedtest is lower-is-worse: orange below warn, red below crit
+			if t.Type == "speedtest" {
+				if th.Warn <= th.Crit {
+					return fmt.Errorf("warn threshold must be greater than crit threshold for speedtest")
+				}
+			} else if th.Warn >= th.Crit {
+				return fmt.Errorf("warn threshold must be less than crit threshold")
+			}
+		}
 	}
 
 	switch t.Type {

@@ -84,18 +84,22 @@ Planned work, roughly grouped. Not ordered by priority yet.
       disconnected), Logs UI page with agent/level/source filters and
       auto-refresh. Later: log download, DEBUG-level capture, retention by age.
 - [ ] Password change / user self-service in the UI
+- [ ] Roles and permissions: finer-grained access than the current
+      admin / tenant-user split (e.g. read-only viewer, per-site operator)
 - [x] On-demand test runs (`RUN_TEST`) from the UI — "Run now" on the Path and
       Results pages
 - [ ] Optional result forwarding (e.g. Splunk HEC, port of `legacy/hec-forwarder`)
 - [x] Dashboard deep-links: every dashboard block links to its page
       (e.g. clicking agents opens the Agents page, sites the Sites page)
 - [ ] Configurable dashboard with widgets (add/remove/reorder blocks)
-- [ ] Separate configure vs. view menus for sites, agents, tests, wireless
-      and logs
+- [x] Separate configure vs. view menus for sites, agents, tests, wireless
+      and logs (sidebar split: viewing pages on top, Sites/Agents/Tests/Alert
+      rules under Configuration)
 - [x] Modify the path view to look more professional (vertical subway line,
       MTR-style latency bars in table, path-history heatmap)
 - [x] Alert-rule configuration UI as its own menu item
-- [ ] Logo for the web UI
+- [x] Logo for the web UI (theme-aware transparent logo in sidebar/login +
+      light/dark favicons)
 - [ ] Version tag reported by server and agent, shown in UI/API
 - [ ] Configurable result retention: time-based (e.g. "keep 30 days") and/or
       per-test caps instead of the fixed 5000-results-per-agent limit, which

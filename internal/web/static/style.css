@@ -174,12 +174,13 @@ h3 { font-size: var(--text-lg); letter-spacing: -0.01em; margin: 0 0 var(--space
   letter-spacing: -0.02em;
 }
 .brand.big { font-size: 1.5rem; }
-.brand-dot {
-  width: 10px; height: 10px;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  box-shadow: 0 0 12px var(--accent);
+.brand-logo {
+  width: 22px; height: 22px;
+  background: url("logo-light.png") no-repeat center / contain;
+  flex-shrink: 0;
 }
+:root[data-theme="dark"] .brand-logo { background-image: url("logo-dark.png"); }
+.brand.big .brand-logo { width: 44px; height: 44px; }
 
 /* Login */
 #login-view {
@@ -738,8 +739,38 @@ button.stat-tile:focus-visible {
 .health.failing::before { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
 .health.nodata { color: var(--muted-solid); }
 .health.nodata::before { background: var(--muted-solid); opacity: 0.5; }
+.health + .health { margin-left: var(--space-3); }
 
 #ov-health-table tbody tr { cursor: pointer; }
+
+/* State-threshold band editor (Grafana-style) */
+#t-bands { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.band-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+}
+.band-swatch {
+  width: 34px; height: 26px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.band-swatch.green { background: var(--ok); }
+.band-swatch.orange { background: var(--warn); }
+.band-swatch.red { background: var(--bad); }
+.band-row input[data-band] { width: 88px; }
+.band-row .band-text { color: var(--muted-solid); font-size: var(--text-sm); }
+.band-row .band-x {
+  margin-left: auto;
+  padding: var(--space-1) var(--space-2);
+  line-height: 1;
+}
+.band-add { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.band-add button { font-size: var(--text-sm); }
 
 /* Wireless page */
 .mono { font-family: var(--mono); font-size: 0.86em; }

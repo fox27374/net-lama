@@ -197,6 +197,16 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	// Add thresholds column to tests table
+	if err := s.addColumnIfMissing("tests", "thresholds", "TEXT"); err != nil {
+		return err
+	}
+
+	// Add subject column to alerts table (for multi-target tests)
+	if err := s.addColumnIfMissing("alerts", "subject", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+
 	// Migration: move webhook_url entries to alert_targets
 	return s.migrateWebhookTargets()
 }

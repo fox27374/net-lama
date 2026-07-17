@@ -9,7 +9,7 @@ import (
 )
 
 var validMetrics = map[string]bool{
-	"unhealthy": true, "latency_ms": true, "loss_percent": true,
+	"unhealthy": true, "state": true, "latency_ms": true, "loss_percent": true,
 	"download_mbps": true, "upload_mbps": true,
 }
 var validOperators = map[string]bool{">": true, ">=": true, "<": true, "<=": true, "==": true}
@@ -58,9 +58,18 @@ func (a *API) handleCreateAlertRule(w http.ResponseWriter, r *http.Request, user
 		writeError(w, http.StatusBadRequest, "invalid metric")
 		return
 	}
-	if req.Metric != "unhealthy" {
+	if req.Metric != "unhealthy" && req.Metric != "state" {
 		if !validOperators[req.Operator] {
 			writeError(w, http.StatusBadRequest, "invalid operator")
+			return
+		}
+	} else if req.Metric == "state" {
+		// State metric uses >= operator and level (1=orange, 2=red)
+		if req.Operator != ">=" {
+			req.Operator = ">="
+		}
+		if req.Threshold != 1 && req.Threshold != 2 {
+			writeError(w, http.StatusBadRequest, "state level must be 1 (orange) or 2 (red)")
 			return
 		}
 	}
@@ -70,7 +79,6 @@ func (a *API) handleCreateAlertRule(w http.ResponseWriter, r *http.Request, user
 	if req.ClearCount < 1 {
 		req.ClearCount = 1
 	}
-	req.WebhookURL = strings.TrimSpace(req.WebhookURL)
 
 	// Validate targetIds exist in the same tenant
 	if len(req.TargetIds) > 0 {
@@ -137,9 +145,16 @@ func (a *API) handleUpdateAlertRule(w http.ResponseWriter, r *http.Request, user
 	}
 	rule.Metric = req.Metric
 
-	if rule.Metric != "unhealthy" {
+	if rule.Metric != "unhealthy" && rule.Metric != "state" {
 		if !validOperators[req.Operator] {
 			writeError(w, http.StatusBadRequest, "invalid operator")
+			return
+		}
+	} else if rule.Metric == "state" {
+		// State metric uses >= operator and level (1=orange, 2=red)
+		req.Operator = ">="
+		if req.Threshold != 1 && req.Threshold != 2 {
+			writeError(w, http.StatusBadRequest, "state level must be 1 (orange) or 2 (red)")
 			return
 		}
 	}
@@ -168,8 +183,6 @@ func (a *API) handleUpdateAlertRule(w http.ResponseWriter, r *http.Request, user
 		}
 	}
 	rule.TargetIds = req.TargetIds
-
-	rule.WebhookURL = strings.TrimSpace(req.WebhookURL)
 
 	updated, err := a.Store.UpdateAlertRule(rule)
 	if err != nil {

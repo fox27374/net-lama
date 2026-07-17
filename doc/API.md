@@ -249,7 +249,8 @@ Body is a `TestDef`:
 ```json
 {
   "tenantId": "...", "name": "...", "type": "ping",
-  "intervalSeconds": 60, "params": { /* type-specific, see below */ }
+  "intervalSeconds": 60, "params": { /* type-specific, see below */ },
+  "thresholds": { "warn": 30, "crit": 80 }
 }
 ```
 
@@ -257,14 +258,18 @@ Body is a `TestDef`:
 `ping`, `dns`, `http`, `tcp`, `traceroute`, `wlan_scan`, `speedtest`;
 validation and defaulting of `params` is type-specific (see
 [Test parameter shapes](#test-parameter-shapes)); invalid params → `400`.
+`thresholds` (optional) defines state boundaries: `warn` and `crit` are
+numeric thresholds applied to the test's primary metric. For speedtest
+(lower-is-worse), values *below* the thresholds trigger orange/red states;
+for all other types (higher-is-worse), values *above* trigger orange/red.
 `409` on duplicate name within the tenant. Returns the created `TestDef`
 (with `id` and normalized `params`).
 
 ### `PUT /api/v1/tests/{id}`
 
 Body: same shape as create. `type` and `tenantId` are immutable (ignored if
-sent); `name`, `intervalSeconds`, `params` can change, re-validated the same
-way. Pushes the updated config to every agent whose site uses this test.
+sent); `name`, `intervalSeconds`, `params`, `thresholds` can change, re-validated
+the same way. Pushes the updated config to every agent whose site uses this test.
 Response: `{"test": <TestDef>, "pushed": <n>}`.
 
 ### `DELETE /api/v1/tests/{id}`
@@ -490,8 +495,8 @@ admin access. `403` if not in your tenant (tenant users).
 
 ## Alert Rules
 
-Per-test rules that watch either overall health or a numeric metric, with optional
-hysteresis (clear threshold + clear count).
+Per-test rules that watch either overall health, test state, or a numeric metric,
+with optional hysteresis (clear threshold + clear count).
 
 ### `GET /api/v1/alert-rules`
 
@@ -502,7 +507,7 @@ Query: `tenantId` (required for admins). Returns `AlertRule[]`:
   "id": "...", "tenantId": "...", "testId": "...", "testName": "ping-gw",
   "name": "High latency", "metric": "latency_ms", "operator": ">",
   "threshold": 100, "forCount": 2, "clearThreshold": 70, "clearCount": 10,
-  "targetIds": ["target-id-1", "target-id-2"], "webhookUrl": ""
+  "targetIds": ["target-id-1", "target-id-2"]
 }]
 ```
 
@@ -510,19 +515,25 @@ Query: `tenantId` (required for admins). Returns `AlertRule[]`:
 
 Body: `{"name": "...", "testId": "...", "metric": "...", "operator": "...",
 "threshold": 0, "forCount": 1, "clearThreshold": null, "clearCount": 1,
-"targetIds": [], "webhookUrl": "", "tenantId": "..."}`.
+"targetIds": [], "tenantId": "..."}`.
 
 `tenantId` required for admins. `name` required. `testId` must reference an
-existing test in the tenant. `metric` must be one of `unhealthy`,
-`latency_ms`, `loss_percent`, `download_mbps`, `upload_mbps`. For any
-metric other than `unhealthy`, `operator` must be one of `>`, `>=`, `<`,
-`<=`, `==`. `forCount` (consecutive breaches before firing) defaults to 1 if
-< 1. `clearThreshold` (optional, must satisfy inverse condition for clearing)
-and `clearCount` (default 1, consecutive samples meeting clear condition before
+existing test in the tenant. `metric` must be one of `unhealthy`, `state`,
+`latency_ms`, `loss_percent`, `download_mbps`, `upload_mbps`. 
+
+For `unhealthy` metric, `operator` is ignored (always fired on failure).
+For `state` metric, `operator` is always `>=` and `threshold` must be 1 (orange)
+or 2 (red), representing the minimum state level to trigger the rule (computed
+from the test's thresholds applied to each result's primary metric).
+For numeric metrics (`latency_ms`, etc.), `operator` must be one of `>`, `>=`,
+`<`, `<=`, `==`.
+
+`forCount` (consecutive breaches before firing) defaults to 1 if < 1.
+`clearThreshold` (optional, must satisfy inverse condition for clearing) and
+`clearCount` (default 1, consecutive samples meeting clear condition before
 resolving) implement hysteresis. `targetIds` is an array of alert target IDs
 (must all exist in the tenant); rules are always stored and visible in the UI
-regardless of targets. `webhookUrl` (deprecated, moved to webhook targets) is
-optional. Returns the created `AlertRule`.
+regardless of targets. Returns the created `AlertRule`.
 
 ### `PUT /api/v1/alert-rules/{id}`
 

@@ -252,3 +252,41 @@ func TestControlStream_LegacyCapabilitiesNotStored(t *testing.T) {
 		t.Errorf("Legacy re-register must keep stored capabilities: got %s, want %s", got.Capabilities, want)
 	}
 }
+
+// TestValidateTestDefThresholds covers the direction-dependent warn/crit
+// ordering: higher-is-worse types need warn < crit, speedtest (lower-is-worse)
+// needs warn > crit.
+func TestValidateTestDefThresholds(t *testing.T) {
+	cases := []struct {
+		name    string
+		typ     string
+		params  string
+		th      string
+		wantErr bool
+	}{
+		{"ping warn<crit ok", "ping", `{"targets":["8.8.8.8"],"count":3}`, `{"warn":30,"crit":80}`, false},
+		{"ping warn>=crit bad", "ping", `{"targets":["8.8.8.8"],"count":3}`, `{"warn":80,"crit":30}`, true},
+		{"speedtest warn>crit ok", "speedtest", `{"provider":"ookla"}`, `{"warn":80,"crit":40}`, false},
+		{"speedtest warn<=crit bad", "speedtest", `{"provider":"ookla"}`, `{"warn":40,"crit":80}`, true},
+		{"single warn only ok", "ping", `{"targets":["8.8.8.8"],"count":3}`, `{"warn":30}`, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			interval := uint32(30)
+			if c.typ == "speedtest" {
+				interval = 300
+			}
+			td := &store.TestDef{
+				Name: "x", Type: c.typ, IntervalSeconds: interval,
+				Params: []byte(c.params), Thresholds: []byte(c.th),
+			}
+			err := ValidateTestDef(td)
+			if c.wantErr && err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if !c.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}

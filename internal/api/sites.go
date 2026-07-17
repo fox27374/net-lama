@@ -239,10 +239,11 @@ func (a *API) handleUpdateTest(w http.ResponseWriter, r *http.Request, user *sto
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	// Type and tenant are immutable, name/interval/params can change
+	// Type and tenant are immutable, name/interval/params/thresholds can change
 	test.Name = strings.TrimSpace(req.Name)
 	test.IntervalSeconds = req.IntervalSeconds
 	test.Params = req.Params
+	test.Thresholds = req.Thresholds
 	if err := server.ValidateTestDef(test); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

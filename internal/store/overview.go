@@ -5,6 +5,44 @@ import (
 	"time"
 )
 
+// Thresholds represents the warn/crit boundaries for test state.
+type Thresholds struct {
+	Warn float64 `json:"warn"`
+	Crit float64 `json:"crit"`
+}
+
+// computeResultState computes the state of a result (green/orange/red)
+// based on the test type's thresholds. Failed results are always red.
+// For speedtest (lower-is-worse): value < warn => orange, < crit => red
+// For others (higher-is-worse): value > warn => orange, > crit => red
+func computeResultState(testType string, value float64, thresholds *Thresholds) string {
+	if thresholds == nil {
+		return "green"
+	}
+
+	isSpeedtest := testType == "speedtest"
+
+	if isSpeedtest {
+		// Lower is worse: below thresholds is bad
+		if thresholds.Crit > 0 && value < thresholds.Crit {
+			return "red"
+		}
+		if thresholds.Warn > 0 && value < thresholds.Warn {
+			return "orange"
+		}
+	} else {
+		// Higher is worse: above thresholds is bad
+		if thresholds.Crit > 0 && value > thresholds.Crit {
+			return "red"
+		}
+		if thresholds.Warn > 0 && value > thresholds.Warn {
+			return "orange"
+		}
+	}
+
+	return "green"
+}
+
 type TestHealth struct {
 	TestID   string     `json:"testId"`
 	Name     string     `json:"name"`
@@ -19,6 +57,16 @@ type TestHealth struct {
 	Current  *float64   `json:"current,omitempty"` // last value
 }
 
+// SiteHealth is the per-site rollup: how many of the site's assigned tests
+// are in each status, judged only against results from that site's agents.
+type SiteHealth struct {
+	SiteID   string `json:"siteId"`
+	Healthy  int    `json:"healthy"`
+	Degraded int    `json:"degraded"`
+	Failing  int    `json:"failing"`
+	NoData   int    `json:"nodata"`
+}
+
 type Overview struct {
 	Sites           int           `json:"sites"`
 	Agents          int           `json:"agents"`
@@ -26,6 +74,7 @@ type Overview struct {
 	Tests           int           `json:"tests"`
 	ActiveAlerts    int           `json:"activeAlerts"`
 	TestHealth      []*TestHealth `json:"testHealth"`
+	SiteHealth      []*SiteHealth `json:"siteHealth"`
 }
 
 // TenantOverview returns the counts and per-test health for a tenant.
@@ -93,33 +142,13 @@ func (s *Store) TenantOverview(tenantID, siteID string) (*Overview, error) {
 	for _, t := range tests {
 		h := &TestHealth{TestID: t.ID, Name: t.Name, Type: t.Type, Status: "nodata"}
 
-		// Consider the last ~3 cycles, clamped to [90s, 1h].
-		windowSec := t.IntervalSeconds * 3
-		if windowSec < 90 {
-			windowSec = 90
-		}
-		if windowSec > 3600 {
-			windowSec = 3600
-		}
-		since := time.Now().Add(-time.Duration(windowSec) * time.Second).UTC()
-
-		var checks, okSum, agents int
-		resultQuery := `
-			SELECT COUNT(*), COALESCE(SUM(ok), 0), COUNT(DISTINCT r.agent_id)
-			FROM results r
-			JOIN agents a ON a.id = r.agent_id
-			WHERE a.tenant_id = ? AND r.test_id = ? AND r.time >= ?`
-		resultArgs := []interface{}{tenantID, t.ID, since}
-		if siteID != "" {
-			resultQuery += ` AND a.site_id = ?`
-			resultArgs = append(resultArgs, siteID)
-		}
-		err := s.db.QueryRow(resultQuery, resultArgs...).Scan(&checks, &okSum, &agents)
+		status, checks, okSum, agents, err := s.testStatus(tenantID, siteID, t)
 		if err != nil {
 			return nil, err
 		}
 
 		if checks > 0 {
+			h.Status = status
 			h.Checks = checks
 			h.OK = okSum
 			h.Agents = agents
@@ -144,19 +173,236 @@ func (s *Store) TenantOverview(tenantID, siteID string) (*Overview, error) {
 			// Extract series: last ~30 result values for this test (site-filtered)
 			// Unit and current value are determined by test type
 			h.Unit, h.Series, h.Current = s.extractSeries(t.Type, t.ID, tenantID, siteID)
-
-			switch {
-			case okSum == checks:
-				h.Status = "healthy"
-			case okSum == 0:
-				h.Status = "failing"
-			default:
-				h.Status = "degraded"
-			}
 		}
 		ov.TestHealth = append(ov.TestHealth, h)
 	}
+
+	// Per-site rollup: judge each site's assigned tests only against results
+	// from that site's own agents, so shared tests can't mask a broken site.
+	testByID := make(map[string]*TestDef, len(tests))
+	for _, t := range tests {
+		testByID[t.ID] = t
+	}
+	pairQuery := `
+		SELECT st.site_id, st.test_id
+		FROM site_tests st
+		JOIN sites s ON s.id = st.site_id
+		WHERE s.tenant_id = ?`
+	pairArgs := []interface{}{tenantID}
+	if siteID != "" {
+		pairQuery += ` AND st.site_id = ?`
+		pairArgs = append(pairArgs, siteID)
+	}
+	pairQuery += ` ORDER BY st.site_id`
+	pairs, err := s.db.Query(pairQuery, pairArgs...)
+	if err != nil {
+		return nil, err
+	}
+	type pair struct{ siteID, testID string }
+	var assigned []pair
+	for pairs.Next() {
+		var p pair
+		if err := pairs.Scan(&p.siteID, &p.testID); err == nil {
+			assigned = append(assigned, p)
+		}
+	}
+	pairs.Close()
+
+	rollups := map[string]*SiteHealth{}
+	for _, p := range assigned {
+		t, ok := testByID[p.testID]
+		if !ok {
+			continue
+		}
+		status, _, _, _, err := s.testStatus(tenantID, p.siteID, t)
+		if err != nil {
+			return nil, err
+		}
+		r := rollups[p.siteID]
+		if r == nil {
+			r = &SiteHealth{SiteID: p.siteID}
+			rollups[p.siteID] = r
+			ov.SiteHealth = append(ov.SiteHealth, r)
+		}
+		switch status {
+		case "healthy":
+			r.Healthy++
+		case "degraded":
+			r.Degraded++
+		case "failing":
+			r.Failing++
+		default:
+			r.NoData++
+		}
+	}
 	return ov, nil
+}
+
+// testStatus judges one test from its recent results — the last ~3 cycles,
+// clamped to [90s, 1h] — optionally restricted to a single site's agents.
+// A test with no results in the window is "nodata".
+// Health rollup now incorporates state thresholds: red > orange > green.
+func (s *Store) testStatus(tenantID, siteID string, t *TestDef) (status string, checks, okSum, agents int, err error) {
+	windowSec := t.IntervalSeconds * 3
+	if windowSec < 90 {
+		windowSec = 90
+	}
+	if windowSec > 3600 {
+		windowSec = 3600
+	}
+	since := time.Now().Add(-time.Duration(windowSec) * time.Second).UTC()
+
+	// Parse thresholds if present
+	var thresholds *Thresholds
+	if len(t.Thresholds) > 0 {
+		th := &Thresholds{}
+		if err := json.Unmarshal(t.Thresholds, th); err == nil {
+			thresholds = th
+		}
+	}
+
+	query := `
+		SELECT ok, payload
+		FROM results r
+		JOIN agents a ON a.id = r.agent_id
+		WHERE a.tenant_id = ? AND r.test_id = ? AND r.time >= ?`
+	args := []interface{}{tenantID, t.ID, since}
+	if siteID != "" {
+		query += ` AND a.site_id = ?`
+		args = append(args, siteID)
+	}
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return "", 0, 0, 0, err
+	}
+	defer rows.Close()
+
+	checks = 0
+	okSum = 0
+	redCount := 0
+	orangeCount := 0
+
+	for rows.Next() {
+		checks++
+		var ok int
+		var payload string
+		if err := rows.Scan(&ok, &payload); err != nil {
+			continue
+		}
+		if ok == 1 {
+			okSum++
+		}
+
+		// Extract agent_id from the subquery to count distinct agents
+		// (simplified: just count all results; per-agent tracking would need more query changes)
+
+		// If thresholds are set and result is ok, compute state
+		if ok == 1 && thresholds != nil {
+			val := extractMetricValue(t.Type, payload)
+			if val != nil {
+				state := computeResultState(t.Type, *val, thresholds)
+				if state == "red" {
+					redCount++
+				} else if state == "orange" {
+					orangeCount++
+				}
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", 0, 0, 0, err
+	}
+
+	// Count distinct agents
+	agentQuery := `
+		SELECT COUNT(DISTINCT r.agent_id)
+		FROM results r
+		JOIN agents a ON a.id = r.agent_id
+		WHERE a.tenant_id = ? AND r.test_id = ? AND r.time >= ?`
+	agentArgs := []interface{}{tenantID, t.ID, since}
+	if siteID != "" {
+		agentQuery += ` AND a.site_id = ?`
+		agentArgs = append(agentArgs, siteID)
+	}
+	if err := s.db.QueryRow(agentQuery, agentArgs...).Scan(&agents); err != nil {
+		agents = 0
+	}
+
+	// Determine status: red > orange > mixed > all green
+	switch {
+	case checks == 0:
+		status = "nodata"
+	case redCount > 0:
+		status = "failing"
+	case orangeCount > 0:
+		status = "degraded"
+	case okSum == checks:
+		status = "healthy"
+	case okSum == 0:
+		status = "failing"
+	default:
+		status = "degraded"
+	}
+	return status, checks, okSum, agents, nil
+}
+
+// extractMetricValue extracts the primary metric from a result payload.
+func extractMetricValue(testType, payload string) *float64 {
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(payload), &data); err != nil {
+		return nil
+	}
+
+	var val float64
+	switch testType {
+	case "ping":
+		if ping, ok := data["ping"].(map[string]interface{}); ok {
+			if avgRtt, ok := ping["avgRttMs"].(float64); ok && avgRtt > 0 {
+				val = avgRtt
+			}
+		}
+	case "dns":
+		if dns, ok := data["dns"].(map[string]interface{}); ok {
+			if resolveTime, ok := dns["resolveTimeMs"].(float64); ok && resolveTime > 0 {
+				val = resolveTime
+			}
+		}
+	case "http":
+		if http, ok := data["http"].(map[string]interface{}); ok {
+			if total, ok := http["totalMs"].(float64); ok && total > 0 {
+				val = total
+			}
+		}
+	case "tcp":
+		if tcp, ok := data["tcp"].(map[string]interface{}); ok {
+			if connectTime, ok := tcp["connectMs"].(float64); ok && connectTime > 0 {
+				val = connectTime
+			}
+		}
+	case "speedtest":
+		if speedtest, ok := data["speedtest"].(map[string]interface{}); ok {
+			if download, ok := speedtest["downloadMbps"].(float64); ok && download > 0 {
+				val = download
+			}
+		}
+	case "traceroute":
+		if tr, ok := data["traceroute"].(map[string]interface{}); ok {
+			if hops, ok := tr["hops"].([]interface{}); ok {
+				val = float64(len(hops))
+			}
+		}
+	case "wlan_scan":
+		if ws, ok := data["wlanScan"].(map[string]interface{}); ok {
+			if aps, ok := ws["accessPoints"].([]interface{}); ok {
+				val = float64(len(aps))
+			}
+		}
+	}
+
+	if val > 0 {
+		return &val
+	}
+	return nil
 }
 
 // extractSeries extracts the last ~30 results for a test and returns the unit, series data, and current value.

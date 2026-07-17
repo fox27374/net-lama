@@ -496,6 +496,85 @@ What has been done so far, in chronological order. Planned work lives in
   submission: `await api("PUT", `/api/v1/alert-rules/${selectedRuleId}`, ruleUpdate)`
   with all rule fields preserved. Evidence in the report below.
 
+## 2026-07-13 — Logo, per-site health, configure/view nav split
+
+- **Logo for the web UI**: theme-aware transparent llama logo (from
+  `logo.jpg` artwork, background removed, strokes thickened for small sizes)
+  in the sidebar and login box, plus light/dark favicons
+  (`favicon-light/dark.png`) swapped by `prefers-color-scheme`. Assets
+  generated as tinted-alpha PNGs matching the theme `--fg` tokens.
+- **Per-site health rollup** (`siteHealth` in `GET /api/v1/overview`): the
+  dashboard sites box previously mapped *tenant-wide* per-test health onto
+  each site, so a shared test could show "no data"/wrong status for a site
+  it was healthy (or broken) on. The server now judges each site's assigned
+  tests only against results from that site's own agents. Health chips in
+  the sites box also got spacing (`.health + .health`).
+- **Configure vs. view nav split**: Sites and Agents moved from the top
+  (viewing) sidebar group into Configuration (Sites, Agents, Tests,
+  Alerts & Alert Rules).
+
+## 2026-07-14 — Per-test state thresholds and state-based alert rules
+
+- **Per-test state thresholds** (warn/crit boundaries): tests now accept an
+  optional `thresholds` object (`{"warn": 30, "crit": 80}`) that applies to
+  the test's primary metric (ping/dns/http/tcp → ms; speedtest → Mbps;
+  traceroute → hops; wlan_scan → APs). Stored as TEXT (JSON) column on the
+  tests table. Direction is type-specific: speedtest is "lower-is-worse"
+  (values below thresholds trigger degraded/failing states), all other types
+  are "higher-is-worse". Test result state is computed per result: failed
+  results are always red; ok results without thresholds are green; otherwise
+  state is green/orange/red based on metric vs. warn/crit. Health rollups
+  incorporate state: any red in the window → failing; orange present (no red)
+  → degraded; all green → healthy (backward-compatible for tests without
+  thresholds).
+- **State-based alert rules** (`metric: "state"`): new alert-rule metric type
+  fires on test state. Threshold is the level (1=orange, 2=red); operator is
+  always `>=`. Evaluation computes result state from the test's thresholds and
+  fires when the state level is reached for `forCount` consecutive results.
+  Clear hysteresis uses the same dead-band logic as other metrics.
+- **API & validation**: tests POST/PUT endpoints now accept and validate
+  `thresholds` (warn must be < crit if both set). Alert-rules endpoints
+  validate `metric: "state"` with level ∈ {1,2} and set operator to `>=`.
+  `doc/API.md` updated with the new fields and semantics.
+- **Web UI**: Tests dialog thresholds use a Grafana-style colored **band
+  editor** (`#t-bands` in `app.js`): stacked red/orange/green rows, each
+  showing its swatch, the editable boundary value, and the derived range
+  text ("80 and greater", "30 to 80", "less than 30"). Bands are added and
+  removed individually ("+ Degraded (orange)"/"+ Failing (red)"); the same
+  `{warn, crit}` model backs it. For speedtest the stack inverts (green on
+  top, red at the bottom) since lower is worse, and server validation was
+  fixed to require warn > crit in that direction (the initial numeric-input
+  version wrongly rejected valid speedtest bands). Alert Rules dialog gained
+  a "State is at least" metric option with a level dropdown (Orange/Red) in
+  place of the numeric threshold input. Sidebar button renamed from
+  "Alerts & Alert Rules" to "Alert Rules"; alertcfg section reordered
+  (Rules box above Targets; "Alert Targets" heading → "Targets"). Webhook
+  URL field removed from the rule dialog and API responses (deprecated, now
+  routed through webhook targets).
+- **Startup migration**: existing alert_rules with non-empty `webhook_url`
+  are migrated: a webhook target is created or found (name convention:
+  original rule name + " webhook"), added to `target_ids`, and `webhook_url`
+  is cleared in the rule (idempotent, runs on every startup from the schema
+  migration in `store.go`).
+- **Storage & evaluation** (`internal/store/overview.go`): `testStatus`
+  refactored to scan result payloads and compute state per result when
+  thresholds are set. New helper functions: `computeResultState` (applies
+  thresholds to a value, returns state string), `extractMetricValue` (pulls
+  primary metric from result payload). State-aware status determination:
+  red count > orange count > mixed/degraded > all healthy. Backward-compatible:
+  no thresholds → classic ok-count logic.
+- **Alert evaluation** (`internal/server/alerts.go`): `evalRule` now accepts
+  test definition, extracts result state for `metric: "state"`, and compares
+  level using existing hysteresis. New `resultState` function computes result
+  state from thresholds (parsing JSON); new `extractResultMetric` function
+  pulls the metric value from a TestResult oneof (mirrors overview.go logic).
+- **Verification**: `make build`, `go vet ./...`, `go test ./...` pass.
+  E2E: self-signed server, tenant/site/agent created via JSON API, HTTP test
+  with tiny thresholds (warn=0.0001, crit=0.0002) targeting server UI,
+  state-rule for red×3, webhook target with local http.server sink,
+  confirmed overview displays degraded/failing correctly and webhook
+  receives POST on state breach.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

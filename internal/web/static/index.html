@@ -4,12 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Net-Lama</title>
+  <link id="favicon" rel="icon" type="image/png" href="favicon-light.png">
   <script>
     // Set the theme before first paint to avoid flashing
     (function () {
       const saved = localStorage.getItem("netlama-theme");
       const theme = saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       document.documentElement.dataset.theme = theme;
+      // The tab strip follows the browser theme, not the app theme
+      const mq = matchMedia("(prefers-color-scheme: dark)");
+      const setIcon = () => {
+        document.getElementById("favicon").href = mq.matches ? "favicon-dark.png" : "favicon-light.png";
+      };
+      setIcon();
+      mq.addEventListener("change", setIcon);
     })();
   </script>
   <link rel="stylesheet" href="style.css">
@@ -18,7 +26,7 @@
 
 <div id="login-view" class="hidden">
   <div class="login-box">
-    <div class="brand big"><span class="brand-dot"></span>Net-Lama</div>
+    <div class="brand big"><span class="brand-logo" role="img" aria-label="Net-Lama logo"></span>Net-Lama</div>
     <p class="muted">Network measurement platform</p>
     <form id="login-form">
       <label>Username <input type="text" id="login-username" autocomplete="username" required></label>
@@ -32,7 +40,7 @@
 <div id="app-view" class="hidden">
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <span class="brand"><span class="brand-dot"></span>Net-Lama</span>
+      <span class="brand"><span class="brand-logo" role="img" aria-label="Net-Lama logo"></span>Net-Lama</span>
     </div>
     <nav class="sidebar-nav">
       <button data-nav="dashboard" class="nav-item active">Dashboard</button>
@@ -41,14 +49,14 @@
       <button data-nav="wireless" class="nav-item">Wireless</button>
       <button data-nav="logs" class="nav-item">Logs</button>
       <button data-nav="alerts" class="nav-item">Alerts <span id="nav-alert-badge" class="nav-badge hidden"></span></button>
-      <button data-nav="sites" class="nav-item">Sites</button>
-      <button data-nav="agents" class="nav-item">Agents</button>
     </nav>
     <div class="sidebar-divider"></div>
     <nav class="sidebar-nav">
       <div class="nav-group-label">Configuration</div>
+      <button data-nav="sites" class="nav-item">Sites</button>
+      <button data-nav="agents" class="nav-item">Agents</button>
       <button data-nav="tests" class="nav-item">Tests</button>
-      <button data-nav="alertcfg" class="nav-item">Alerts &amp; Alert Rules</button>
+      <button data-nav="alertcfg" class="nav-item">Alert Rules</button>
     </nav>
     <div class="sidebar-divider"></div>
     <nav class="sidebar-nav">
@@ -293,15 +301,7 @@
 
     <!-- Alert Configuration -->
     <section id="section-alertcfg" class="hidden">
-      <div class="section-head"><h2>Alerts &amp; Alert Rules</h2></div>
-      <div class="card table-card">
-        <div class="section-head"><h3>Alert targets</h3><button id="btn-new-target" class="primary">New target</button></div>
-        <table id="targets-table">
-          <thead><tr><th>Name</th><th>Type</th><th>Summary</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <p id="targets-empty" class="empty hidden">No alert targets yet. Configure at least one to route alerts (or leave empty to view alerts only).</p>
-      </div>
+      <div class="section-head"><h2>Alert Rules</h2></div>
       <div class="card table-card">
         <div class="section-head"><h3>Rules</h3><button id="btn-new-rule" class="primary">New rule</button></div>
         <table id="rules-table">
@@ -309,6 +309,14 @@
           <tbody></tbody>
         </table>
         <p id="rules-empty" class="empty hidden">No alert rules yet. Create one to be notified when a test fails or breaches a threshold.</p>
+      </div>
+      <div class="card table-card">
+        <div class="section-head"><h3>Targets</h3><button id="btn-new-target" class="primary">New target</button></div>
+        <table id="targets-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Summary</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="targets-empty" class="empty hidden">No alert targets yet. Configure at least one to route alerts (or leave empty to view alerts only).</p>
       </div>
     </section>
 
@@ -510,6 +518,10 @@
         <label>Probes per hop <input type="number" id="t-tr-probes" min="1" max="20" value="5"></label>
       </div>
     </div>
+    <div id="t-thresholds-section">
+      <label>State thresholds <span id="t-band-unit" class="muted"></span></label>
+      <div id="t-bands"></div>
+    </div>
     <div id="t-alert-rule-section">
       <label id="t-alert-rule-label">Alert Rule
         <select id="t-alert-rule"></select>
@@ -597,6 +609,7 @@
     <label>Condition
       <select id="ar-metric">
         <option value="unhealthy">Test is unhealthy (fails)</option>
+        <option value="state">State is at least</option>
         <option value="latency_ms">Latency (ms)</option>
         <option value="loss_percent">Packet loss (%)</option>
         <option value="download_mbps">Download (Mbps)</option>
@@ -614,6 +627,14 @@
       </label>
       <label>Threshold <input type="number" id="ar-threshold" step="any" value="0"></label>
     </div>
+    <div id="ar-state-wrap" class="grid2 hidden">
+      <label>Level
+        <select id="ar-state-level">
+          <option value="1">Orange (degraded)</option>
+          <option value="2">Red (failing)</option>
+        </select>
+      </label>
+    </div>
     <label>Fire after N consecutive breaches <input type="number" id="ar-forcount" min="1" value="2"></label>
     <div id="ar-clearthreshold-wrap">
       <label>Clear threshold (optional) <input type="number" id="ar-clearthreshold" step="any" placeholder="leave blank if N/A"></label>
@@ -623,7 +644,6 @@
       <label>Alert targets (select any)</label>
       <div id="ar-targets-list" class="check-list"></div>
     </div>
-    <label>Webhook URL (optional, deprecated) <input type="text" id="ar-webhook" placeholder="https://hooks.slack.com/services/..."></label>
     <p class="error hidden" id="ar-error"></p>
     <div class="row end">
       <button type="button" class="ghost" data-close>Cancel</button>

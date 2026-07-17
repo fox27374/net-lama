@@ -21,6 +21,7 @@ type TestDef struct {
 	Type            string          `json:"type"`
 	IntervalSeconds uint32          `json:"intervalSeconds"`
 	Params          json.RawMessage `json:"params"`
+	Thresholds      json.RawMessage `json:"thresholds,omitempty"`
 }
 
 // --- Sites ---
@@ -127,8 +128,8 @@ func (s *Store) SetSiteTests(siteID string, testIDs []string) error {
 func (s *Store) CreateTest(t *TestDef) (*TestDef, error) {
 	t.ID = newID()
 	_, err := s.db.Exec(
-		`INSERT INTO tests (id, tenant_id, name, type, interval_seconds, params) VALUES (?, ?, ?, ?, ?, ?)`,
-		t.ID, t.TenantID, t.Name, t.Type, t.IntervalSeconds, string(t.Params))
+		`INSERT INTO tests (id, tenant_id, name, type, interval_seconds, params, thresholds) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, t.TenantID, t.Name, t.Type, t.IntervalSeconds, string(t.Params), string(t.Thresholds))
 	if err != nil {
 		return nil, fmt.Errorf("creating test: %w", err)
 	}
@@ -137,8 +138,8 @@ func (s *Store) CreateTest(t *TestDef) (*TestDef, error) {
 
 func (s *Store) UpdateTest(t *TestDef) error {
 	res, err := s.db.Exec(
-		`UPDATE tests SET name = ?, interval_seconds = ?, params = ? WHERE id = ?`,
-		t.Name, t.IntervalSeconds, string(t.Params), t.ID)
+		`UPDATE tests SET name = ?, interval_seconds = ?, params = ?, thresholds = ? WHERE id = ?`,
+		t.Name, t.IntervalSeconds, string(t.Params), string(t.Thresholds), t.ID)
 	if err != nil {
 		return err
 	}
@@ -151,7 +152,8 @@ func (s *Store) UpdateTest(t *TestDef) error {
 func (s *Store) scanTest(row interface{ Scan(...any) error }) (*TestDef, error) {
 	t := &TestDef{}
 	var params string
-	err := row.Scan(&t.ID, &t.TenantID, &t.Name, &t.Type, &t.IntervalSeconds, &params)
+	var thresholds sql.NullString // NULL on rows predating the column
+	err := row.Scan(&t.ID, &t.TenantID, &t.Name, &t.Type, &t.IntervalSeconds, &params, &thresholds)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -159,10 +161,13 @@ func (s *Store) scanTest(row interface{ Scan(...any) error }) (*TestDef, error) 
 		return nil, err
 	}
 	t.Params = json.RawMessage(params)
+	if thresholds.String != "" {
+		t.Thresholds = json.RawMessage(thresholds.String)
+	}
 	return t, nil
 }
 
-const testCols = `id, tenant_id, name, type, interval_seconds, params`
+const testCols = `id, tenant_id, name, type, interval_seconds, params, thresholds`
 
 func (s *Store) GetTest(id string) (*TestDef, error) {
 	return s.scanTest(s.db.QueryRow(`SELECT `+testCols+` FROM tests WHERE id = ?`, id))
@@ -194,7 +199,7 @@ func (s *Store) DeleteTest(id string) error {
 // TestsForSite returns the test definitions assigned to a site.
 func (s *Store) TestsForSite(siteID string) ([]*TestDef, error) {
 	rows, err := s.db.Query(`
-		SELECT t.id, t.tenant_id, t.name, t.type, t.interval_seconds, t.params
+		SELECT t.id, t.tenant_id, t.name, t.type, t.interval_seconds, t.params, t.thresholds
 		FROM tests t JOIN site_tests st ON st.test_id = t.id
 		WHERE st.site_id = ? ORDER BY t.name`, siteID)
 	if err != nil {

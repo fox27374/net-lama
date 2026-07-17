@@ -164,3 +164,28 @@ func TestOverviewWithSiteFilter(t *testing.T) {
 	}
 	t.Logf("Overview with site1 filter: agents=%d", ov.Agents)
 }
+
+// TestListTestsNullThresholds reproduces a migrated database where the
+// thresholds column was added by ALTER TABLE and existing rows hold NULL.
+func TestListTestsNullThresholds(t *testing.T) {
+	s := openTestStore(t)
+	tn, err := s.CreateTenant("t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	td, err := s.CreateTest(&TestDef{TenantID: tn.ID, Name: "ping", Type: "ping",
+		IntervalSeconds: 60, Params: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE tests SET thresholds = NULL WHERE id = ?`, td.ID); err != nil {
+		t.Fatal(err)
+	}
+	tests, err := s.ListTests(tn.ID)
+	if err != nil {
+		t.Fatalf("ListTests with NULL thresholds: %v", err)
+	}
+	if len(tests) != 1 || tests[0].Thresholds != nil {
+		t.Fatalf("unexpected result: %+v", tests)
+	}
+}

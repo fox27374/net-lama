@@ -211,7 +211,7 @@ async function loadDashboard() {
 
   // Render sites table (filtered if needed)
   const sitesData = siteId ? sites.filter(s => s.id === siteId) : sites;
-  renderDashboardSites(sitesData, ov.testHealth || []);
+  renderDashboardSites(sitesData, ov.siteHealth || []);
 
   // Render alerts table
   await renderDashboardAlerts(siteId);
@@ -228,16 +228,15 @@ $("#db-site-filter").addEventListener("change", () => {
   loadDashboard();
 });
 
-function renderDashboardSites(sitesData, testHealth) {
+function renderDashboardSites(sitesData, siteHealth) {
   const tbody = $("#db-sites-table tbody");
   tbody.innerHTML = "";
   $("#db-sites-empty").classList.toggle("hidden", sitesData.length > 0);
 
   for (const site of sitesData) {
-    // Health rollup: statuses of the tests assigned to this site.
-    const statuses = (testHealth || []).filter((h) => (site.testIds || []).includes(h.testId));
-    const counts = {};
-    for (const h of statuses) counts[h.status] = (counts[h.status] || 0) + 1;
+    // Health rollup comes from the server: the site's assigned tests judged
+    // only against results from this site's own agents.
+    const counts = (siteHealth || []).find((sh) => sh.siteId === site.id) || {};
     const chips = ["healthy", "degraded", "failing", "nodata"]
       .filter((st) => counts[st])
       .map((st) => `<span class="health ${st}">${counts[st]} ${HEALTH_LABEL[st].toLowerCase()}</span>`)
@@ -680,7 +679,11 @@ function updateTestParamFields() {
   // Re-filter alert rules when test type changes
   populateAlertRuleSelect(type);
 }
-$("#t-type").addEventListener("change", updateTestParamFields);
+$("#t-type").addEventListener("change", () => {
+  updateTestParamFields();
+  // Direction and unit change with the type — reset the bands for the new type
+  initThresholdBands($("#t-type").value, {});
+});
 
 function populateAlertRuleSelect(testType) {
   const applicableRules = getApplicableRules(testType);
@@ -700,6 +703,126 @@ function populateAlertRuleSelect(testType) {
     select.innerHTML = '<option value="">— none —</option>' +
       applicableRules.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
   }
+}
+
+// --- State-threshold band editor (Grafana-style colored bands) ---
+// Backed by the same {warn, crit} model: warn is the green|orange boundary,
+// crit the orange|red one. For speedtest lower is worse, so the band order
+// flips (green on top) and warn > crit.
+const BAND_UNIT = { ping: "ms", dns: "ms", http: "ms", tcp: "ms", speedtest: "Mbps", traceroute: "hops", wlan_scan: "APs" };
+// null = band absent, "" = band added but value not typed yet, "40" = value
+let bandTh = { warn: null, crit: null };
+let bandType = "ping";
+
+function initThresholdBands(type, th) {
+  bandType = type;
+  bandTh.warn = th.warn != null ? String(th.warn) : null;
+  bandTh.crit = th.crit != null ? String(th.crit) : null;
+  renderBands();
+}
+
+// bandRows returns the rows to draw, highest boundary first. Each row:
+// {color, field (editable boundary; null for the catch-all band), text}.
+function bandRows() {
+  const lw = bandType === "speedtest"; // lower is worse
+  const hasW = bandTh.warn !== null, hasC = bandTh.crit !== null;
+  const w = bandTh.warn || "…", c = bandTh.crit || "…";
+  if (hasW && hasC) {
+    return lw
+      ? [{ color: "green", field: "warn", text: "and greater" },
+         { color: "orange", field: "crit", text: `to ${w}` },
+         { color: "red", field: null, text: `less than ${c}` }]
+      : [{ color: "red", field: "crit", text: "and greater" },
+         { color: "orange", field: "warn", text: `to ${c}` },
+         { color: "green", field: null, text: `less than ${w}` }];
+  }
+  if (hasW) {
+    return lw
+      ? [{ color: "green", field: "warn", text: "and greater" },
+         { color: "orange", field: null, text: `less than ${w}` }]
+      : [{ color: "orange", field: "warn", text: "and greater" },
+         { color: "green", field: null, text: `less than ${w}` }];
+  }
+  if (hasC) {
+    return lw
+      ? [{ color: "green", field: "crit", text: "and greater" },
+         { color: "red", field: null, text: `less than ${c}` }]
+      : [{ color: "red", field: "crit", text: "and greater" },
+         { color: "green", field: null, text: `less than ${c}` }];
+  }
+  return [];
+}
+
+function renderBands() {
+  const unit = BAND_UNIT[bandType] || "";
+  $("#t-band-unit").textContent = unit ? `(${unit}, optional)` : "(optional)";
+  const box = $("#t-bands");
+  box.innerHTML = "";
+
+  for (const row of bandRows()) {
+    const div = document.createElement("div");
+    div.className = "band-row";
+    div.innerHTML = `<span class="band-swatch ${row.color}"></span>` +
+      (row.field ? `<input type="number" step="any" data-band="${row.field}" value="${bandTh[row.field]}">` : "") +
+      `<span class="band-text" data-band-text>${row.text}</span>` +
+      `<button type="button" class="ghost band-x" data-band-x="${row.field || "all"}" title="Remove">✕</button>`;
+    box.appendChild(div);
+  }
+
+  // Add buttons for missing bands (warn ↔ orange, crit ↔ red)
+  const add = document.createElement("div");
+  add.className = "band-add";
+  if (bandTh.warn === null && bandTh.crit === null) {
+    add.innerHTML = `<button type="button" class="ghost" data-band-add="both">+ Add state thresholds</button>`;
+  } else {
+    if (bandTh.warn === null) add.innerHTML += `<button type="button" class="ghost" data-band-add="warn">+ Degraded (orange) state</button>`;
+    if (bandTh.crit === null) add.innerHTML += `<button type="button" class="ghost" data-band-add="crit">+ Failing (red) state</button>`;
+  }
+  if (add.innerHTML) box.appendChild(add);
+}
+
+$("#t-bands").addEventListener("input", (e) => {
+  const f = e.target.dataset.band;
+  if (!f) return;
+  bandTh[f] = e.target.value;
+  // Update dependent range labels without re-rendering (keeps focus)
+  const texts = $("#t-bands").querySelectorAll("[data-band-text]");
+  bandRows().forEach((row, i) => { if (texts[i]) texts[i].textContent = row.text; });
+});
+
+$("#t-bands").addEventListener("click", (e) => {
+  const x = e.target.dataset.bandX, a = e.target.dataset.bandAdd;
+  if (!x && !a) return;
+  if (x === "all") { bandTh.warn = null; bandTh.crit = null; }
+  else if (x) bandTh[x] = null;
+  if (a === "both") { bandTh.warn = ""; bandTh.crit = ""; }
+  else if (a) bandTh[a] = "";
+  renderBands();
+  // Focus the first empty input of the freshly added band
+  const inp = $("#t-bands").querySelector('input[data-band][value=""]');
+  if (inp) inp.focus();
+});
+
+// readThresholdBands returns {warn?, crit?}, null for none, or undefined
+// after showing a validation error.
+function readThresholdBands() {
+  const w = bandTh.warn, c = bandTh.crit;
+  if (w === null && c === null) return null;
+  if (w === "" || c === "" || (w !== null && isNaN(+w)) || (c !== null && isNaN(+c))) {
+    dialogError("#t-error", "Fill in every state boundary or remove the band");
+    return undefined;
+  }
+  const th = {};
+  if (w !== null) th.warn = +w;
+  if (c !== null) th.crit = +c;
+  if (th.warn != null && th.crit != null) {
+    const lw = bandType === "speedtest";
+    if (lw ? th.warn <= th.crit : th.warn >= th.crit) {
+      dialogError("#t-error", "State boundaries overlap — adjust the band values");
+      return undefined;
+    }
+  }
+  return th;
 }
 
 function openTestDialog(test) {
@@ -730,6 +853,9 @@ function openTestDialog(test) {
   $("#t-tr-probes").value = (test && test.type === "traceroute" && p.probesPerHop) || 5;
   $("#t-st-provider").value = (test && test.type === "speedtest" && p.provider) || "ookla";
   updateTestParamFields();
+
+  // State thresholds band editor
+  initThresholdBands(testType, (test && test.thresholds) || {});
 
   // Populate alert rule selection
   populateAlertRuleSelect(testType);
@@ -783,12 +909,17 @@ $("#form-test").addEventListener("submit", async (e) => {
   } else if (type === "speedtest") {
     params = { provider: $("#t-st-provider").value };
   }
+  // Build thresholds from the band editor (undefined => validation error)
+  const thresholds = readThresholdBands();
+  if (thresholds === undefined) return;
+
   const body = {
     name: $("#t-name").value.trim(),
     type,
     intervalSeconds: +$("#t-interval").value,
     params,
   };
+  if (thresholds) body.thresholds = thresholds;
   try {
     let testId;
     if (editingTest) {
@@ -817,7 +948,6 @@ $("#form-test").addEventListener("submit", async (e) => {
           clearThreshold: rule.clearThreshold,
           clearCount: rule.clearCount,
           targetIds: rule.targetIds,
-          webhookUrl: rule.webhookUrl,
         };
         await api("PUT", `/api/v1/alert-rules/${selectedRuleId}`, ruleUpdate);
       }
@@ -2343,7 +2473,9 @@ async function loadAlerts() {
 }
 
 $("#ar-metric").addEventListener("change", () => {
-  $("#ar-threshold-wrap").classList.toggle("hidden", $("#ar-metric").value === "unhealthy");
+  const metric = $("#ar-metric").value;
+  $("#ar-threshold-wrap").classList.toggle("hidden", metric === "unhealthy" || metric === "state");
+  $("#ar-state-wrap").classList.toggle("hidden", metric !== "state");
 });
 
 let editingRuleId = null;
@@ -2365,11 +2497,12 @@ $("#btn-new-rule").addEventListener("click", async () => {
   }
   $("#ar-metric").value = "unhealthy";
   $("#ar-threshold-wrap").classList.add("hidden");
+  $("#ar-state-wrap").classList.add("hidden");
   $("#ar-threshold").value = 0;
+  $("#ar-state-level").value = "2";
   $("#ar-forcount").value = 2;
   $("#ar-clearthreshold").value = "";
   $("#ar-clearcount").value = 1;
-  $("#ar-webhook").value = "";
   // Populate target checkboxes
   const targetsList = $("#ar-targets-list");
   targetsList.innerHTML = targets.map((t) => `
@@ -2388,13 +2521,12 @@ $("#form-rule").addEventListener("submit", async (e) => {
     name: $("#ar-name").value.trim(),
     testId: $("#ar-test").value,
     metric,
-    operator: metric === "unhealthy" ? ">" : $("#ar-op").value,
-    threshold: metric === "unhealthy" ? 0 : +$("#ar-threshold").value,
+    operator: metric === "unhealthy" ? ">" : (metric === "state" ? ">=" : $("#ar-op").value),
+    threshold: metric === "unhealthy" ? 0 : (metric === "state" ? +$("#ar-state-level").value : +$("#ar-threshold").value),
     forCount: +$("#ar-forcount").value,
     clearThreshold: clearThresholdVal ? +clearThresholdVal : null,
     clearCount: +$("#ar-clearcount").value,
     targetIds,
-    webhookUrl: $("#ar-webhook").value.trim(),
   };
   const tid = tenantParam("");
   if (tid) body.tenantId = tid.split("=")[1];
@@ -2504,15 +2636,18 @@ async function editAlertRule(rule, targets) {
   $("#ar-name").value = rule.name;
   $("#ar-test").innerHTML = tests.map((t) => `<option value="${t.id}" ${t.id === rule.testId ? "selected" : ""}>${esc(t.name)} (${t.type})</option>`).join("");
   $("#ar-metric").value = rule.metric;
-  $("#ar-threshold-wrap").classList.toggle("hidden", rule.metric === "unhealthy");
-  if (rule.metric !== "unhealthy") {
+  $("#ar-threshold-wrap").classList.toggle("hidden", rule.metric === "unhealthy" || rule.metric === "state");
+  $("#ar-state-wrap").classList.toggle("hidden", rule.metric !== "state");
+  if (rule.metric !== "unhealthy" && rule.metric !== "state") {
     $("#ar-op").value = rule.operator;
     $("#ar-threshold").value = rule.threshold;
+  }
+  if (rule.metric === "state") {
+    $("#ar-state-level").value = rule.threshold;
   }
   $("#ar-forcount").value = rule.forCount;
   $("#ar-clearthreshold").value = rule.clearThreshold || "";
   $("#ar-clearcount").value = rule.clearCount || 1;
-  $("#ar-webhook").value = rule.webhookUrl || "";
   // Populate target checkboxes
   const targetsList = $("#ar-targets-list");
   targetsList.innerHTML = targets.map((t) => `

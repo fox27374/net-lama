@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -21,13 +22,19 @@ func (s *Server) evaluateAlerts(conn *connectedAgent, result *pb.TestResult) {
 		return
 	}
 
+	// Get test definition for state computation
+	var test *store.TestDef
+	if testDef, err := s.Store.GetTest(result.TestId); err == nil {
+		test = testDef
+	}
+
 	// Some tests emit several results per run (one per target/query); the
 	// subject keeps a separate alert per target so a healthy target doesn't
 	// resolve an alert raised by a failing one.
 	subject := resultSubject(result)
 
 	for _, rule := range rules {
-		breach, value, applicable := evalRule(rule, result)
+		breach, value, applicable := evalRule(rule, result, test)
 		if !applicable {
 			continue
 		}
@@ -150,10 +157,17 @@ func resultSubject(result *pb.TestResult) string {
 
 // evalRule computes whether a result breaches a rule. applicable is false
 // when the metric does not apply to this result's type (rule is skipped).
-func evalRule(rule *store.AlertRule, result *pb.TestResult) (breach bool, value float64, applicable bool) {
+func evalRule(rule *store.AlertRule, result *pb.TestResult, test *store.TestDef) (breach bool, value float64, applicable bool) {
 	if rule.Metric == "unhealthy" {
 		return !resultOK(result), 0, true
 	}
+
+	// State metric: compute result state and compare against level (1=orange, 2=red)
+	if rule.Metric == "state" {
+		stateLevel := resultState(result, test)
+		return compare(stateLevel, rule.Operator, rule.Threshold), stateLevel, true
+	}
+
 	// Numeric metrics only apply to successful results of the right type;
 	// use the "unhealthy" metric to catch outright failures.
 	if result.Error != "" {
@@ -165,6 +179,97 @@ func evalRule(rule *store.AlertRule, result *pb.TestResult) (breach bool, value 
 		return false, 0, false
 	}
 	return compare(v, rule.Operator, rule.Threshold), v, true
+}
+
+// resultState computes the numeric state of a result for "state" metric alerts.
+// Returns: 0=green, 1=orange, 2=red (failed result).
+// Requires the test's thresholds from the database.
+func resultState(result *pb.TestResult, test *store.TestDef) float64 {
+	// Failed result is always red (level 2)
+	if result.Error != "" {
+		return 2
+	}
+	if !resultOK(result) {
+		return 2
+	}
+	// Parse test thresholds if present
+	if test == nil || len(test.Thresholds) == 0 {
+		return 0 // green if no thresholds
+	}
+
+	var thresholds struct {
+		Warn float64 `json:"warn"`
+		Crit float64 `json:"crit"`
+	}
+	if err := json.Unmarshal(test.Thresholds, &thresholds); err != nil {
+		return 0
+	}
+
+	// Extract the metric value from the result
+	val := extractResultMetric(test.Type, result)
+	if val == nil {
+		return 0
+	}
+
+	// Compute state based on test type direction
+	isSpeedtest := test.Type == "speedtest"
+	if isSpeedtest {
+		// Lower is worse
+		if thresholds.Crit > 0 && *val < thresholds.Crit {
+			return 2
+		}
+		if thresholds.Warn > 0 && *val < thresholds.Warn {
+			return 1
+		}
+	} else {
+		// Higher is worse
+		if thresholds.Crit > 0 && *val > thresholds.Crit {
+			return 2
+		}
+		if thresholds.Warn > 0 && *val > thresholds.Warn {
+			return 1
+		}
+	}
+	return 0
+}
+
+// extractResultMetric extracts the primary metric from a TestResult's oneof.
+func extractResultMetric(testType string, result *pb.TestResult) *float64 {
+	var val float64
+	switch r := result.Result.(type) {
+	case *pb.TestResult_Ping:
+		if r.Ping != nil {
+			val = r.Ping.AvgRttMs
+		}
+	case *pb.TestResult_Dns:
+		if r.Dns != nil {
+			val = r.Dns.ResolveTimeMs
+		}
+	case *pb.TestResult_Http:
+		if r.Http != nil {
+			val = r.Http.TotalMs
+		}
+	case *pb.TestResult_Tcp:
+		if r.Tcp != nil {
+			val = r.Tcp.ConnectMs
+		}
+	case *pb.TestResult_Speedtest:
+		if r.Speedtest != nil {
+			val = r.Speedtest.DownloadMbps
+		}
+	case *pb.TestResult_Traceroute:
+		if r.Traceroute != nil {
+			val = float64(len(r.Traceroute.Hops))
+		}
+	case *pb.TestResult_WlanScan:
+		if r.WlanScan != nil {
+			val = float64(len(r.WlanScan.AccessPoints))
+		}
+	}
+	if val > 0 {
+		return &val
+	}
+	return nil
 }
 
 func metricValue(metric string, result *pb.TestResult) (float64, bool) {
