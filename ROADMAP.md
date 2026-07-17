@@ -46,6 +46,16 @@ Planned work, roughly grouped. Not ordered by priority yet.
       supports, incl. DFS) on a monitor sensor's first connect, with a Wireless
       page panel and an assisted button to narrow the recurring test to the
       channels that had activity
+- [ ] WLAN tests on a channel or SSID basis: define a wlan_sense test that
+      targets a specific SSID (sensor follows it across channels) or a fixed
+      channel set per test
+- [ ] Improve the channel and SSID overview on the Wireless page (clearer
+      per-band layout, channel occupancy at a glance, SSID grouping across
+      BSSIDs/bands)
+- [ ] AP vendor info: resolve BSSID OUIs to manufacturer names in the
+      Wireless views
+- [ ] SSID details: security (WPA2/WPA3, cipher/AKM), capabilities and
+      settings like 802.11r/k/v — parsed from beacon information elements
 - [x] Traceroute / path analysis Phase 1: mtr-based path test (TCP/ICMP/UDP),
       per-hop RTT and loss, failure localization, hop-chain Path visualization
 - [ ] SaaS / cloud service tests: reachability and quality checks for online
@@ -104,7 +114,8 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] Alert-rule configuration UI as its own menu item
 - [x] Logo for the web UI (theme-aware transparent logo in sidebar/login +
       light/dark favicons)
-- [ ] Version tag reported by server and agent, shown in UI/API
+- [ ] Version tag reported by server and agent, shown in UI/API (incl. the
+      agent overview listing each agent's version)
 - [ ] Configurable result retention: time-based (e.g. "keep 30 days") and/or
       per-test caps instead of the fixed 5000-results-per-agent limit, which
       is shared across all of an agent's tests (a chatty 1-minute test crowds
