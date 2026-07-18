@@ -1616,7 +1616,167 @@ async function renderWirelessAgent() {
   if (tid) params.set("tenantId", tid.split("=")[1]);
   const results = await api("GET", "/api/v1/results?" + params.toString());
   renderWirelessNetworks(results[0]);
+  renderWirelessActive(agent);
 }
+
+// --- Active connection test (wlan_active) on the Wireless page ---
+let wlActiveChart = null;
+let wlActiveLast = null; // latest wlan_active payload, for theme re-render
+
+// renderWirelessActive shows the active-test card with a step waterfall when
+// the selected agent has wlan_active results; hidden otherwise.
+async function renderWirelessActive(agent) {
+  const card = $("#wl-active");
+  let r = null;
+  try {
+    const params = new URLSearchParams({ agentId: agent.id, type: "wlan_active", limit: "1" });
+    const tid = tenantParam("");
+    if (tid) params.set("tenantId", tid.split("=")[1]);
+    r = (await api("GET", "/api/v1/results?" + params.toString()))[0];
+  } catch (e) { /* treat as no data */ }
+  const wa = r && r.payload && r.payload.wlanActive;
+  if (!wa) {
+    card.classList.add("hidden");
+    wlActiveLast = null;
+    return;
+  }
+  wlActiveLast = wa;
+  card.classList.remove("hidden");
+
+  const meta = $("#wl-active-meta");
+  meta.textContent = "";
+  if (wa.demo) {
+    const badge = document.createElement("span");
+    badge.className = "demo-badge";
+    badge.textContent = "DEMO DATA";
+    meta.appendChild(badge);
+  }
+  meta.appendChild(document.createTextNode(
+    `${r.testName} · ${new Date(r.time).toLocaleString()}`));
+
+  const status = wa.success
+    ? '<span class="health healthy">connected</span>'
+    : `<span class="health failing">failed: ${esc(wa.failedStep || r.error || "unknown")}</span>`;
+  const rows = [
+    ["SSID", esc(wa.ssid || "—") + (wa.bssid ? ` <span class="muted mono">${esc(wa.bssid)}</span>` : "")],
+    ["Status", status],
+    ["IP address", wa.ip ? `<span class="mono">${esc(wa.ip)}</span>` : "—"],
+    ["Netmask", wa.netmask ? `<span class="mono">${esc(wa.netmask)}</span>` : "—"],
+    ["Gateway", wa.gateway ? `<span class="mono">${esc(wa.gateway)}</span>` : "—"],
+    ["Signal", wa.rssiDbm ? `<span class="health ${signalClass(wa.rssiDbm)}">${wa.rssiDbm} dBm</span>` : "—"],
+    ["Throughput", wa.throughputMbps ? `${fmt(wa.throughputMbps)} Mbps` : "—"],
+    ["Total", `${fmt(wa.totalMs)} ms`],
+  ];
+  $("#wl-active-summary").innerHTML = rows
+    .map(([k, v]) => `<div class="wl-detail-item"><span class="wl-detail-label">${k}</span><span class="wl-detail-value">${v}</span></div>`)
+    .join("");
+
+  renderWlActiveWaterfall(wa);
+}
+
+// renderWlActiveWaterfall draws the per-step connection waterfall:
+// association → authentication → DHCP (+ throughput when measured), each
+// bar offset by the cumulative time of the previous steps.
+function renderWlActiveWaterfall(wa) {
+  const container = $("#wl-active-waterfall");
+  const steps = [
+    { name: "Association", ms: wa.associateMs || 0, key: "associate" },
+    { name: "Authentication", ms: wa.authenticateMs || 0, key: "authenticate" },
+    { name: "DHCP", ms: wa.dhcpMs || 0, key: "dhcp" },
+  ];
+  if (wa.throughputMs) {
+    steps.push({ name: "Throughput", ms: wa.throughputMs, key: "throughput" });
+  }
+
+  const style = getComputedStyle(document.documentElement);
+  const accentColor = style.getPropertyValue("--accent").trim();
+  const badColor = style.getPropertyValue("--bad").trim();
+  const mutedColor = style.getPropertyValue("--muted-solid").trim();
+  const textColor = style.getPropertyValue("--fg").trim();
+
+  const baseData = [];
+  const barData = [];
+  let cumulative = 0;
+  for (const s of steps) {
+    baseData.push(cumulative);
+    barData.push({
+      value: s.ms,
+      itemStyle: { color: wa.failedStep === s.key ? badColor : accentColor },
+    });
+    cumulative += s.ms;
+  }
+  const maxNice = niceMax(Math.max(cumulative, 1) * 1.1);
+
+  const option = {
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: function (params) {
+        if (!params || !params.length) return "";
+        const i = params[0].dataIndex;
+        const s = steps[i];
+        if (wa.failedStep === s.key) {
+          return `<strong>${s.name}</strong><br/>failed after ${fmt(s.ms)} ms`;
+        }
+        return `<strong>${s.name}</strong>: ${fmt(s.ms)} ms<br/>` +
+          `completed at ${fmt(baseData[i] + s.ms)} ms`;
+      },
+    },
+    grid: { top: 44, bottom: 24, left: 110, right: 30 },
+    xAxis: {
+      type: "value",
+      position: "top",
+      min: 0,
+      max: maxNice,
+      name: "ms",
+      nameGap: 6,
+      nameTextStyle: { color: mutedColor, fontSize: 11 },
+      axisLabel: { color: mutedColor, fontSize: 11 },
+      axisLine: { lineStyle: { color: mutedColor } },
+      splitLine: { lineStyle: { color: mutedColor, opacity: 0.2 } },
+    },
+    yAxis: {
+      type: "category",
+      data: steps.map((s) => s.name),
+      inverse: true,
+      axisLabel: { color: mutedColor, fontSize: 11 },
+      axisLine: { lineStyle: { color: mutedColor } },
+    },
+    series: [
+      {
+        name: "base",
+        type: "bar",
+        stack: "waterfall",
+        data: baseData,
+        itemStyle: { color: "transparent" },
+        tooltip: { show: false },
+      },
+      {
+        name: "Duration",
+        type: "bar",
+        stack: "waterfall",
+        barWidth: 16,
+        data: barData,
+        itemStyle: { borderWidth: 0 },
+      },
+    ],
+    textStyle: { color: textColor },
+  };
+
+  const chartHeight = Math.max(160, steps.length * 30 + 90);
+  if (!wlActiveChart) {
+    container.style.height = chartHeight + "px";
+    wlActiveChart = window.echarts.init(container);
+  } else {
+    container.style.height = chartHeight + "px";
+    wlActiveChart.resize();
+  }
+  wlActiveChart.setOption(option, true);
+}
+
+window.addEventListener("resize", () => {
+  if (wlActiveChart && currentSection() === "wireless") wlActiveChart.resize();
+});
 
 // signalClass buckets an RSSI (dBm) into a health color: >=-60 ok,
 // -75..-60 warn, <-75 bad.
@@ -2030,6 +2190,9 @@ document.querySelectorAll(".seg-btn[data-metric]").forEach((btn) => {
 
 // Add theme toggle handler for path heatmap and waterfall
 $("#theme-toggle").addEventListener("click", () => {
+  if (currentSection() === "wireless" && wlActiveLast) {
+    renderWlActiveWaterfall(wlActiveLast);
+  }
   if (currentSection() === "path") {
     if (paHistoryResults) {
       renderPathHeatmap(paHistoryResults);

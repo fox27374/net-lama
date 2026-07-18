@@ -858,6 +858,16 @@ What has been done so far, in chronological order. Planned work lives in
   CA cert/skip-verify only for EAP), per-step timing summary in Results.
 - **Deferred**: roaming-event observation (new ROADMAP item).
 
+## 2026-07-18 — WLAN active on the Wireless page
+
+- **Active connection card** on the Wireless page: when the selected agent has
+  `wlan_active` results, a card appears with the latest test's summary (SSID/
+  BSSID, status, IP/netmask/gateway, signal, throughput, total) and an ECharts
+  step waterfall — Association → Authentication → DHCP (+ Throughput when
+  measured), each bar offset by the cumulative previous steps, failed step in
+  red. Hidden entirely when no wlan_active test produces results for that
+  agent. Theme-toggle and resize re-render like the Path waterfall.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
