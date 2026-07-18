@@ -1035,6 +1035,9 @@ svg { display: inline-block; }
 .wl-child-row.hidden {
   display: none;
 }
+.wl-stale {
+  opacity: 0.5;
+}
 .wl-band-check {
   display: inline-flex;
   align-items: center;

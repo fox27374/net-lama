@@ -100,6 +100,11 @@ type Agent struct {
 
 type wlanPassiveState struct {
 	InterestingChannels []uint32
+	LastFullSweep       time.Time
+	// Retained sightings: APs and stations stay in results for wlanRetention
+	// after last being heard, so short fades don't drop them from the UI.
+	Networks map[string]probe.WlanNetwork // by BSSID
+	Stations map[string]probe.WlanStation // by MAC
 }
 
 // Run connects to the server and keeps the control stream alive,

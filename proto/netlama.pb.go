@@ -2152,6 +2152,7 @@ type WlanNetwork struct {
 	Wps                bool                   `protobuf:"varint,20,opt,name=wps,proto3" json:"wps,omitempty"`                                                              // WPS vendor element present
 	Streams            uint32                 `protobuf:"varint,21,opt,name=streams,proto3" json:"streams,omitempty"`                                                      // spatial streams from HT/VHT MCS maps (0 = unknown)
 	MaxRateMbps        float64                `protobuf:"fixed64,22,opt,name=max_rate_mbps,json=maxRateMbps,proto3" json:"max_rate_mbps,omitempty"`                        // estimated max PHY rate from gen/width/streams
+	LastSeenMs         int64                  `protobuf:"varint,23,opt,name=last_seen_ms,json=lastSeenMs,proto3" json:"last_seen_ms,omitempty"`                            // unix ms of the last beacon heard (agent retains APs ~10 min)
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -2336,6 +2337,13 @@ func (x *WlanNetwork) GetStreams() uint32 {
 func (x *WlanNetwork) GetMaxRateMbps() float64 {
 	if x != nil {
 		return x.MaxRateMbps
+	}
+	return 0
+}
+
+func (x *WlanNetwork) GetLastSeenMs() int64 {
+	if x != nil {
+		return x.LastSeenMs
 	}
 	return 0
 }
@@ -3102,7 +3110,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bstations\x18\x03 \x03(\v2\x17.netlama.v1.WlanStationR\bstations\x127\n" +
 	"\bchannels\x18\x04 \x03(\v2\x1b.netlama.v1.WlanChannelStatR\bchannels\x12\x19\n" +
 	"\bsweep_ms\x18\x05 \x01(\rR\asweepMs\x123\n" +
-	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xa4\x05\n" +
+	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xc6\x05\n" +
 	"\vWlanNetwork\x12\x14\n" +
 	"\x05bssid\x18\x01 \x01(\tR\x05bssid\x12\x12\n" +
 	"\x04ssid\x18\x02 \x01(\tR\x04ssid\x12\x18\n" +
@@ -3127,7 +3135,9 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"dtimPeriod\x12\x10\n" +
 	"\x03wps\x18\x14 \x01(\bR\x03wps\x12\x18\n" +
 	"\astreams\x18\x15 \x01(\rR\astreams\x12\"\n" +
-	"\rmax_rate_mbps\x18\x16 \x01(\x01R\vmaxRateMbps\"\x8e\x02\n" +
+	"\rmax_rate_mbps\x18\x16 \x01(\x01R\vmaxRateMbps\x12 \n" +
+	"\flast_seen_ms\x18\x17 \x01(\x03R\n" +
+	"lastSeenMs\"\x8e\x02\n" +
 	"\vWlanStation\x12\x10\n" +
 	"\x03mac\x18\x01 \x01(\tR\x03mac\x12\x14\n" +
 	"\x05bssid\x18\x02 \x01(\tR\x05bssid\x12\x12\n" +

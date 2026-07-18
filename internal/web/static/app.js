@@ -1667,7 +1667,7 @@ async function showApDetail(n, wp, result) {
     ["Country", n.country ? esc(n.country) : "—"],
     ["AP load", n.loadPresent ? `${n.loadStations || 0} stations · ${(n.loadChannelUtilPct || 0).toFixed(0)}% channel busy` : "—"],
     ["Beacons heard", String(n.beacons || 0)],
-    ["Last seen", result ? new Date(result.time).toLocaleString() : "—"],
+    ["Last seen", n.lastSeenMs ? new Date(n.lastSeenMs).toLocaleString() : result ? new Date(result.time).toLocaleString() : "—"],
   ];
   $("#wl-detail-grid").innerHTML = rows
     .map(([k, v]) => `<div class="wl-detail-item"><span class="wl-detail-label">${k}</span><span class="wl-detail-value">${v}</span></div>`)
@@ -1774,26 +1774,31 @@ function renderWirelessNetworks(result) {
     }
   }
 
+  const bandLabel = (freq) => (freq >= 5955 ? "6 GHz" : freq >= 5000 ? "5 GHz" : "2.4 GHz");
+  // Entries retained from earlier sweeps (agent keeps them ~10 min) get dimmed
+  const resultMs = result ? new Date(result.time).getTime() : 0;
+  const isStale = (lastSeenMs) => lastSeenMs && resultMs && resultMs - lastSeenMs > 2 * 60 * 1000;
+  const lastSeenText = (lastSeenMs) =>
+    lastSeenMs ? new Date(lastSeenMs).toLocaleTimeString() : result ? new Date(result.time).toLocaleTimeString() : "";
+
   // Helper to render a single network row
   function renderNetworkRow(n, isChild = false) {
-    const freq = n.freqMhz || 0;
-    const band = freq >= 5955 ? "6 GHz" : freq >= 5000 ? "5 GHz" : "2.4 GHz";
     const rssiClass = signalClass(n.rssiDbm);
     const clients = clientsPerBssid.get(n.bssid) || 0;
-    const lastSeen = result ? new Date(result.time).toLocaleTimeString() : "";
 
     const tr = document.createElement("tr");
     if (isChild) tr.className = "wl-child-row";
+    if (isStale(n.lastSeenMs)) tr.classList.add("wl-stale");
     tr.innerHTML = `
       <td>${isChild ? "&nbsp;&nbsp;" : ""}${n.ssid ? esc(n.ssid) : '<span class="muted">(hidden)</span>'}</td>
       <td class="mono">${esc(n.bssid)}</td>
       <td class="num"><span class="health ${rssiClass}">${n.rssiDbm || 0}</span> ${renderSignalBar(n.rssiDbm)}</td>
       <td class="num">${n.channel || "—"}</td>
-      <td>${band}</td>
+      <td>${bandLabel(n.freqMhz || 0)}</td>
       <td>${n.standards || "—"}</td>
       <td>${n.security || "Open"}</td>
       <td class="num">${clients}</td>
-      <td class="muted nowrap">${lastSeen}</td>`;
+      <td class="muted nowrap">${lastSeenText(n.lastSeenMs)}</td>`;
     tr.style.cursor = "pointer";
     tr.addEventListener("click", () => showApDetail(n, wp, result));
     return tr;
@@ -1805,52 +1810,45 @@ function renderWirelessNetworks(result) {
       // Single AP: render as plain row without chevron
       tbody.appendChild(renderNetworkRow(networks[0]));
     } else {
-      // Multiple APs: create group row with chevron and count
+      // Multiple APs: summary group row; expanding lists every AP underneath
       const strongest = networks[0]; // Already sorted by RSSI
-      const freq = strongest.freqMhz || 0;
-      const band = freq >= 5955 ? "6 GHz" : freq >= 5000 ? "5 GHz" : "2.4 GHz";
-      const rssiClass = signalClass(strongest.rssiDbm);
-      const clients = clientsPerBssid.get(strongest.bssid) || 0;
-      const lastSeen = result ? new Date(result.time).toLocaleTimeString() : "";
+      const channels = [...new Set(networks.map((n) => n.channel).filter(Boolean))].sort((a, b) => a - b);
+      const bands = [...new Set(networks.map((n) => bandLabel(n.freqMhz || 0)))];
+      const clients = networks.reduce((sum, n) => sum + (clientsPerBssid.get(n.bssid) || 0), 0);
+      const newestMs = Math.max(...networks.map((n) => n.lastSeenMs || 0));
 
       const groupTr = document.createElement("tr");
       groupTr.className = "wl-group-row";
       groupTr.innerHTML = `
         <td><span class="chevron">▸</span> ${esc(ssid)} <span class="ap-count">${networks.length} APs</span></td>
-        <td class="mono">${esc(strongest.bssid)}</td>
-        <td class="num"><span class="health ${rssiClass}">${strongest.rssiDbm || 0}</span> ${renderSignalBar(strongest.rssiDbm)}</td>
-        <td class="num">${strongest.channel || "—"}</td>
-        <td>${band}</td>
+        <td class="muted">${networks.length} BSSIDs</td>
+        <td class="num"><span class="health ${signalClass(strongest.rssiDbm)}">${strongest.rssiDbm || 0}</span> ${renderSignalBar(strongest.rssiDbm)}</td>
+        <td class="num">${channels.join(", ") || "—"}</td>
+        <td>${bands.join(" / ")}</td>
         <td>${strongest.standards || "—"}</td>
         <td>${strongest.security || "Open"}</td>
         <td class="num">${clients}</td>
-        <td class="muted nowrap">${lastSeen}</td>`;
+        <td class="muted nowrap">${lastSeenText(newestMs)}</td>`;
       groupTr.style.cursor = "pointer";
       tbody.appendChild(groupTr);
 
-      // Store expanded state in the row
+      // All APs of the SSID as child rows, hidden until expanded
       let expanded = false;
-      const childRows = [];
-      for (let i = 1; i < networks.length; i++) {
-        const childTr = renderNetworkRow(networks[i], true);
-        childRows.push(childTr);
+      const childRows = networks.map((n) => {
+        const childTr = renderNetworkRow(n, true);
         childTr.classList.add("hidden");
-      }
+        tbody.appendChild(childTr);
+        return childTr;
+      });
 
       // Toggle expansion on click
       groupTr.addEventListener("click", () => {
         expanded = !expanded;
-        const chevron = groupTr.querySelector(".chevron");
-        chevron.textContent = expanded ? "▾" : "▸";
+        groupTr.querySelector(".chevron").textContent = expanded ? "▾" : "▸";
         for (const childTr of childRows) {
           childTr.classList.toggle("hidden", !expanded);
         }
       });
-
-      // Add child rows after the group row
-      for (const childTr of childRows) {
-        tbody.appendChild(childTr);
-      }
     }
   }
 
@@ -1879,11 +1877,13 @@ function renderWirelessStations(wp, result) {
     : "";
   if (!stations.length) return;
 
+  const resultMs = result ? new Date(result.time).getTime() : 0;
   for (const s of stations) {
     const net = s.probeOnly || !s.bssid
       ? '<span class="muted">probing</span>'
       : esc(s.ssid || ssidByBssid.get(s.bssid) || "") || `<span class="mono">${esc(s.bssid)}</span>`;
     const tr = document.createElement("tr");
+    if (s.lastSeenMs && resultMs && resultMs - s.lastSeenMs > 2 * 60 * 1000) tr.classList.add("wl-stale");
     tr.innerHTML = `
       <td class="mono">${esc(s.mac)}</td>
       <td><span class="wl-vendor muted" data-mac="${esc(s.mac)}"></span></td>

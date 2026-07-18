@@ -181,6 +181,10 @@ func demoSense(iface string) (string, []WlanStation, []WlanChannelStat, []WlanNe
 			GroupCipher: "CCMP", DTIMPeriod: 1, Streams: 1, MaxRateMbps: 72.2},
 	}
 
+	for i := range networks {
+		networks[i].LastSeenMs = now
+	}
+
 	sweepMs := uint32(400 * len(channels)) // dwell per channel + small overhead
 	return iface, stations, channels, networks, sweepMs, nil
 }

@@ -793,6 +793,26 @@ What has been done so far, in chronological order. Planned work lives in
 - **Verification**: build/vet/tests green; e2e demo agent payload carries
   mfp/groupCipher/dtimPeriod/streams/maxRateMbps.
 
+## 2026-07-18 — WLAN retention, periodic full re-scan, SSID group fix
+
+- **10-minute sighting retention** (`internal/agent/scheduler.go`
+  `mergeWlanRetained`, `wlanRetention = 10 * time.Minute`): the agent keeps a
+  per-test map of APs (by BSSID) and stations (by MAC) and includes everything
+  heard within the last 10 minutes in each result, so briefly-faded devices
+  don't flicker out of the UI. `WlanNetwork.last_seen_ms` (proto field 23) is
+  stamped per beacon; stations already carried it. Covered by
+  `TestMergeWlanRetained`.
+- **Periodic full re-scan**: adaptive narrowing no longer locks the sweep to
+  interesting channels forever — every 10 minutes the agent re-sweeps the full
+  spectrum so new APs/SSIDs on other channels are discovered, then narrows
+  again.
+- **UI**: SSID group rows are now a pure summary (AP count, BSSID count,
+  strongest signal, all channels/bands, summed clients) and expanding lists
+  every AP of the SSID underneath (previously the strongest AP was merged into
+  the group row and only the remaining APs appeared as children). Last-seen
+  columns and the detail panel use the per-AP/station timestamp; rows not heard
+  for >2 minutes are dimmed (`wl-stale`).
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

@@ -388,7 +388,7 @@ func TestProcessFrameNetworkRSSIandBeacons(t *testing.T) {
 
 func TestRecordNetworkSkipsBroadcastBSSID(t *testing.T) {
 	networks := map[string]*WlanNetwork{}
-	recordNetwork(networks, "ff:ff:ff:ff:ff:ff", beaconInfo{SSID: "x"}, -50)
+	recordNetwork(networks, "ff:ff:ff:ff:ff:ff", beaconInfo{SSID: "x"}, -50, 0)
 	if len(networks) != 0 {
 		t.Fatalf("broadcast BSSID must be skipped, got %v", networks)
 	}

@@ -329,8 +329,11 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 	state, hasState := a.wlanState[testKey]
 
 	var channels []uint32
-	if !hasState || len(state.InterestingChannels) == 0 {
-		// First run or no interesting channels yet: full sweep
+	fullSweep := !hasState || len(state.InterestingChannels) == 0 ||
+		time.Since(state.LastFullSweep) >= wlanRetention
+	if fullSweep {
+		// First run, nothing interesting yet, or the periodic re-scan is due:
+		// sweep the full spectrum so new APs/SSIDs on other channels are found.
 		channels = nil // nil means all channels
 		a.Logger.Info("WLAN passive sweep starting (full spectrum)", slog.String("test", spec.Name), slog.String("interface", iface))
 	} else {
@@ -355,19 +358,27 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 		return
 	}
 
-	// Update interesting channels from this sweep
+	if !hasState {
+		state = &wlanPassiveState{}
+	}
+	if fullSweep {
+		state.LastFullSweep = time.Now()
+	}
+	networks, stations = mergeWlanRetained(state, networks, stations, time.Now())
+
+	// Update interesting channels from the retained sightings, so channels of
+	// recently-faded APs stay watched until retention expires.
 	interestingChannels := extractInterestingChannels(networks, stations)
-	if len(interestingChannels) == 0 && hasState && len(state.InterestingChannels) > 0 {
+	if len(interestingChannels) == 0 && len(state.InterestingChannels) > 0 {
 		// If this sweep found nothing but we had previous results, keep the old set
 		interestingChannels = state.InterestingChannels
 	}
+	state.InterestingChannels = interestingChannels
 
 	if a.wlanState == nil {
 		a.wlanState = make(map[string]*wlanPassiveState)
 	}
-	a.wlanState[testKey] = &wlanPassiveState{
-		InterestingChannels: interestingChannels,
-	}
+	a.wlanState[testKey] = state
 	a.wlanMu.Unlock()
 
 	a.Logger.Info("WLAN passive done",
@@ -376,6 +387,57 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 		slog.Uint64("sweepMs", uint64(sweepMs)))
 	result.Result = wlanPassiveResult(usedIface, stations, channelStats, networks, sweepMs)
 	sendResult(ctx, results, result)
+}
+
+// wlanRetention is how long APs and stations stay in wlan_passive results
+// after last being heard, and how often a full-spectrum re-scan runs.
+const wlanRetention = 10 * time.Minute
+
+// mergeWlanRetained folds this sweep's networks/stations into the state's
+// retained maps, drops entries older than wlanRetention, and returns the
+// merged lists that the result should carry.
+func mergeWlanRetained(state *wlanPassiveState, networks []probe.WlanNetwork, stations []probe.WlanStation, now time.Time) ([]probe.WlanNetwork, []probe.WlanStation) {
+	nowMs := now.UnixMilli()
+	cutoff := now.Add(-wlanRetention).UnixMilli()
+
+	if state.Networks == nil {
+		state.Networks = make(map[string]probe.WlanNetwork)
+	}
+	if state.Stations == nil {
+		state.Stations = make(map[string]probe.WlanStation)
+	}
+	for _, n := range networks {
+		if n.LastSeenMs == 0 {
+			n.LastSeenMs = nowMs
+		}
+		state.Networks[n.BSSID] = n
+	}
+	for _, s := range stations {
+		if s.LastSeenMs == 0 {
+			s.LastSeenMs = nowMs
+		}
+		state.Stations[s.MAC] = s
+	}
+
+	mergedNets := make([]probe.WlanNetwork, 0, len(state.Networks))
+	for bssid, n := range state.Networks {
+		if n.LastSeenMs < cutoff {
+			delete(state.Networks, bssid)
+			continue
+		}
+		mergedNets = append(mergedNets, n)
+	}
+	mergedStas := make([]probe.WlanStation, 0, len(state.Stations))
+	for mac, s := range state.Stations {
+		if s.LastSeenMs < cutoff {
+			delete(state.Stations, mac)
+			continue
+		}
+		mergedStas = append(mergedStas, s)
+	}
+	sort.Slice(mergedNets, func(i, j int) bool { return mergedNets[i].BSSID < mergedNets[j].BSSID })
+	sort.Slice(mergedStas, func(i, j int) bool { return mergedStas[i].MAC < mergedStas[j].MAC })
+	return mergedNets, mergedStas
 }
 
 // extractInterestingChannels returns the set of channels where APs or stations were heard
@@ -450,6 +512,7 @@ func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats 
 			Wps:                n.WPS,
 			Streams:            n.Streams,
 			MaxRateMbps:        n.MaxRateMbps,
+			LastSeenMs:         n.LastSeenMs,
 		})
 	}
 

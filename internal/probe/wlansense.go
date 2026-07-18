@@ -65,6 +65,7 @@ type WlanNetwork struct {
 	WPS                bool    // WPS vendor element present
 	Streams            uint32  // spatial streams from HT/VHT MCS maps (0 = unknown)
 	MaxRateMbps        float64 // estimated max PHY rate from gen/width/streams
+	LastSeenMs         int64   // unix ms of the last beacon heard
 }
 
 // Sense performs a monitor-mode sweep, capturing stations, per-channel
@@ -220,7 +221,7 @@ func isUnicastMAC(mac string) bool {
 
 // recordNetwork upserts an AP heard from a beacon/probe-response, keeping the
 // strongest RSSI and non-empty SSID/security/standards once seen.
-func recordNetwork(networks map[string]*WlanNetwork, bssid string, info beaconInfo, rssi int32) {
+func recordNetwork(networks map[string]*WlanNetwork, bssid string, info beaconInfo, rssi int32, nowMs int64) {
 	if !isUnicastMAC(bssid) {
 		return // broadcast/multicast BSSID isn't a real AP
 	}
@@ -279,6 +280,7 @@ func recordNetwork(networks map[string]*WlanNetwork, bssid string, info beaconIn
 	if rssi > n.RSSIdBm {
 		n.RSSIdBm = rssi
 	}
+	n.LastSeenMs = nowMs
 	n.Beacons++
 }
 
@@ -330,11 +332,11 @@ func processFrame(data []byte, stations map[string]*WlanStation, networks map[st
 	case layers.Dot11TypeMgmtBeacon:
 		// Beacon frame - Address3 is the BSSID; the fixed body (timestamp,
 		// interval, capability = 12 bytes) precedes the tagged elements.
-		recordNetwork(networks, dot11.Address3.String(), parseBeaconBody(dot11Layer.LayerPayload()), rssi)
+		recordNetwork(networks, dot11.Address3.String(), parseBeaconBody(dot11Layer.LayerPayload()), rssi, nowMs)
 
 	case layers.Dot11TypeMgmtProbeResp:
 		// Probe response - same fixed-body layout as a beacon.
-		recordNetwork(networks, dot11.Address3.String(), parseBeaconBody(dot11Layer.LayerPayload()), rssi)
+		recordNetwork(networks, dot11.Address3.String(), parseBeaconBody(dot11Layer.LayerPayload()), rssi, nowMs)
 
 	case layers.Dot11TypeMgmtProbeReq:
 		// Probe request - station is transmitter (Address2)

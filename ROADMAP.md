@@ -57,6 +57,12 @@ Planned work, roughly grouped. Not ordered by priority yet.
       stations table (MAC/vendor/network/signal/rate/MCS/frames), and more
       beacon detail — MFP (802.11w), group cipher, DTIM period, WPS,
       spatial streams, estimated max PHY rate
+- [x] WLAN sighting retention + periodic re-scan: agent keeps APs and
+      stations in results for 10 minutes after last heard (per-AP
+      last-seen, stale rows dimmed in the UI), and re-sweeps the full
+      spectrum every 10 minutes so new APs/SSIDs on other channels appear
+      despite adaptive channel narrowing; SSID group rows are a summary
+      and expand to all APs listed underneath
 - [x] Traceroute / path analysis Phase 1: mtr-based path test (TCP/ICMP/UDP),
       per-hop RTT and loss, failure localization, hop-chain Path visualization
 - [ ] SaaS / cloud service tests: reachability and quality checks for online

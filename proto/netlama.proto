@@ -264,6 +264,7 @@ message WlanNetwork {
   bool wps = 20;                 // WPS vendor element present
   uint32 streams = 21;           // spatial streams from HT/VHT MCS maps (0 = unknown)
   double max_rate_mbps = 22;     // estimated max PHY rate from gen/width/streams
+  int64 last_seen_ms = 23;       // unix ms of the last beacon heard (agent retains APs ~10 min)
 }
 
 message WlanStation {
