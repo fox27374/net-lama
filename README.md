@@ -78,7 +78,7 @@ The UI (login with username/password, dark/light theme) has a fixed left sidebar
 * **Dashboard** — the tenant landing page with a site filter; shows stat tiles (sites,
   agents, tests, active alerts), a sites table, active & recent alerts, tests with
   inline sparklines showing metric trends, and the latest wireless scans
-* **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_passive/speedtest) with interval and parameters
+* **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_passive/wlan_active/speedtest) with interval and parameters
   * `speedtest` tests pick a **provider**: `ookla` (default, speedtest.net via the
     unofficial `showwin/speedtest-go` client against volunteer-run servers — the
     most widely available but occasionally untrustworthy, so results are
@@ -222,7 +222,13 @@ avoid pushing unsupported tests to agents—**an old agent that never re-registe
 still receives all tests (backward compatible)**. The web UI shows capability badges
 per agent, and warns when an assigned test won't run on some agents.
 
-### Sensor agents (WLAN passive and traceroute)
+### Sensor agents (WLAN and traceroute)
+
+`wlan_active` tests connect to an SSID for real (associate, authenticate — PSK
+or 802.1X EAP-PEAP with CA cert or skip-verify —, DHCP, optional throughput
+download) and time every step; the sensor's radio leaves monitor mode during
+the test and is restored afterwards. Requires `wpa_supplicant` in the agent
+image (included in agent-sensor).
 
 The WLAN passive and traceroute probes shell out to external tools (`iw`, `mtr`) that
 are **not** in the default distroless agent image and need raw-socket access. Use

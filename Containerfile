@@ -25,13 +25,14 @@ COPY --from=build /out/netlama-agent /netlama-agent
 ENTRYPOINT ["/netlama-agent"]
 
 # agent-sensor bundles the external tools the probes shell out to: iw + ip
-# (iproute2) for WLAN scan/monitor-mode sensing, mtr for traceroute. Larger
-# and not distroless; use this variant on agents that do WLAN sensing or path
-# tracing. Needs CAP_NET_RAW (and CAP_NET_ADMIN for WLAN); see the README for
-# the host/network requirements.
+# (iproute2) for WLAN scan/monitor-mode sensing, wpasupplicant for active
+# WLAN connect tests, mtr for traceroute. Larger and not distroless; use
+# this variant on agents that do WLAN sensing or path tracing. Needs
+# CAP_NET_RAW (and CAP_NET_ADMIN for WLAN); see the README for the
+# host/network requirements.
 FROM debian:12-slim AS agent-sensor
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends iw iproute2 mtr-tiny ca-certificates && \
+    apt-get install -y --no-install-recommends iw iproute2 mtr-tiny wpasupplicant ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/netlama-agent /netlama-agent
 ENTRYPOINT ["/netlama-agent"]

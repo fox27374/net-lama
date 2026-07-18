@@ -72,6 +72,7 @@ message TestSpec {
     TracerouteParams traceroute = 10;
     // wlan_sense (11) is reserved
     WlanPassiveParams wlan_passive = 12;
+    WlanActiveParams wlan_active = 13;
   }
 }
 
@@ -110,6 +111,22 @@ message WlanScanParams {}
 message WlanSenseParams {
   repeated uint32 channels = 1; // empty = all channels the phy supports
   uint32 dwell_ms = 2;          // per-channel capture time, default 400
+}
+
+// WlanActiveParams configures an active connection test against one SSID:
+// associate, authenticate, DHCP, and optionally a throughput download —
+// each step timed. Runs wpa_supplicant on the sensor's wireless interface
+// (temporarily leaving monitor mode) and restores the previous state.
+message WlanActiveParams {
+  string ssid = 1;
+  // security: "psk" (WPA2/WPA3 passphrase), "eap-peap" (802.1X PEAP/MSCHAPv2),
+  // or "open".
+  string security = 2;
+  string password = 3;        // PSK passphrase, or EAP password
+  string identity = 4;        // EAP identity (eap-peap only)
+  string ca_cert_pem = 5;     // PEM CA cert to validate the EAP server (optional)
+  bool insecure_skip_verify = 6; // EAP: accept any server cert (no ca_cert)
+  string throughput_url = 7;  // optional: URL downloaded through the WLAN for throughput
 }
 
 // WlanPassiveParams configures a passive monitor-mode sweep.
@@ -153,6 +170,7 @@ message TestResult {
     TracerouteResult traceroute = 11;
     // wlan_sense (12) is reserved
     WlanPassiveResult wlan_passive = 13;
+    WlanActiveResult wlan_active = 14;
   }
 }
 
@@ -230,6 +248,27 @@ message WlanSenseResult {
   repeated WlanChannelStat channels = 4;
   uint32 sweep_ms = 5;              // total sweep duration
   repeated WlanNetwork networks = 6; // APs/SSIDs heard from beacons
+}
+
+// WlanActiveResult reports one active connection test with per-step timing.
+// A failed step sets success=false and failed_step; later steps are zero.
+message WlanActiveResult {
+  string interface = 1;
+  string ssid = 2;
+  string bssid = 3;           // AP the test associated with
+  bool demo = 4;
+  bool success = 5;
+  string failed_step = 6;     // "associate" | "authenticate" | "dhcp" | "throughput"
+  double associate_ms = 7;    // start → 802.11 association
+  double authenticate_ms = 8; // association → key handshake/EAP complete
+  double dhcp_ms = 9;         // DHCP DISCOVER → ACK
+  string ip = 10;             // leased address
+  string netmask = 11;
+  string gateway = 12;
+  double throughput_mbps = 13;
+  double throughput_ms = 14;  // duration of the throughput download
+  int32 rssi_dbm = 15;        // signal to the AP during the test
+  double total_ms = 16;       // whole test wall time
 }
 
 message WlanPassiveResult {

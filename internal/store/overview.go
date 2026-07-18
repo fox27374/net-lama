@@ -404,6 +404,12 @@ func extractMetricValue(testType, payload string) *float64 {
 				}
 			}
 		}
+	case "wlan_active":
+		if wa, ok := data["wlanActive"].(map[string]interface{}); ok {
+			if total, ok := wa["totalMs"].(float64); ok {
+				val = total
+			}
+		}
 	}
 
 	if val > 0 {
@@ -477,6 +483,9 @@ func (s *Store) extractSeries(testType, testID, tenantID, siteID string) (string
 	case "wlan_passive":
 		unit = "%"
 		series, current = extractWlanPassiveMetric(payloads)
+	case "wlan_active":
+		unit = "ms"
+		series, current = extractWlanActiveMetric(payloads)
 	}
 
 	return unit, series, current
@@ -561,6 +570,29 @@ func extractTracerouteMetric(payloads []string) ([]float64, *float64) {
 		}
 		if hops, ok := tr["hops"].([]interface{}); ok && len(hops) > 0 {
 			series = append(series, float64(len(hops)))
+		}
+	}
+	if len(series) == 0 {
+		return series, nil
+	}
+	last := series[len(series)-1]
+	return series, &last
+}
+
+// extractWlanActiveMetric extracts the total connection time from WLAN active results.
+func extractWlanActiveMetric(payloads []string) ([]float64, *float64) {
+	var series []float64
+	for _, p := range payloads {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(p), &data); err != nil {
+			continue
+		}
+		wa, ok := data["wlanActive"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if total, ok := wa["totalMs"].(float64); ok && total > 0 {
+			series = append(series, total)
 		}
 	}
 	if len(series) == 0 {

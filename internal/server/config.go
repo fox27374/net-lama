@@ -42,6 +42,16 @@ type SpeedtestParams struct {
 type WlanPassiveParams struct {
 }
 
+type WlanActiveParams struct {
+	SSID               string `json:"ssid"`
+	Security           string `json:"security"` // "psk", "eap-peap", "open"
+	Password           string `json:"password"`
+	Identity           string `json:"identity"`
+	CACertPEM          string `json:"caCertPem"`
+	InsecureSkipVerify bool   `json:"insecureSkipVerify"`
+	ThroughputURL      string `json:"throughputUrl"`
+}
+
 type TracerouteParams struct {
 	Target       string `json:"target"`
 	Protocol     string `json:"protocol"`
@@ -171,6 +181,40 @@ func ValidateTestDef(t *store.TestDef) error {
 		}
 		t.Params = json.RawMessage(`{}`)
 
+	case "wlan_active":
+		var p WlanActiveParams
+		if err := json.Unmarshal(t.Params, &p); err != nil {
+			return fmt.Errorf("invalid wlan_active parameters: %w", err)
+		}
+		p.SSID = strings.TrimSpace(p.SSID)
+		if p.SSID == "" {
+			return fmt.Errorf("wlan_active requires an SSID")
+		}
+		switch p.Security {
+		case "":
+			p.Security = "psk"
+		case "psk", "eap-peap", "open":
+		default:
+			return fmt.Errorf("wlan_active security must be psk, eap-peap or open")
+		}
+		if p.Security == "psk" && p.Password == "" {
+			return fmt.Errorf("wlan_active with psk requires a password")
+		}
+		if p.Security == "eap-peap" {
+			if p.Identity == "" || p.Password == "" {
+				return fmt.Errorf("wlan_active with eap-peap requires identity and password")
+			}
+			if p.CACertPEM == "" && !p.InsecureSkipVerify {
+				return fmt.Errorf("wlan_active with eap-peap requires a CA certificate or insecureSkipVerify")
+			}
+		}
+		// The test takes the radio away from passive sweeps; keep it rare.
+		if t.IntervalSeconds < 300 {
+			return fmt.Errorf("wlan_active interval must be at least 300 seconds")
+		}
+		normalized, _ := json.Marshal(p)
+		t.Params = normalized
+
 	case "traceroute":
 		var p TracerouteParams
 		if err := json.Unmarshal(t.Params, &p); err != nil {
@@ -259,6 +303,16 @@ func TestSpec(t *store.TestDef) (*pb.TestSpec, error) {
 		}}
 	case "wlan_passive":
 		spec.Params = &pb.TestSpec_WlanPassive{WlanPassive: &pb.WlanPassiveParams{}}
+	case "wlan_active":
+		var p WlanActiveParams
+		if err := json.Unmarshal(t.Params, &p); err != nil {
+			return nil, err
+		}
+		spec.Params = &pb.TestSpec_WlanActive{WlanActive: &pb.WlanActiveParams{
+			Ssid: p.SSID, Security: p.Security, Password: p.Password,
+			Identity: p.Identity, CaCertPem: p.CACertPEM,
+			InsecureSkipVerify: p.InsecureSkipVerify, ThroughputUrl: p.ThroughputURL,
+		}}
 	case "traceroute":
 		var p TracerouteParams
 		if err := json.Unmarshal(t.Params, &p); err != nil {

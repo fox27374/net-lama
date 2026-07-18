@@ -505,6 +505,7 @@
           <option value="tcp">TCP connect</option>
           <option value="traceroute">Traceroute (path)</option>
           <option value="wlan_passive">WLAN passive (monitor mode)</option>
+          <option value="wlan_active">WLAN active (connect test)</option>
           <option value="speedtest">Speedtest</option>
         </select>
       </label>
@@ -539,6 +540,30 @@
       then narrows to "interesting" channels where activity was heard, cutting
       scan time from ~50s to ~15s on busy phys. Needs a monitor-capable adapter
       and a privileged (root) agent.</p>
+    </div>
+    <div id="t-params-wlan_active" class="hidden">
+      <p class="muted">Actively connects to the SSID: association, authentication,
+      DHCP and optional throughput — each step timed. The sensor's radio leaves
+      monitor mode for the test and returns afterwards (min. interval 300s).</p>
+      <div class="grid2">
+        <label>SSID <input type="text" id="t-wa-ssid" placeholder="corp-wifi"></label>
+        <label>Security
+          <select id="t-wa-security">
+            <option value="psk">WPA2/WPA3 PSK</option>
+            <option value="eap-peap">802.1X EAP-PEAP</option>
+            <option value="open">Open</option>
+          </select>
+        </label>
+      </div>
+      <div class="grid2" id="t-wa-cred-row">
+        <label id="t-wa-identity-label" class="hidden">Identity <input type="text" id="t-wa-identity" autocomplete="off"></label>
+        <label id="t-wa-password-label">Password <input type="password" id="t-wa-password" autocomplete="new-password"></label>
+      </div>
+      <div id="t-wa-eap-extra" class="hidden">
+        <label>CA certificate (PEM) <textarea id="t-wa-cacert" rows="3" placeholder="-----BEGIN CERTIFICATE-----&#10;… leave empty and check below to skip validation"></textarea></label>
+        <label class="check"><input type="checkbox" id="t-wa-insecure"> Ignore server certificate (accept any EAP server)</label>
+      </div>
+      <label>Throughput URL (optional) <input type="text" id="t-wa-tpurl" placeholder="https://…/testfile — empty skips the throughput step"></label>
     </div>
     <div id="t-params-speedtest" class="hidden">
       <label>Provider

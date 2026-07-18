@@ -42,8 +42,13 @@ Planned work, roughly grouped. Not ordered by priority yet.
       channels where APs or clients were heard), single `wlan` capability tag,
       networks table UI with SSID/BSSID/RSSI/channel/band/security/standards/clients/
       last-seen columns, and consolidated demo mode (`NETLAMA_WLAN_DEMO`)
-- [ ] WLAN active tests: on-demand association/throughput/auth tests against selected
-      SSIDs
+- [x] WLAN active tests (`wlan_active`): timed association, authentication
+      (PSK, 802.1X EAP-PEAP with CA cert or insecure skip-verify, open),
+      DHCP (IP/netmask/gateway) and optional throughput download against a
+      selected SSID; per-step durations in the result, radio restored to
+      monitor mode afterwards
+- [ ] WLAN roaming observation: detect roaming events of the active test
+      station (or tracked clients) and measure roam duration between APs
 - [x] SSID security + PHY standards: security (Open/WEP/WPA2/WPA3/WPA2-WPA3
       transition/Enterprise/OWE) and PHY generation (n/ac/ax/be) parsed from
       RSN/HT/VHT/HE/EHT beacon information elements, shown in the SSID table

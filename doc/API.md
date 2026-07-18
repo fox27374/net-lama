@@ -386,6 +386,20 @@ E.g. for `testType: "speedtest"` the payload is
 `{"provider": "ookla"|"ndt7"|"cloudflare", "serverName": "...",
 "latencyMs": 12.3, "downloadMbps": 280.1, "uploadMbps": 110.5, ...}`.
 
+### wlan_active test parameters
+
+`POST/PUT /api/v1/tests` with `type: "wlan_active"` takes params:
+`{"ssid": "...", "security": "psk"|"eap-peap"|"open", "password": "...",
+"identity": "...", "caCertPem": "-----BEGIN CERTIFICATE-----...",
+"insecureSkipVerify": false, "throughputUrl": "https://..."}`.
+`ssid` is required; `psk` requires `password`; `eap-peap` requires
+`identity`, `password` and either `caCertPem` or `insecureSkipVerify`;
+`throughputUrl` empty skips the throughput step. Interval must be ≥ 300s.
+The result payload (`wlanActive`) carries per-step timings
+(`associateMs`, `authenticateMs`, `dhcpMs`, `throughputMs`), `ip`,
+`netmask`, `gateway`, `throughputMbps`, `rssiDbm`, `totalMs`, and
+`success`/`failedStep`.
+
 ### `GET /api/v1/me`
 
 Returns the authenticated user plus `serverVersion` (the server's build

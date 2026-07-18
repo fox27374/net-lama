@@ -218,6 +218,13 @@ func (m *Metrics) Record(tenant, site, client string, result *pb.TestResult) {
 		m.tcpConnect.WithLabelValues(labels...).Set(r.Tcp.ConnectMs)
 		m.tcpUp.WithLabelValues(labels...).Set(1)
 
+	case *pb.TestResult_WlanActive:
+		m.resultsTotal.WithLabelValues(append(base, "wlan_active")...).Inc()
+		if result.Error != "" {
+			m.errorsTotal.WithLabelValues(append(base, "wlan_active")...).Inc()
+			return
+		}
+
 	case *pb.TestResult_WlanPassive:
 		m.resultsTotal.WithLabelValues(append(base, "wlan_passive")...).Inc()
 		if result.Error != "" {

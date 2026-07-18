@@ -25,6 +25,16 @@ func DetectCapabilities(hasWireless bool, wifaces []WirelessInterface) []string 
 		caps = append(caps, "wlan")
 	}
 
+	// wlan_active: needs any wireless interface, wpa_supplicant, and
+	// privilege (interface mode switches + DHCP raw sockets), or demo mode
+	if wlanDemo() {
+		caps = append(caps, "wlan_active")
+	} else if len(wifaces) > 0 && isPrivileged() {
+		if _, err := exec.LookPath("wpa_supplicant"); err == nil {
+			caps = append(caps, "wlan_active")
+		}
+	}
+
 	return caps
 }
 

@@ -99,6 +99,8 @@ func (a *Agent) runTest(ctx context.Context, spec *pb.TestSpec, results chan<- *
 		a.runTCP(ctx, spec, params.Tcp, results)
 	case *pb.TestSpec_WlanPassive:
 		a.runWlanPassive(ctx, spec, results)
+	case *pb.TestSpec_WlanActive:
+		a.runWlanActive(ctx, spec, params.WlanActive, results)
 	case *pb.TestSpec_Traceroute:
 		a.runTraceroute(ctx, spec, params.Traceroute, results)
 	}
@@ -386,6 +388,81 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 		slog.Int("stations", len(stations)), slog.Int("networks", len(networks)),
 		slog.Uint64("sweepMs", uint64(sweepMs)))
 	result.Result = wlanPassiveResult(usedIface, stations, channelStats, networks, sweepMs)
+	sendResult(ctx, results, result)
+}
+
+// runWlanActive runs one active connection test. It shares the radio with
+// the passive sweep, so both serialize on wlanMu; the probe restores the
+// interface's previous mode afterwards.
+func (a *Agent) runWlanActive(ctx context.Context, spec *pb.TestSpec, params *pb.WlanActiveParams, results chan<- *pb.TestResult) {
+	result := newResult(spec)
+
+	iface := a.WlanIface
+	if iface == "" && !probe.DemoMode() {
+		if detected := probe.WirelessInterfaces(ctx); len(detected) > 0 {
+			iface = detected[0].Name
+		}
+	}
+	if iface == "" && !probe.DemoMode() {
+		result.Error = "no wireless interface available"
+		result.Result = &pb.TestResult_WlanActive{WlanActive: &pb.WlanActiveResult{Ssid: params.Ssid}}
+		sendResult(ctx, results, result)
+		return
+	}
+
+	opts := probe.WlanActiveOpts{
+		SSID:               params.Ssid,
+		Security:           params.Security,
+		Password:           params.Password,
+		Identity:           params.Identity,
+		CACertPEM:          params.CaCertPem,
+		InsecureSkipVerify: params.InsecureSkipVerify,
+		ThroughputURL:      params.ThroughputUrl,
+	}
+	a.Logger.Info("WLAN active test starting",
+		slog.String("test", spec.Name), slog.String("interface", iface), slog.String("ssid", params.Ssid))
+
+	a.wlanMu.Lock()
+	out, err := probe.WlanActive(ctx, iface, opts)
+	a.wlanMu.Unlock()
+
+	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		a.Logger.Error("WLAN active test failed",
+			slog.String("test", spec.Name), slog.String("interface", iface), slog.Any("error", err))
+		result.Error = err.Error()
+		result.Result = &pb.TestResult_WlanActive{WlanActive: &pb.WlanActiveResult{Interface: iface, Ssid: params.Ssid}}
+		sendResult(ctx, results, result)
+		return
+	}
+
+	if !out.Success {
+		result.Error = fmt.Sprintf("%s step failed", out.FailedStep)
+	}
+	a.Logger.Info("WLAN active test done",
+		slog.String("test", spec.Name), slog.String("ssid", out.SSID),
+		slog.Bool("success", out.Success), slog.String("failedStep", out.FailedStep),
+		slog.String("ip", out.IP), slog.Float64("totalMs", out.TotalMs))
+	result.Result = &pb.TestResult_WlanActive{WlanActive: &pb.WlanActiveResult{
+		Interface:      out.Interface,
+		Ssid:           out.SSID,
+		Bssid:          out.BSSID,
+		Demo:           probe.DemoMode(),
+		Success:        out.Success,
+		FailedStep:     out.FailedStep,
+		AssociateMs:    out.AssociateMs,
+		AuthenticateMs: out.AuthenticateMs,
+		DhcpMs:         out.DHCPMs,
+		Ip:             out.IP,
+		Netmask:        out.Netmask,
+		Gateway:        out.Gateway,
+		ThroughputMbps: out.ThroughputMbps,
+		ThroughputMs:   out.ThroughputMs,
+		RssiDbm:        out.RSSIdBm,
+		TotalMs:        out.TotalMs,
+	}}
 	sendResult(ctx, results, result)
 }
 

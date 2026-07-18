@@ -663,6 +663,10 @@ function paramsSummary(t) {
   if (t.type === "http") return p.url || "";
   if (t.type === "tcp") return (p.targets || []).join(", ");
   if (t.type === "wlan_passive") return "passive monitor-mode sweep";
+  if (t.type === "wlan_active") {
+    const sec = p.security === "eap-peap" ? "802.1X" : p.security === "open" ? "open" : "PSK";
+    return `connect to ${p.ssid || "?"} · ${sec}${p.throughputUrl ? " · throughput" : ""}`;
+  }
   if (t.type === "traceroute") {
     const proto = (p.protocol || "tcp").toUpperCase();
     const port = (p.protocol === "icmp") ? "" : `:${p.port || 443}`;
@@ -718,11 +722,22 @@ function updateTestParamFields() {
   $("#t-params-http").classList.toggle("hidden", type !== "http");
   $("#t-params-tcp").classList.toggle("hidden", type !== "tcp");
   $("#t-params-wlan_passive").classList.toggle("hidden", type !== "wlan_passive");
+  $("#t-params-wlan_active").classList.toggle("hidden", type !== "wlan_active");
+  updateWlanActiveSecurityFields();
   $("#t-params-traceroute").classList.toggle("hidden", type !== "traceroute");
   $("#t-params-speedtest").classList.toggle("hidden", type !== "speedtest");
   // Re-filter alert rules when test type changes
   populateAlertRuleSelect(type);
 }
+// Show identity + certificate fields only for EAP, password only when needed
+function updateWlanActiveSecurityFields() {
+  const sec = $("#t-wa-security").value;
+  $("#t-wa-identity-label").classList.toggle("hidden", sec !== "eap-peap");
+  $("#t-wa-password-label").classList.toggle("hidden", sec === "open");
+  $("#t-wa-eap-extra").classList.toggle("hidden", sec !== "eap-peap");
+}
+$("#t-wa-security").addEventListener("change", updateWlanActiveSecurityFields);
+
 $("#t-type").addEventListener("change", () => {
   updateTestParamFields();
   // Direction and unit change with the type — reset the bands for the new type
@@ -753,7 +768,7 @@ function populateAlertRuleSelect(testType) {
 // Backed by the same {warn, crit} model: warn is the green|orange boundary,
 // crit the orange|red one. For speedtest lower is worse, so the band order
 // flips (green on top) and warn > crit.
-const BAND_UNIT = { ping: "ms", dns: "ms", http: "ms", tcp: "ms", speedtest: "Mbps", traceroute: "hops", wlan_passive: "%" };
+const BAND_UNIT = { ping: "ms", dns: "ms", http: "ms", tcp: "ms", speedtest: "Mbps", traceroute: "hops", wlan_passive: "%", wlan_active: "ms" };
 // null = band absent, "" = band added but value not typed yet, "40" = value
 let bandTh = { warn: null, crit: null };
 let bandType = "ping";
@@ -896,6 +911,14 @@ function openTestDialog(test) {
   $("#t-tr-maxhops").value = (test && test.type === "traceroute" && p.maxHops) || 30;
   $("#t-tr-probes").value = (test && test.type === "traceroute" && p.probesPerHop) || 5;
   $("#t-st-provider").value = (test && test.type === "speedtest" && p.provider) || "ookla";
+  const wa = (test && test.type === "wlan_active") ? p : {};
+  $("#t-wa-ssid").value = wa.ssid || "";
+  $("#t-wa-security").value = wa.security || "psk";
+  $("#t-wa-password").value = wa.password || "";
+  $("#t-wa-identity").value = wa.identity || "";
+  $("#t-wa-cacert").value = wa.caCertPem || "";
+  $("#t-wa-insecure").checked = !!wa.insecureSkipVerify;
+  $("#t-wa-tpurl").value = wa.throughputUrl || "";
   updateTestParamFields();
 
   // State thresholds band editor
@@ -954,6 +977,16 @@ $("#form-test").addEventListener("submit", async (e) => {
     params = { provider: $("#t-st-provider").value };
   } else if (type === "wlan_passive") {
     params = {};
+  } else if (type === "wlan_active") {
+    params = {
+      ssid: $("#t-wa-ssid").value.trim(),
+      security: $("#t-wa-security").value,
+      password: $("#t-wa-password").value,
+      identity: $("#t-wa-identity").value.trim(),
+      caCertPem: $("#t-wa-cacert").value.trim(),
+      insecureSkipVerify: $("#t-wa-insecure").checked,
+      throughputUrl: $("#t-wa-tpurl").value.trim(),
+    };
   }
   // Build thresholds from the band editor (undefined => validation error)
   const thresholds = readThresholdBands();
@@ -1068,6 +1101,7 @@ let assigningSite = null;
 // Maps test type to required capability (e.g., wlan_passive → wlan).
 function requiredCapability(testType) {
   if (testType === "wlan_passive") return "wlan";
+  if (testType === "wlan_active") return "wlan_active";
   return testType;
 }
 
@@ -1203,6 +1237,17 @@ function resultDetails(r) {
     const n = (p.wlanPassive.networks || []).length;
     const m = (p.wlanPassive.stations || []).length;
     return `${n} network${n === 1 ? "" : "s"}, ${m} client${m === 1 ? "" : "s"}`;
+  }
+  if (p.wlanActive) {
+    const w = p.wlanActive;
+    if (!w.success) {
+      return `${esc(w.ssid)} · <span class="error">${esc(w.failedStep || "failed")}</span>` +
+        (w.associateMs ? ` · assoc ${fmt(w.associateMs)} ms` : "");
+    }
+    let out = `${esc(w.ssid)} · assoc ${fmt(w.associateMs)} ms · auth ${fmt(w.authenticateMs)} ms · dhcp ${fmt(w.dhcpMs)} ms · ${esc(w.ip)}`;
+    if (w.gateway) out += ` gw ${esc(w.gateway)}`;
+    if (w.throughputMbps) out += ` · ${fmt(w.throughputMbps)} Mbps`;
+    return out;
   }
   if (p.traceroute) {
     const t = p.traceroute;

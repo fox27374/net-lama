@@ -829,6 +829,35 @@ What has been done so far, in chronological order. Planned work lives in
 - **Note**: deployed-from-tarball builds (tpr06) must pass
   `--build-arg VERSION=...` since the source tarball has no `.git`.
 
+## 2026-07-18 — WLAN active tests (v0.2.0)
+
+- **New `wlan_active` test type** (`internal/probe/wlanactive*.go`): connects
+  to a configured SSID for real and times every step — association,
+  authentication, DHCP, optional throughput. wpa_supplicant (nl80211) drives
+  the connection with its events parsed for timing (`parseWpaEvent`); DHCP is
+  a full DISCOVER→ACK exchange via `insomniacslk/dhcp` (no host state
+  touched) reporting leased IP, netmask and gateway; throughput pins the
+  leased source address with a source-routed default in a dedicated policy
+  table (host routing untouched, cleanly torn down). The radio's previous
+  mode (monitor) is restored afterwards; passive sweep and active test
+  serialize on `wlanMu`.
+- **Security modes**: `psk` (WPA2/WPA3, `WPA-PSK SAE` + `ieee80211w=1`),
+  `eap-peap` (802.1X PEAP/MSCHAPv2 with a CA certificate PEM — or explicit
+  `insecureSkipVerify` to accept any EAP server), and `open`. Config values
+  are escaped against wpa.conf injection (tested).
+- **Result**: per-step ms (associate/authenticate/dhcp/throughput), BSSID,
+  RSSI during the test, IP/netmask/gateway, Mbps, total ms, `failedStep` on
+  failure. Proto oneofs 13 (params) / 14 (result); `resultTestType`,
+  metrics, and overview extraction (`totalMs` series) covered.
+- **Capability** `wlan_active`: any wireless interface + `wpa_supplicant`
+  in PATH + privilege (or demo mode). agent-sensor image now installs
+  `wpasupplicant`. Server validation: SSID required, security enum,
+  credential requirements per mode, min interval 300s (the test takes the
+  radio away from passive sweeps).
+- **UI**: "WLAN active (connect test)" test type with dynamic form (identity/
+  CA cert/skip-verify only for EAP), per-step timing summary in Results.
+- **Deferred**: roaming-event observation (new ROADMAP item).
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
