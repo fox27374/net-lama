@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fox27374/net-lama/internal/oui"
 	"github.com/fox27374/net-lama/internal/store"
 )
 
@@ -234,4 +235,21 @@ func (a *API) handleListResults(w http.ResponseWriter, r *http.Request, user *st
 		return
 	}
 	writeJSON(w, http.StatusOK, results)
+}
+
+// handleOUILookup resolves MAC addresses to manufacturer names from the
+// embedded IEEE registry. GET /api/v1/oui?macs=aa:bb:cc:dd:ee:ff,...
+// Returns {"aa:bb:cc:dd:ee:ff": "Vendor", ...} with unknown MACs omitted.
+func (a *API) handleOUILookup(w http.ResponseWriter, r *http.Request, _ *store.User) {
+	out := map[string]string{}
+	for _, mac := range strings.Split(r.URL.Query().Get("macs"), ",") {
+		mac = strings.TrimSpace(mac)
+		if mac == "" {
+			continue
+		}
+		if v := oui.Lookup(mac); v != "" {
+			out[mac] = v
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }

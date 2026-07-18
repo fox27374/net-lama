@@ -428,14 +428,22 @@ func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats 
 	pbNetworks := make([]*pb.WlanNetwork, 0, len(networks))
 	for _, n := range networks {
 		pbNetworks = append(pbNetworks, &pb.WlanNetwork{
-			Bssid:     n.BSSID,
-			Ssid:      n.SSID,
-			Channel:   n.Channel,
-			FreqMhz:   n.FreqMHz,
-			RssiDbm:   n.RSSIdBm,
-			Beacons:   n.Beacons,
-			Security:  n.Security,
-			Standards: n.Standards,
+			Bssid:              n.BSSID,
+			Ssid:               n.SSID,
+			Channel:            n.Channel,
+			FreqMhz:            n.FreqMHz,
+			RssiDbm:            n.RSSIdBm,
+			Beacons:            n.Beacons,
+			Security:           n.Security,
+			Standards:          n.Standards,
+			WidthMhz:           n.WidthMHz,
+			BeaconIntervalTu:   n.BeaconIntervalTU,
+			Country:            n.Country,
+			LoadPresent:        n.LoadPresent,
+			LoadStations:       n.LoadStations,
+			LoadChannelUtilPct: n.LoadChannelUtilPct,
+			SecurityDetail:     n.SecurityDetail,
+			Roaming:            n.Roaming,
 		})
 	}
 

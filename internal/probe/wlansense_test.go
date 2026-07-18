@@ -444,3 +444,55 @@ func TestParsePhyName(t *testing.T) {
 		t.Errorf("no match: got %q, want empty", got)
 	}
 }
+
+func TestParseBeaconBodyDetails(t *testing.T) {
+	elems := []byte{}
+	elems = append(elems, 7, 6, 'A', 'T', ' ', 1, 11, 20)        // Country AT
+	elems = append(elems, 11, 5, 7, 0, 128, 0, 0)                // BSS Load: 7 stations, util 128/255
+	elems = append(elems, 61, 3, 6, 0x01, 0)                     // HT op: secondary above → 40 MHz
+	elems = append(elems, 54, 3, 0x12, 0x34, 1)                  // Mobility Domain → r
+	elems = append(elems, 70, 5, 0, 0, 0, 0, 0)                  // RM Enabled → k
+	elems = append(elems, 127, 3, 0, 0, 0x08)                    // ExtCap bit 19 → v
+	elems = append(elems, rsnElem(2, 8)...)                      // PSK+SAE, CCMP pairwise
+
+	body := fixedBody(true, elems...)
+	body[8], body[9] = 100, 0 // beacon interval 100 TU
+	info := parseBeaconBody(body)
+
+	if info.BeaconIntervalTU != 100 {
+		t.Errorf("interval: expected 100, got %d", info.BeaconIntervalTU)
+	}
+	if info.Country != "AT" {
+		t.Errorf("country: expected AT, got %q", info.Country)
+	}
+	if !info.LoadPresent || info.LoadStations != 7 {
+		t.Errorf("load: expected present with 7 stations, got %+v", info)
+	}
+	if info.LoadChannelUtilPct < 50 || info.LoadChannelUtilPct > 51 {
+		t.Errorf("load util: expected ~50.2, got %f", info.LoadChannelUtilPct)
+	}
+	if info.WidthMHz != 40 {
+		t.Errorf("width: expected 40, got %d", info.WidthMHz)
+	}
+	if info.Roaming != "k/r/v" {
+		t.Errorf("roaming: expected k/r/v, got %q", info.Roaming)
+	}
+	if info.SecurityDetail != "PSK+SAE · CCMP" {
+		t.Errorf("security detail: expected 'PSK+SAE · CCMP', got %q", info.SecurityDetail)
+	}
+}
+
+func TestParseBeaconBodyVHTWidth(t *testing.T) {
+	vht80 := fixedBody(false, 192, 5, 1, 42, 0, 0, 0)
+	if w := parseBeaconBody(vht80).WidthMHz; w != 80 {
+		t.Errorf("vht80: expected 80, got %d", w)
+	}
+	vht160 := fixedBody(false, 192, 5, 1, 42, 50, 0, 0) // CCFS1 set → 160
+	if w := parseBeaconBody(vht160).WidthMHz; w != 160 {
+		t.Errorf("vht160: expected 160, got %d", w)
+	}
+	plain := fixedBody(false, ssidElem("x")...)
+	if w := parseBeaconBody(plain).WidthMHz; w != 20 {
+		t.Errorf("plain: expected 20, got %d", w)
+	}
+}

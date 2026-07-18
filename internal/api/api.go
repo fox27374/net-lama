@@ -54,6 +54,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/agents/{id}", a.auth(a.handleDeleteAgent))
 
 	mux.HandleFunc("GET /api/v1/results", a.auth(a.handleListResults))
+	mux.HandleFunc("GET /api/v1/oui", a.auth(a.handleOUILookup))
 	mux.HandleFunc("GET /api/v1/overview", a.auth(a.handleOverview))
 	mux.HandleFunc("GET /api/v1/logs", a.auth(a.handleListLogs))
 

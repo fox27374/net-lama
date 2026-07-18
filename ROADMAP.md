@@ -47,8 +47,12 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] SSID security + PHY standards: security (Open/WEP/WPA2/WPA3/WPA2-WPA3
       transition/Enterprise/OWE) and PHY generation (n/ac/ax/be) parsed from
       RSN/HT/VHT/HE/EHT beacon information elements, shown in the SSID table
-- [ ] SSID capabilities/settings like 802.11r/k/v, parsed from beacon
+- [x] SSID capabilities/settings like 802.11r/k/v, parsed from beacon
       information elements
+- [x] AP detail panel: click an access point on the Wireless page for
+      vendor (embedded IEEE OUI registry via `GET /api/v1/oui`), channel
+      width, beacon interval, country, BSS load, AKM/cipher detail,
+      802.11k/r/v roaming, and the clients observed on that BSSID
 - [x] Traceroute / path analysis Phase 1: mtr-based path test (TCP/ICMP/UDP),
       per-hop RTT and loss, failure localization, hop-chain Path visualization
 - [ ] SaaS / cloud service tests: reachability and quality checks for online

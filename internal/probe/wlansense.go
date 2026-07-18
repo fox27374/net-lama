@@ -50,6 +50,15 @@ type WlanNetwork struct {
 	Beacons   uint32 // beacon/probe-response frames seen
 	Security  string // "Open", "WEP", "WPA2", "WPA2/WPA3", "WPA3", ...
 	Standards string // PHY generations from IEs, e.g. "n/ac/ax"
+
+	WidthMHz           uint32  // channel width from HT/VHT operation IEs (20/40/80/160)
+	BeaconIntervalTU   uint32  // beacon interval in time units (1 TU = 1.024 ms)
+	Country            string  // country code from the Country IE
+	LoadPresent        bool    // BSS Load IE seen
+	LoadStations       uint32  // associated station count reported by the AP
+	LoadChannelUtilPct float64 // AP-reported channel utilization 0-100
+	SecurityDetail     string  // AKM + cipher, e.g. "PSK+SAE · CCMP"
+	Roaming            string  // 802.11 roaming amendments seen, e.g. "k/r/v"
 }
 
 // Sense performs a monitor-mode sweep, capturing stations, per-channel
@@ -223,6 +232,26 @@ func recordNetwork(networks map[string]*WlanNetwork, bssid string, info beaconIn
 	if info.Standards != "" {
 		n.Standards = info.Standards
 	}
+	if info.WidthMHz > n.WidthMHz {
+		n.WidthMHz = info.WidthMHz
+	}
+	if info.BeaconIntervalTU > 0 {
+		n.BeaconIntervalTU = info.BeaconIntervalTU
+	}
+	if info.Country != "" {
+		n.Country = info.Country
+	}
+	if info.LoadPresent {
+		n.LoadPresent = true
+		n.LoadStations = info.LoadStations
+		n.LoadChannelUtilPct = info.LoadChannelUtilPct
+	}
+	if info.SecurityDetail != "" {
+		n.SecurityDetail = info.SecurityDetail
+	}
+	if info.Roaming != "" {
+		n.Roaming = info.Roaming
+	}
 	if rssi > n.RSSIdBm {
 		n.RSSIdBm = rssi
 	}
@@ -365,6 +394,15 @@ type beaconInfo struct {
 	SSID      string
 	Security  string // derived from RSN/WPA elements + privacy capability bit
 	Standards string // PHY generations from HT/VHT/HE/EHT elements, "n/ac/ax"
+
+	WidthMHz           uint32  // 20/40 from HT operation, 80/160 from VHT operation
+	BeaconIntervalTU   uint32  // fixed-body beacon interval
+	Country            string  // Country IE
+	LoadPresent        bool    // BSS Load IE seen
+	LoadStations       uint32
+	LoadChannelUtilPct float64
+	SecurityDetail     string // AKM + pairwise cipher, e.g. "PSK+SAE · CCMP"
+	Roaming            string // "k/r/v" from RM/Mobility-Domain/BSS-Transition
 }
 
 // parseBeaconBody parses a beacon/probe-response frame body: 12 fixed bytes
@@ -375,12 +413,15 @@ func parseBeaconBody(body []byte) beaconInfo {
 	if len(body) < 12 {
 		return info
 	}
+	info.BeaconIntervalTU = uint32(body[8]) | uint32(body[9])<<8
 	privacy := body[10]&0x10 != 0 // capability bit 4
 	data := body[12:]
 
 	var hasRSN, hasWPA bool
-	var akms []byte
+	var akms, ciphers []byte
 	var ht, vht, he, eht bool
+	var rm, ft, btm bool // 802.11k / 802.11r / 802.11v
+	info.WidthMHz = 20
 
 	for i := 0; i+2 <= len(data); {
 		tag, length := data[i], int(data[i+1])
@@ -393,13 +434,45 @@ func parseBeaconBody(body []byte) beaconInfo {
 			if length > 0 {
 				info.SSID = string(v)
 			}
+		case 7: // Country: 2-char code + environment byte
+			if length >= 2 && v[0] >= 'A' && v[0] <= 'Z' && v[1] >= 'A' && v[1] <= 'Z' {
+				info.Country = string(v[:2])
+			}
+		case 11: // BSS Load: station count(2 LE), channel utilization(1, /255)
+			if length >= 3 {
+				info.LoadPresent = true
+				info.LoadStations = uint32(v[0]) | uint32(v[1])<<8
+				info.LoadChannelUtilPct = float64(v[2]) / 255.0 * 100.0
+			}
 		case 45: // HT capabilities → 802.11n
 			ht = true
 		case 48: // RSN
 			hasRSN = true
-			akms = append(akms, parseRSNAKMs(v)...)
+			a, c := parseRSNSuites(v)
+			akms = append(akms, a...)
+			ciphers = append(ciphers, c...)
+		case 54: // Mobility Domain → 802.11r
+			ft = true
+		case 61: // HT operation: secondary channel offset (byte1 bits 0-1) → 40 MHz
+			if length >= 2 && v[1]&0x03 != 0 && info.WidthMHz < 40 {
+				info.WidthMHz = 40
+			}
+		case 70: // RM Enabled Capabilities → 802.11k
+			rm = true
+		case 127: // Extended Capabilities: bit 19 = BSS Transition → 802.11v
+			if length >= 3 && v[2]&0x08 != 0 {
+				btm = true
+			}
 		case 191: // VHT capabilities → 802.11ac
 			vht = true
+		case 192: // VHT operation: width byte 1+ → 80, CCFS1 set → 160
+			if length >= 3 && v[0] >= 1 {
+				if v[2] != 0 || v[0] >= 2 {
+					info.WidthMHz = 160
+				} else if info.WidthMHz < 80 {
+					info.WidthMHz = 80
+				}
+			}
 		case 221: // vendor: Microsoft WPA1 OUI 00:50:F2 type 1
 			if length >= 4 && v[0] == 0x00 && v[1] == 0x50 && v[2] == 0xF2 && v[3] == 0x01 {
 				hasWPA = true
@@ -416,8 +489,10 @@ func parseBeaconBody(body []byte) beaconInfo {
 		}
 		i += 2 + length
 	}
+	// ponytail: HE-operation 6 GHz width not parsed; 6 GHz APs report the HT/VHT-derived width
 
 	info.Security = securityLabel(privacy, hasWPA, hasRSN, akms)
+	info.SecurityDetail = securityDetail(akms, ciphers)
 	var gens []string
 	if ht {
 		gens = append(gens, "n")
@@ -432,28 +507,84 @@ func parseBeaconBody(body []byte) beaconInfo {
 		gens = append(gens, "be")
 	}
 	info.Standards = strings.Join(gens, "/")
+
+	var roam []string
+	if rm {
+		roam = append(roam, "k")
+	}
+	if ft {
+		roam = append(roam, "r")
+	}
+	if btm {
+		roam = append(roam, "v")
+	}
+	info.Roaming = strings.Join(roam, "/")
 	return info
 }
 
-// parseRSNAKMs pulls the AKM suite-type bytes out of an RSN element body:
-// version(2) group-cipher(4) pairwise-count(2) pairwise(4n) akm-count(2)
-// akm(4m); the type is the 4th byte of each 00-0F-AC-XX suite.
-func parseRSNAKMs(v []byte) []byte {
+// parseRSNSuites pulls the AKM and pairwise-cipher suite-type bytes out of an
+// RSN element body: version(2) group-cipher(4) pairwise-count(2) pairwise(4n)
+// akm-count(2) akm(4m); the type is the 4th byte of each 00-0F-AC-XX suite.
+func parseRSNSuites(v []byte) (akms, ciphers []byte) {
 	off := 2 + 4
 	if off+2 > len(v) {
-		return nil
+		return nil, nil
 	}
 	pairwise := int(v[off]) | int(v[off+1])<<8
-	off += 2 + 4*pairwise
+	off += 2
+	for j := 0; j < pairwise && off+4 <= len(v); j++ {
+		ciphers = append(ciphers, v[off+3])
+		off += 4
+	}
 	if off+2 > len(v) {
-		return nil
+		return nil, ciphers
 	}
 	akmCount := int(v[off]) | int(v[off+1])<<8
 	off += 2
-	var out []byte
 	for j := 0; j < akmCount && off+4 <= len(v); j++ {
-		out = append(out, v[off+3])
+		akms = append(akms, v[off+3])
 		off += 4
+	}
+	return akms, ciphers
+}
+
+// securityDetail renders AKM and pairwise cipher names, e.g. "PSK+SAE · CCMP".
+func securityDetail(akms, ciphers []byte) string {
+	akmNames := map[byte]string{
+		1: "802.1X", 2: "PSK", 3: "FT-802.1X", 4: "FT-PSK", 5: "802.1X-SHA256",
+		6: "PSK-SHA256", 8: "SAE", 9: "FT-SAE", 11: "802.1X-SuiteB", 12: "802.1X-SuiteB-192",
+		13: "FT-802.1X-SHA384", 18: "OWE",
+	}
+	cipherNames := map[byte]string{
+		1: "WEP-40", 2: "TKIP", 4: "CCMP", 5: "WEP-104",
+		8: "GCMP", 9: "GCMP-256", 10: "CCMP-256",
+	}
+	name := func(m map[byte]string, b byte) string {
+		if s, ok := m[b]; ok {
+			return s
+		}
+		return "type-" + strconv.Itoa(int(b))
+	}
+	var aParts, cParts []string
+	seen := map[string]bool{}
+	for _, a := range akms {
+		if s := name(akmNames, a); !seen["a"+s] {
+			seen["a"+s] = true
+			aParts = append(aParts, s)
+		}
+	}
+	for _, c := range ciphers {
+		if s := name(cipherNames, c); !seen["c"+s] {
+			seen["c"+s] = true
+			cParts = append(cParts, s)
+		}
+	}
+	if len(aParts) == 0 {
+		return ""
+	}
+	out := strings.Join(aParts, "+")
+	if len(cParts) > 0 {
+		out += " · " + strings.Join(cParts, "/")
 	}
 	return out
 }

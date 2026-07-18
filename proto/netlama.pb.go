@@ -2129,17 +2129,25 @@ func (x *WlanPassiveResult) GetNetworks() []*WlanNetwork {
 }
 
 type WlanNetwork struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Bssid         string                 `protobuf:"bytes,1,opt,name=bssid,proto3" json:"bssid,omitempty"`
-	Ssid          string                 `protobuf:"bytes,2,opt,name=ssid,proto3" json:"ssid,omitempty"`        // empty = hidden network
-	Channel       uint32                 `protobuf:"varint,3,opt,name=channel,proto3" json:"channel,omitempty"` // channel it was heard on
-	FreqMhz       uint32                 `protobuf:"varint,4,opt,name=freq_mhz,json=freqMhz,proto3" json:"freq_mhz,omitempty"`
-	RssiDbm       int32                  `protobuf:"varint,5,opt,name=rssi_dbm,json=rssiDbm,proto3" json:"rssi_dbm,omitempty"` // strongest beacon RSSI
-	Beacons       uint32                 `protobuf:"varint,6,opt,name=beacons,proto3" json:"beacons,omitempty"`                // beacon/probe-response frames seen
-	Security      string                 `protobuf:"bytes,7,opt,name=security,proto3" json:"security,omitempty"`               // "Open", "WEP", "WPA2", "WPA2/WPA3", "WPA3", ...
-	Standards     string                 `protobuf:"bytes,8,opt,name=standards,proto3" json:"standards,omitempty"`             // PHY generations from IEs, e.g. "n/ac/ax"
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Bssid              string                 `protobuf:"bytes,1,opt,name=bssid,proto3" json:"bssid,omitempty"`
+	Ssid               string                 `protobuf:"bytes,2,opt,name=ssid,proto3" json:"ssid,omitempty"`        // empty = hidden network
+	Channel            uint32                 `protobuf:"varint,3,opt,name=channel,proto3" json:"channel,omitempty"` // channel it was heard on
+	FreqMhz            uint32                 `protobuf:"varint,4,opt,name=freq_mhz,json=freqMhz,proto3" json:"freq_mhz,omitempty"`
+	RssiDbm            int32                  `protobuf:"varint,5,opt,name=rssi_dbm,json=rssiDbm,proto3" json:"rssi_dbm,omitempty"`                                        // strongest beacon RSSI
+	Beacons            uint32                 `protobuf:"varint,6,opt,name=beacons,proto3" json:"beacons,omitempty"`                                                       // beacon/probe-response frames seen
+	Security           string                 `protobuf:"bytes,7,opt,name=security,proto3" json:"security,omitempty"`                                                      // "Open", "WEP", "WPA2", "WPA2/WPA3", "WPA3", ...
+	Standards          string                 `protobuf:"bytes,8,opt,name=standards,proto3" json:"standards,omitempty"`                                                    // PHY generations from IEs, e.g. "n/ac/ax"
+	WidthMhz           uint32                 `protobuf:"varint,9,opt,name=width_mhz,json=widthMhz,proto3" json:"width_mhz,omitempty"`                                     // channel width from HT/VHT operation IEs (20/40/80/160)
+	BeaconIntervalTu   uint32                 `protobuf:"varint,10,opt,name=beacon_interval_tu,json=beaconIntervalTu,proto3" json:"beacon_interval_tu,omitempty"`          // beacon interval in time units (1 TU = 1.024 ms)
+	Country            string                 `protobuf:"bytes,11,opt,name=country,proto3" json:"country,omitempty"`                                                       // country code from the Country IE, e.g. "AT"
+	LoadPresent        bool                   `protobuf:"varint,12,opt,name=load_present,json=loadPresent,proto3" json:"load_present,omitempty"`                           // BSS Load IE seen (station_count/channel_util valid)
+	LoadStations       uint32                 `protobuf:"varint,13,opt,name=load_stations,json=loadStations,proto3" json:"load_stations,omitempty"`                        // associated station count reported by the AP
+	LoadChannelUtilPct float64                `protobuf:"fixed64,14,opt,name=load_channel_util_pct,json=loadChannelUtilPct,proto3" json:"load_channel_util_pct,omitempty"` // AP-reported channel utilization 0-100
+	SecurityDetail     string                 `protobuf:"bytes,15,opt,name=security_detail,json=securityDetail,proto3" json:"security_detail,omitempty"`                   // AKM + cipher, e.g. "PSK+SAE · CCMP"
+	Roaming            string                 `protobuf:"bytes,16,opt,name=roaming,proto3" json:"roaming,omitempty"`                                                       // 802.11 roaming amendments seen, e.g. "k/r/v"
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *WlanNetwork) Reset() {
@@ -2224,6 +2232,62 @@ func (x *WlanNetwork) GetSecurity() string {
 func (x *WlanNetwork) GetStandards() string {
 	if x != nil {
 		return x.Standards
+	}
+	return ""
+}
+
+func (x *WlanNetwork) GetWidthMhz() uint32 {
+	if x != nil {
+		return x.WidthMhz
+	}
+	return 0
+}
+
+func (x *WlanNetwork) GetBeaconIntervalTu() uint32 {
+	if x != nil {
+		return x.BeaconIntervalTu
+	}
+	return 0
+}
+
+func (x *WlanNetwork) GetCountry() string {
+	if x != nil {
+		return x.Country
+	}
+	return ""
+}
+
+func (x *WlanNetwork) GetLoadPresent() bool {
+	if x != nil {
+		return x.LoadPresent
+	}
+	return false
+}
+
+func (x *WlanNetwork) GetLoadStations() uint32 {
+	if x != nil {
+		return x.LoadStations
+	}
+	return 0
+}
+
+func (x *WlanNetwork) GetLoadChannelUtilPct() float64 {
+	if x != nil {
+		return x.LoadChannelUtilPct
+	}
+	return 0
+}
+
+func (x *WlanNetwork) GetSecurityDetail() string {
+	if x != nil {
+		return x.SecurityDetail
+	}
+	return ""
+}
+
+func (x *WlanNetwork) GetRoaming() string {
+	if x != nil {
+		return x.Roaming
 	}
 	return ""
 }
@@ -2990,7 +3054,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bstations\x18\x03 \x03(\v2\x17.netlama.v1.WlanStationR\bstations\x127\n" +
 	"\bchannels\x18\x04 \x03(\v2\x1b.netlama.v1.WlanChannelStatR\bchannels\x12\x19\n" +
 	"\bsweep_ms\x18\x05 \x01(\rR\asweepMs\x123\n" +
-	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xdb\x01\n" +
+	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xfe\x03\n" +
 	"\vWlanNetwork\x12\x14\n" +
 	"\x05bssid\x18\x01 \x01(\tR\x05bssid\x12\x12\n" +
 	"\x04ssid\x18\x02 \x01(\tR\x04ssid\x12\x18\n" +
@@ -2999,7 +3063,16 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\brssi_dbm\x18\x05 \x01(\x05R\arssiDbm\x12\x18\n" +
 	"\abeacons\x18\x06 \x01(\rR\abeacons\x12\x1a\n" +
 	"\bsecurity\x18\a \x01(\tR\bsecurity\x12\x1c\n" +
-	"\tstandards\x18\b \x01(\tR\tstandards\"\x8e\x02\n" +
+	"\tstandards\x18\b \x01(\tR\tstandards\x12\x1b\n" +
+	"\twidth_mhz\x18\t \x01(\rR\bwidthMhz\x12,\n" +
+	"\x12beacon_interval_tu\x18\n" +
+	" \x01(\rR\x10beaconIntervalTu\x12\x18\n" +
+	"\acountry\x18\v \x01(\tR\acountry\x12!\n" +
+	"\fload_present\x18\f \x01(\bR\vloadPresent\x12#\n" +
+	"\rload_stations\x18\r \x01(\rR\floadStations\x121\n" +
+	"\x15load_channel_util_pct\x18\x0e \x01(\x01R\x12loadChannelUtilPct\x12'\n" +
+	"\x0fsecurity_detail\x18\x0f \x01(\tR\x0esecurityDetail\x12\x18\n" +
+	"\aroaming\x18\x10 \x01(\tR\aroaming\"\x8e\x02\n" +
 	"\vWlanStation\x12\x10\n" +
 	"\x03mac\x18\x01 \x01(\tR\x03mac\x12\x14\n" +
 	"\x05bssid\x18\x02 \x01(\tR\x05bssid\x12\x12\n" +

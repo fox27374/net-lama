@@ -1594,6 +1594,77 @@ function renderSignalBar(rssi) {
   return `<div class="signal-bar"><div class="signal-fill ${color}" style="width: ${percent}%"></div></div>`;
 }
 
+// --- AP vendor lookup (server resolves BSSID OUIs from the IEEE registry) ---
+const ouiCache = new Map();
+async function lookupVendors(macs) {
+  const missing = [...new Set(macs)].filter((m) => m && !ouiCache.has(m));
+  if (missing.length) {
+    try {
+      const res = await api("GET", "/api/v1/oui?macs=" + encodeURIComponent(missing.join(",")));
+      for (const m of missing) ouiCache.set(m, res[m] || "");
+    } catch (e) { /* vendors stay unresolved */ }
+  }
+  return macs.map((m) => ouiCache.get(m) || "");
+}
+
+let wlDetailBssid = null; // BSSID of the open detail panel, null = closed
+
+$("#wl-detail-close").addEventListener("click", () => {
+  wlDetailBssid = null;
+  $("#wl-detail").classList.add("hidden");
+});
+
+// showApDetail fills the AP detail panel for one network from the latest sweep.
+async function showApDetail(n, wp, result) {
+  wlDetailBssid = n.bssid;
+  $("#wl-detail").classList.remove("hidden");
+  $("#wl-detail-title").textContent = (n.ssid || "(hidden)") + " — " + n.bssid;
+
+  const freq = n.freqMhz || 0;
+  const band = freq >= 5955 ? "6 GHz" : freq >= 5000 ? "5 GHz" : "2.4 GHz";
+  const rows = [
+    ["Vendor", '<span class="wl-vendor muted" data-mac="' + esc(n.bssid) + '">resolving…</span>'],
+    ["Signal", `<span class="health ${signalClass(n.rssiDbm)}">${n.rssiDbm || 0} dBm</span> ${renderSignalBar(n.rssiDbm)}`],
+    ["Channel", `${n.channel || "—"} · ${band}${n.widthMhz ? ` · ${n.widthMhz} MHz` : ""}`],
+    ["Frequency", freq ? freq + " MHz" : "—"],
+    ["Security", esc(n.security || "Open") + (n.securityDetail ? ` <span class="muted">(${esc(n.securityDetail)})</span>` : "")],
+    ["Standards", n.standards ? "802.11 " + esc(n.standards) : "—"],
+    ["Roaming", n.roaming ? "802.11 " + esc(n.roaming) : "—"],
+    ["Beacon interval", n.beaconIntervalTu ? `${n.beaconIntervalTu} TU (${(n.beaconIntervalTu * 1.024).toFixed(0)} ms)` : "—"],
+    ["Country", n.country ? esc(n.country) : "—"],
+    ["AP load", n.loadPresent ? `${n.loadStations || 0} stations · ${(n.loadChannelUtilPct || 0).toFixed(0)}% channel busy` : "—"],
+    ["Beacons heard", String(n.beacons || 0)],
+    ["Last seen", result ? new Date(result.time).toLocaleString() : "—"],
+  ];
+  $("#wl-detail-grid").innerHTML = rows
+    .map(([k, v]) => `<div class="wl-detail-item"><span class="wl-detail-label">${k}</span><span class="wl-detail-value">${v}</span></div>`)
+    .join("");
+
+  // Clients observed on this BSSID during the sweep
+  const clients = ((wp && wp.stations) || []).filter((s) => s.bssid === n.bssid);
+  $("#wl-detail-clients-wrap").classList.toggle("hidden", clients.length === 0);
+  const ctbody = $("#wl-detail-clients tbody");
+  ctbody.innerHTML = clients
+    .map((c) => `<tr>
+      <td class="mono">${esc(c.mac)}</td>
+      <td><span class="wl-vendor muted" data-mac="${esc(c.mac)}"></span></td>
+      <td class="num"><span class="health ${signalClass(c.rssiDbm)}">${c.rssiDbm || 0}</span></td>
+      <td class="num">${c.rateMbps ? c.rateMbps.toFixed(1) : "—"}</td>
+      <td class="num">${c.frames || 0}</td>
+      <td class="muted nowrap">${c.lastSeenMs ? new Date(c.lastSeenMs).toLocaleTimeString() : "—"}</td>
+    </tr>`)
+    .join("");
+
+  // Resolve vendors for the AP and its clients, then fill the placeholders
+  const macs = [n.bssid, ...clients.map((c) => c.mac)];
+  await lookupVendors(macs);
+  for (const el of $("#wl-detail").querySelectorAll(".wl-vendor")) {
+    const v = ouiCache.get(el.dataset.mac) || "";
+    el.textContent = v || "unknown";
+    el.classList.toggle("muted", !v);
+  }
+}
+
 function renderWirelessNetworks(result) {
   const tbody = $("#wl-networks-table tbody");
   tbody.innerHTML = "";
@@ -1623,6 +1694,16 @@ function renderWirelessNetworks(result) {
     $("#wl-empty").textContent = "Last sweep failed: " + result.error;
     $("#wl-empty").classList.remove("hidden");
   }
+
+  // Refresh or close the detail panel against the new sweep
+  const detailNet = wlDetailBssid && allNetworks.find((n) => n.bssid === wlDetailBssid);
+  if (detailNet) {
+    showApDetail(detailNet, wp, result);
+  } else if (wlDetailBssid) {
+    wlDetailBssid = null;
+    $("#wl-detail").classList.add("hidden");
+  }
+
   if (!allNetworks.length) return;
 
   // Count clients per BSSID
@@ -1669,6 +1750,8 @@ function renderWirelessNetworks(result) {
       <td>${n.security || "Open"}</td>
       <td class="num">${clients}</td>
       <td class="muted nowrap">${lastSeen}</td>`;
+    tr.style.cursor = "pointer";
+    tr.addEventListener("click", () => showApDetail(n, wp, result));
     return tr;
   }
 

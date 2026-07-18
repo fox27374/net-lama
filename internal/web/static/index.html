@@ -260,6 +260,23 @@
           </table>
           <p id="wl-empty" class="empty hidden">No networks detected yet.</p>
         </div>
+        <div class="card hidden" id="wl-detail">
+          <div class="section-head">
+            <h3 id="wl-detail-title">Access point</h3>
+            <span class="spacer"></span>
+            <button id="wl-detail-close" class="ghost" title="Close">✕</button>
+          </div>
+          <div class="wl-detail-grid" id="wl-detail-grid"></div>
+          <div id="wl-detail-clients-wrap" class="hidden">
+            <h4>Observed clients</h4>
+            <table id="wl-detail-clients">
+              <thead>
+                <tr><th>MAC</th><th>Vendor</th><th class="num">Signal (dBm)</th><th class="num">Rate (Mbps)</th><th class="num">Frames</th><th>Last seen</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
 

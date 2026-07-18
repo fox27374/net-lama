@@ -164,11 +164,16 @@ func demoSense(iface string) (string, []WlanStation, []WlanChannelStat, []WlanNe
 
 	// Synthetic networks (APs) matching the stations' BSSIDs.
 	networks := []WlanNetwork{
-		{BSSID: "a0:f8:49:74:8b:20", SSID: "corp-wifi", Channel: 6, FreqMHz: 2437, RSSIdBm: int32(-44 - rand.Intn(8)), Beacons: uint32(30 + rand.Intn(20)), Security: "WPA2/WPA3", Standards: "n/ac/ax"},
-		{BSSID: "a0:f8:49:74:8b:22", SSID: "corp-guest", Channel: 6, FreqMHz: 2437, RSSIdBm: int32(-48 - rand.Intn(8)), Beacons: uint32(28 + rand.Intn(20)), Security: "WPA2", Standards: "n/ac"},
-		{BSSID: "c0:25:5c:ec:bb:40", SSID: "corp-wifi", Channel: 36, FreqMHz: 5180, RSSIdBm: int32(-50 - rand.Intn(10)), Beacons: uint32(25 + rand.Intn(20)), Security: "WPA2/WPA3", Standards: "ac/ax"},
-		{BSSID: "2c:3a:fd:8b:1e:56", SSID: "IoT-Net", Channel: 11, FreqMHz: 2462, RSSIdBm: int32(-68 - rand.Intn(10)), Beacons: uint32(20 + rand.Intn(15)), Security: "WPA2", Standards: "n"},
-		{BSSID: "e8:9f:80:11:22:33", SSID: "", Channel: 1, FreqMHz: 2412, RSSIdBm: int32(-72 - rand.Intn(10)), Beacons: uint32(10 + rand.Intn(10)), Security: "WPA2", Standards: "n"},
+		{BSSID: "a0:f8:49:74:8b:20", SSID: "corp-wifi", Channel: 6, FreqMHz: 2437, RSSIdBm: int32(-44 - rand.Intn(8)), Beacons: uint32(30 + rand.Intn(20)), Security: "WPA2/WPA3", Standards: "n/ac/ax",
+			WidthMHz: 40, BeaconIntervalTU: 100, Country: "AT", LoadPresent: true, LoadStations: uint32(rand.Intn(12)), LoadChannelUtilPct: float64(20 + rand.Intn(40)), SecurityDetail: "PSK+SAE · CCMP", Roaming: "k/r/v"},
+		{BSSID: "a0:f8:49:74:8b:22", SSID: "corp-guest", Channel: 6, FreqMHz: 2437, RSSIdBm: int32(-48 - rand.Intn(8)), Beacons: uint32(28 + rand.Intn(20)), Security: "WPA2", Standards: "n/ac",
+			WidthMHz: 20, BeaconIntervalTU: 100, Country: "AT", LoadPresent: true, LoadStations: uint32(rand.Intn(5)), LoadChannelUtilPct: float64(10 + rand.Intn(30)), SecurityDetail: "PSK · CCMP", Roaming: "k/v"},
+		{BSSID: "c0:25:5c:ec:bb:40", SSID: "corp-wifi", Channel: 36, FreqMHz: 5180, RSSIdBm: int32(-50 - rand.Intn(10)), Beacons: uint32(25 + rand.Intn(20)), Security: "WPA2/WPA3", Standards: "ac/ax",
+			WidthMHz: 80, BeaconIntervalTU: 100, Country: "AT", LoadPresent: true, LoadStations: uint32(rand.Intn(20)), LoadChannelUtilPct: float64(15 + rand.Intn(35)), SecurityDetail: "PSK+SAE · CCMP", Roaming: "k/r/v"},
+		{BSSID: "2c:3a:fd:8b:1e:56", SSID: "IoT-Net", Channel: 11, FreqMHz: 2462, RSSIdBm: int32(-68 - rand.Intn(10)), Beacons: uint32(20 + rand.Intn(15)), Security: "WPA2", Standards: "n",
+			WidthMHz: 20, BeaconIntervalTU: 100, Country: "AT", SecurityDetail: "PSK · CCMP/TKIP"},
+		{BSSID: "e8:9f:80:11:22:33", SSID: "", Channel: 1, FreqMHz: 2412, RSSIdBm: int32(-72 - rand.Intn(10)), Beacons: uint32(10 + rand.Intn(10)), Security: "WPA2", Standards: "n",
+			WidthMHz: 20, BeaconIntervalTU: 100, SecurityDetail: "PSK · CCMP"},
 	}
 
 	sweepMs := uint32(400 * len(channels)) // dwell per channel + small overhead

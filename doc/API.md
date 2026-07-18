@@ -386,6 +386,16 @@ E.g. for `testType: "speedtest"` the payload is
 `{"provider": "ookla"|"ndt7"|"cloudflare", "serverName": "...",
 "latencyMs": 12.3, "downloadMbps": 280.1, "uploadMbps": 110.5, ...}`.
 
+### `GET /api/v1/oui`
+
+Query: `macs` — comma-separated MAC addresses. Resolves each MAC's OUI prefix
+to the manufacturer name from the embedded IEEE MA-L registry. Unknown and
+locally-administered (randomized) MACs are omitted from the response:
+
+```json
+{"a0:f8:49:74:8b:20": "Cisco Systems, Inc"}
+```
+
 ---
 
 ## Overview

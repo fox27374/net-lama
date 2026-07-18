@@ -250,6 +250,14 @@ message WlanNetwork {
   uint32 beacons = 6;     // beacon/probe-response frames seen
   string security = 7;    // "Open", "WEP", "WPA2", "WPA2/WPA3", "WPA3", ...
   string standards = 8;   // PHY generations from IEs, e.g. "n/ac/ax"
+  uint32 width_mhz = 9;          // channel width from HT/VHT operation IEs (20/40/80/160)
+  uint32 beacon_interval_tu = 10; // beacon interval in time units (1 TU = 1.024 ms)
+  string country = 11;           // country code from the Country IE, e.g. "AT"
+  bool load_present = 12;        // BSS Load IE seen (station_count/channel_util valid)
+  uint32 load_stations = 13;     // associated station count reported by the AP
+  double load_channel_util_pct = 14; // AP-reported channel utilization 0-100
+  string security_detail = 15;   // AKM + cipher, e.g. "PSK+SAE · CCMP"
+  string roaming = 16;           // 802.11 roaming amendments seen, e.g. "k/r/v"
 }
 
 message WlanStation {

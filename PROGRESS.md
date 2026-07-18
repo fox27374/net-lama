@@ -750,6 +750,28 @@ What has been done so far, in chronological order. Planned work lives in
   `runWlanPassive()`. Documented in README (WLAN passive section), both compose
   files (commented env line with description).
 
+## 2026-07-18 — AP detail panel with vendor, width, load, roaming
+
+- **Richer beacon parsing** (`internal/probe/wlansense.go`): the passive sweep
+  now extracts per-AP channel width (HT/VHT operation IEs → 20/40/80/160 MHz),
+  beacon interval, country code, BSS Load (station count + AP-reported channel
+  utilization), AKM/cipher detail (e.g. "PSK+SAE · CCMP"), and 802.11k/r/v
+  roaming support (RM Enabled / Mobility Domain / BSS Transition bits). New
+  `WlanNetwork` proto fields 9–16; agent conversion and demo data updated;
+  covered by `TestParseBeaconBodyDetails` / `TestParseBeaconBodyVHTWidth`.
+- **AP vendor lookup** (`internal/oui`, `GET /api/v1/oui?macs=...`): embedded
+  IEEE MA-L registry (39,765 OUIs, ~380 KB gzipped, fetched 2026-07-18)
+  resolves BSSIDs and client MACs to manufacturer names server-side;
+  locally-administered (randomized) MACs return unknown. Documented in
+  doc/API.md.
+- **Wireless UI**: clicking an AP row opens a detail panel (vendor, signal,
+  channel/band/width, frequency, security + AKM/cipher, standards, roaming,
+  beacon interval, country, AP load, beacons heard, last seen) plus a table of
+  the clients observed on that BSSID with their vendors. Panel refreshes with
+  each sweep and closes when the AP disappears.
+- **Verification**: build/vet/tests green; e2e with demo agent confirms the new
+  payload fields via `/api/v1/results` and vendor resolution via `/api/v1/oui`.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
