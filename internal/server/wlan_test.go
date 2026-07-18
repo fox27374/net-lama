@@ -9,8 +9,8 @@ import (
 )
 
 func TestWlanSenseMetricExtraction(t *testing.T) {
-	// Create a wlan_sense result with realistic channel utilization
-	result := &pb.WlanSenseResult{
+	// Create a wlan_passive result with realistic channel utilization
+	result := &pb.WlanPassiveResult{
 		Interface: "wlan0",
 		Demo:      true,
 		Stations: []*pb.WlanStation{
@@ -58,7 +58,7 @@ func TestWlanSenseMetricExtraction(t *testing.T) {
 
 	// Serialize to JSON to simulate what's stored in the DB
 	payload := map[string]interface{}{
-		"wlanSense": map[string]interface{}{
+		"wlanPassive": map[string]interface{}{
 			"interface": result.Interface,
 			"demo":      result.Demo,
 			"stations": []interface{}{
@@ -120,9 +120,9 @@ func TestWlanSenseMetricExtraction(t *testing.T) {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 
-	ws, ok := p["wlanSense"].(map[string]interface{})
+	ws, ok := p["wlanPassive"].(map[string]interface{})
 	if !ok {
-		t.Fatal("missing wlanSense field in payload")
+		t.Fatal("missing wlanPassive field in payload")
 	}
 
 	channels, ok := ws["channels"].([]interface{})
@@ -161,7 +161,7 @@ func TestWlanSenseMetricExtraction(t *testing.T) {
 		t.Errorf("expected sweep time 1500ms, got %d", result.SweepMs)
 	}
 
-	t.Logf("SUCCESS: wlan_sense result has max utilization %.1f%% from %d channels", maxUtil, len(result.Channels))
+	t.Logf("SUCCESS: wlan_passive result has max utilization %.1f%% from %d channels", maxUtil, len(result.Channels))
 }
 
 func TestWlanSenseValidation(t *testing.T) {
@@ -173,45 +173,31 @@ func TestWlanSenseValidation(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:        "valid wlan_sense minimal",
-			typ:         "wlan_sense",
-			interval:    30,
-			params:      WlanSenseParams{DwellMs: 400},
-			expectError: false,
-		},
-		{
-			name:        "valid wlan_sense with channels",
-			typ:         "wlan_sense",
+			name:        "valid wlan_passive",
+			typ:         "wlan_passive",
 			interval:    60,
-			params:      WlanSenseParams{Channels: []uint32{1, 6, 11}, DwellMs: 500},
+			params:      WlanPassiveParams{},
 			expectError: false,
 		},
 		{
-			name:        "invalid dwell too low",
-			typ:         "wlan_sense",
-			interval:    30,
-			params:      WlanSenseParams{DwellMs: 50},
+			name:        "valid wlan_passive large interval",
+			typ:         "wlan_passive",
+			interval:    300,
+			params:      WlanPassiveParams{},
+			expectError: false,
+		},
+		{
+			name:        "interval too low (< 60)",
+			typ:         "wlan_passive",
+			interval:    59,
+			params:      WlanPassiveParams{},
 			expectError: true,
 		},
 		{
-			name:        "invalid dwell too high",
-			typ:         "wlan_sense",
+			name:        "interval too low (30)",
+			typ:         "wlan_passive",
 			interval:    30,
-			params:      WlanSenseParams{DwellMs: 3000},
-			expectError: true,
-		},
-		{
-			name:        "invalid channel number",
-			typ:         "wlan_sense",
-			interval:    30,
-			params:      WlanSenseParams{Channels: []uint32{200}},
-			expectError: true,
-		},
-		{
-			name:        "interval too low",
-			typ:         "wlan_sense",
-			interval:    10,
-			params:      WlanSenseParams{},
+			params:      WlanPassiveParams{},
 			expectError: true,
 		},
 	}

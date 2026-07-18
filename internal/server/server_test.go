@@ -146,22 +146,22 @@ func TestIsLegacyCapabilities(t *testing.T) {
 	}{
 		{
 			name: "exact legacy list in legacy order",
-			caps: []string{"speedtest", "ping", "dns", "http", "tcp", "wlan_scan"},
+			caps: []string{"speedtest", "ping", "dns", "http", "tcp", "wlan"},
 			want: true,
 		},
 		{
 			name: "detection ordering is not legacy",
-			caps: []string{"ping", "dns", "http", "tcp", "speedtest", "wlan_scan"},
+			caps: []string{"ping", "dns", "http", "tcp", "speedtest", "wlan"},
 			want: false,
 		},
 		{
-			name: "detected list without wlan_scan",
+			name: "detected list without wlan",
 			caps: []string{"ping", "dns", "http", "tcp", "speedtest"},
 			want: false,
 		},
 		{
 			name: "detected list with traceroute",
-			caps: []string{"ping", "dns", "http", "tcp", "speedtest", "traceroute", "wlan_scan"},
+			caps: []string{"ping", "dns", "http", "tcp", "speedtest", "traceroute", "wlan"},
 			want: false,
 		},
 		{
@@ -222,7 +222,7 @@ func TestControlStream_LegacyCapabilitiesNotStored(t *testing.T) {
 	}
 
 	// 1. Old binary registers with the legacy hardcoded list: nothing stored.
-	record([]string{"speedtest", "ping", "dns", "http", "tcp", "wlan_scan"})
+	record([]string{"speedtest", "ping", "dns", "http", "tcp", "wlan"})
 	got, err := s.GetAgent(agent.ID)
 	if err != nil {
 		t.Fatalf("GetAgent failed: %v", err)
@@ -243,7 +243,7 @@ func TestControlStream_LegacyCapabilitiesNotStored(t *testing.T) {
 	}
 
 	// 3. Old binary reconnects with the legacy list: stored value is kept.
-	record([]string{"speedtest", "ping", "dns", "http", "tcp", "wlan_scan"})
+	record([]string{"speedtest", "ping", "dns", "http", "tcp", "wlan"})
 	got, err = s.GetAgent(agent.ID)
 	if err != nil {
 		t.Fatalf("GetAgent failed: %v", err)
@@ -288,5 +288,99 @@ func TestValidateTestDefThresholds(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestConfigForAgent_WlanPassiveCapability(t *testing.T) {
+	// Create a real temporary database for testing
+	tmpfile, err := os.CreateTemp("", "netlama-test-*.db")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	tmpfile.Close()
+	defer os.Remove(tmpfile.Name())
+
+	s, err := store.Open(tmpfile.Name())
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer s.Close()
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	server := &Server{Store: s, Logger: logger}
+
+	// Create test data
+	tenant, err := s.CreateTenant("test-tenant")
+	if err != nil {
+		t.Fatalf("Failed to create tenant: %v", err)
+	}
+
+	site, err := s.CreateSite(tenant.ID, "test-site")
+	if err != nil {
+		t.Fatalf("Failed to create site: %v", err)
+	}
+
+	// Create a wlan_passive test
+	wlanTest := &store.TestDef{
+		ID:              "test-wlan",
+		TenantID:        tenant.ID,
+		Name:            "test-wlan-passive",
+		Type:            "wlan_passive",
+		IntervalSeconds: 60,
+		Params:          json.RawMessage(`{}`),
+	}
+	_, err = s.CreateTest(wlanTest)
+	if err != nil {
+		t.Fatalf("Failed to create wlan test: %v", err)
+	}
+
+	// Assign test to site
+	if err := s.SetSiteTests(site.ID, []string{wlanTest.ID}); err != nil {
+		t.Fatalf("Failed to assign tests to site: %v", err)
+	}
+
+	// Test case 1: Agent WITH wlan capability should receive wlan_passive test
+	agentWithWlan := &store.Agent{
+		ID:           "agent-with-wlan",
+		Name:         "test-agent-with-wlan",
+		SiteID:       site.ID,
+		Capabilities: json.RawMessage(`["ping","dns","http","tcp","speedtest","wlan"]`),
+		CreatedAt:    time.Now(),
+	}
+
+	cfg, skipped, err := server.ConfigForAgent(agentWithWlan)
+	if err != nil {
+		t.Fatalf("ConfigForAgent failed: %v", err)
+	}
+
+	if len(cfg.Tests) != 1 {
+		t.Errorf("Expected wlan-capable agent to receive 1 test, got %d", len(cfg.Tests))
+	}
+	if len(cfg.Tests) > 0 && cfg.Tests[0].Name != "test-wlan-passive" {
+		t.Errorf("Expected test-wlan-passive, got %s", cfg.Tests[0].Name)
+	}
+	if len(skipped) != 0 {
+		t.Errorf("Expected no skipped tests for wlan-capable agent, got %v", skipped)
+	}
+
+	// Test case 2: Agent WITHOUT wlan capability should NOT receive wlan_passive test
+	agentWithoutWlan := &store.Agent{
+		ID:           "agent-without-wlan",
+		Name:         "test-agent-without-wlan",
+		SiteID:       site.ID,
+		Capabilities: json.RawMessage(`["ping","dns","http","tcp"]`),
+		CreatedAt:    time.Now(),
+	}
+
+	cfg, skipped, err = server.ConfigForAgent(agentWithoutWlan)
+	if err != nil {
+		t.Fatalf("ConfigForAgent failed: %v", err)
+	}
+
+	if len(cfg.Tests) != 0 {
+		t.Errorf("Expected non-wlan agent to receive 0 tests, got %d", len(cfg.Tests))
+	}
+	if len(skipped) != 1 || skipped[0] != "test-wlan-passive" {
+		t.Errorf("Expected skipped=[test-wlan-passive], got %v", skipped)
 	}
 }

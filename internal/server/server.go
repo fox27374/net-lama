@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -47,9 +46,6 @@ type Server struct {
 	reconnectMu    sync.Mutex
 	reconnectCount map[string]int // count of "connected" transitions in 15m window, keyed by agent ID
 	reconnectTimes map[string][]time.Time // timestamps of recent reconnects per agent
-
-	discoverMu  sync.Mutex
-	discovering map[string]bool // agent IDs with an in-flight WLAN discovery sweep
 }
 
 func New(st *store.Store, metrics *Metrics, logger *slog.Logger) *Server {
@@ -62,7 +58,17 @@ func New(st *store.Store, metrics *Metrics, logger *slog.Logger) *Server {
 		goodCount:      make(map[string]int),
 		reconnectCount: make(map[string]int),
 		reconnectTimes: make(map[string][]time.Time),
-		discovering:    make(map[string]bool),
+	}
+}
+
+// requiredCapability maps a test type to its required capability.
+// Most types map to themselves; some aliases map to a base capability.
+func requiredCapability(testType string) string {
+	switch testType {
+	case "wlan_passive":
+		return "wlan"
+	default:
+		return testType
 	}
 }
 
@@ -91,12 +97,13 @@ func (s *Server) ConfigForAgent(agent *store.Agent) (*pb.Config, []string, error
 		capSet[cap] = true
 	}
 
-	cfg := &pb.Config{WlanInterface: agent.WlanInterface}
+	cfg := &pb.Config{}
 	var skipped []string
 	for _, t := range tests {
 		// If capabilities are known and non-empty, filter by capability.
 		// If empty, push all tests (backward compatibility).
-		if len(capabilities) > 0 && !capSet[t.Type] {
+		reqCap := requiredCapability(t.Type)
+		if len(capabilities) > 0 && !capSet[reqCap] {
 			skipped = append(skipped, t.Name)
 			continue
 		}
@@ -121,7 +128,7 @@ func (s *Server) ConfigForAgent(agent *store.Agent) (*pb.Config, []string, error
 // unambiguous fingerprint of an old binary and must be treated as
 // "unreported" — otherwise upgrading the server before the agents would
 // silently drop traceroute tests from deployed sensor agents.
-var legacyCapabilities = []string{"speedtest", "ping", "dns", "http", "tcp", "wlan_scan"}
+var legacyCapabilities = []string{"speedtest", "ping", "dns", "http", "tcp", "wlan"}
 
 // isLegacyCapabilities reports whether caps is exactly the hardcoded list
 // sent by old agent binaries (same values, same order).
@@ -244,11 +251,6 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 			delete(s.connected, agent.ID)
 		}
 		s.mu.Unlock()
-		// Clear any in-flight discovery flag so a reconnect can retry if the
-		// sweep never reported back (e.g. the stream dropped mid-scan).
-		s.discoverMu.Lock()
-		delete(s.discovering, agent.ID)
-		s.discoverMu.Unlock()
 		s.Metrics.SetConnected(tenantName, agent.SiteName, agent.Name, false)
 		logger.Info("Agent disconnected")
 	}()
@@ -266,12 +268,6 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 		return fmt.Errorf("sending config: %w", err)
 	}
 	logger.Info("Config sent to agent", slog.Int("tests", len(cfg.Tests)))
-
-	// On a monitor sensor's first connect, kick off a one-off full-spectrum
-	// WLAN discovery sweep so the UI can show every channel and SSID in
-	// range. Runs once ever (persisted per agent); serialized on the agent
-	// side against the recurring wlan_sense test.
-	s.maybeStartDiscovery(stream.Context(), logger, conn)
 
 	// Receive loop feeding a channel so we can select on pushes as well
 	recvCh := make(chan *pb.AgentMessage)
@@ -401,76 +397,6 @@ func (s *Server) RunTest(agentID, testID string) bool {
 	}
 }
 
-// agentHasWlanSense reports whether the agent advertised the wlan_sense
-// capability (i.e. it is a monitor-capable, privileged sensor).
-func agentHasWlanSense(agent *store.Agent) bool {
-	if len(agent.Capabilities) == 0 {
-		return false
-	}
-	var caps []string
-	if err := json.Unmarshal(agent.Capabilities, &caps); err != nil {
-		return false
-	}
-	for _, c := range caps {
-		if c == "wlan_sense" {
-			return true
-		}
-	}
-	return false
-}
-
-// maybeStartDiscovery triggers a one-off full-spectrum WLAN discovery sweep
-// on the agent, but only if it is a monitor sensor that has never run one and
-// no sweep is already in flight. It sends the command from a goroutine after a
-// short settle delay so the agent has applied its config first.
-func (s *Server) maybeStartDiscovery(ctx context.Context, logger *slog.Logger, conn *connectedAgent) {
-	if !agentHasWlanSense(conn.agent) {
-		return
-	}
-	done, err := s.Store.AgentWlanDiscovered(conn.agent.ID)
-	if err != nil {
-		logger.Warn("Checking WLAN discovery state failed", slog.Any("error", err))
-		return
-	}
-	if done {
-		return
-	}
-
-	s.discoverMu.Lock()
-	if s.discovering[conn.agent.ID] {
-		s.discoverMu.Unlock()
-		return
-	}
-	s.discovering[conn.agent.ID] = true
-	s.discoverMu.Unlock()
-
-	clearFlag := func() {
-		s.discoverMu.Lock()
-		delete(s.discovering, conn.agent.ID)
-		s.discoverMu.Unlock()
-	}
-
-	go func() {
-		// Let the agent apply its config before we ask it to retune the radio.
-		select {
-		case <-time.After(3 * time.Second):
-		case <-ctx.Done():
-			clearFlag()
-			return
-		}
-		msg := &pb.ServerMessage{Payload: &pb.ServerMessage_Command{
-			Command: &pb.Command{Type: pb.Command_RUN_TEST, TestId: pb.WlanDiscoveryTestID},
-		}}
-		select {
-		case conn.push <- msg:
-			logger.Info("Triggered WLAN discovery sweep (first connect)")
-		default:
-			// Push buffer full or connection gone; clear so a later
-			// reconnect can retry.
-			clearFlag()
-		}
-	}()
-}
 
 // AgentConnected reports whether an agent currently has an open stream.
 func (s *Server) AgentConnected(agentID string) bool {
@@ -494,8 +420,8 @@ func resultOK(r *pb.TestResult) bool {
 		return v.Http.StatusCode >= 200 && v.Http.StatusCode < 400
 	case *pb.TestResult_Tcp:
 		return v.Tcp.Connected
-	case *pb.TestResult_WlanScan:
-		return len(v.WlanScan.AccessPoints) > 0
+	case *pb.TestResult_WlanPassive:
+		return len(v.WlanPassive.Networks) > 0
 	case *pb.TestResult_Traceroute:
 		return v.Traceroute.Reached
 	case *pb.TestResult_Speedtest:
@@ -543,10 +469,8 @@ func resultTestType(result *pb.TestResult) string {
 		return "http"
 	case *pb.TestResult_Tcp:
 		return "tcp"
-	case *pb.TestResult_WlanScan:
-		return "wlan_scan"
-	case *pb.TestResult_WlanSense:
-		return "wlan_sense"
+	case *pb.TestResult_WlanPassive:
+		return "wlan_passive"
 	case *pb.TestResult_Traceroute:
 		return "traceroute"
 	}
@@ -581,19 +505,6 @@ func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result 
 	})
 	if err != nil {
 		logger.Error("Storing result failed", slog.Any("error", err))
-	}
-
-	// A successful discovery sweep marks the agent so it never re-runs, and
-	// clears the in-flight flag either way.
-	if result.TestId == pb.WlanDiscoveryTestID {
-		s.discoverMu.Lock()
-		delete(s.discovering, conn.agent.ID)
-		s.discoverMu.Unlock()
-		if result.Error == "" {
-			if err := s.Store.MarkWlanDiscovered(conn.agent.ID); err != nil {
-				logger.Warn("Marking WLAN discovery done failed", slog.Any("error", err))
-			}
-		}
 	}
 
 	// Evaluate alert rules against this result.

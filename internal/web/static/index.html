@@ -232,55 +232,33 @@
         <span class="spacer"></span>
         <button id="wl-refresh" class="ghost" title="Refresh">&#8635; Refresh</button>
       </div>
-      <div id="wl-noagents" class="empty hidden">No agents yet. Create an agent, then it reports its wireless interfaces here.</div>
+      <div id="wl-notest" class="empty hidden">
+        <p>Assign a "WLAN passive" test to a site to start scanning.</p>
+        <p class="muted">Wireless networks from monitor-mode sweeps will appear here.</p>
+      </div>
       <div id="wl-body" class="hidden">
-        <div class="columns">
-          <div class="card">
-            <h3>Sensor interface</h3>
-            <p class="muted" id="wl-iface-hint"></p>
-            <div class="row">
-              <select id="wl-iface"></select>
-              <button id="wl-iface-save" class="primary">Save</button>
-            </div>
-            <p class="muted" id="wl-iface-msg"></p>
-          </div>
-          <div class="card grow">
-            <h3>SSIDs</h3>
-            <div id="wl-ssids" class="ssid-detail-list"></div>
-          </div>
-        </div>
         <div class="card table-card">
           <div class="section-head">
-            <h3>Accesspoints</h3>
-            <span class="muted" id="wl-scan-meta"></span>
+            <h3>Nearby networks</h3>
+            <span class="muted" id="wl-meta"></span>
           </div>
-          <table id="wl-ap-table">
-            <thead><tr><th>SSID</th><th>BSSID</th><th>Band</th><th class="num">Ch</th><th class="num">RSSI (dBm)</th></tr></thead>
+          <table id="wl-networks-table">
+            <thead>
+              <tr>
+                <th>SSID</th>
+                <th>BSSID</th>
+                <th class="num">Signal (dBm)</th>
+                <th class="num">Channel</th>
+                <th>Band</th>
+                <th>Mode</th>
+                <th>Security</th>
+                <th class="num">Clients</th>
+                <th>Last seen</th>
+              </tr>
+            </thead>
             <tbody></tbody>
           </table>
-          <p id="wl-empty" class="empty hidden">No scan results yet. Assign a "WLAN scan" test to this agent's site.</p>
-        </div>
-
-        <!-- Monitor-mode sensing (wlan_sense) -->
-        <div id="wl-sense" class="hidden">
-          <div class="card table-card">
-            <div class="section-head">
-              <h3>Channel utilization</h3>
-              <span class="muted" id="wl-sense-meta"></span>
-            </div>
-            <div id="wl-chan-bars"></div>
-          </div>
-          <div class="card table-card">
-            <div class="section-head">
-              <h3>Client stations</h3>
-              <span class="muted" id="wl-sta-count"></span>
-            </div>
-            <table id="wl-sta-table">
-              <thead><tr><th>MAC</th><th>SSID</th><th class="num">RSSI (dBm)</th><th class="num">Rate (Mbps)</th><th class="num">MCS</th><th class="num">Frames</th><th>Seen</th></tr></thead>
-              <tbody></tbody>
-            </table>
-            <p id="wl-sta-empty" class="empty hidden">No stations sensed in the last sweep.</p>
-          </div>
+          <p id="wl-empty" class="empty hidden">No networks detected yet.</p>
         </div>
       </div>
     </section>
@@ -481,8 +459,7 @@
           <option value="http">HTTP(S)</option>
           <option value="tcp">TCP connect</option>
           <option value="traceroute">Traceroute (path)</option>
-          <option value="wlan_scan">WLAN scan</option>
-          <option value="wlan_sense">WLAN sensing (monitor mode)</option>
+          <option value="wlan_passive">WLAN passive (monitor mode)</option>
           <option value="speedtest">Speedtest</option>
         </select>
       </label>
@@ -511,18 +488,12 @@
       </div>
       <label>Targets (host:port) <textarea id="t-tcp-targets" rows="2" placeholder="one per line, e.g. 10.0.0.1:443"></textarea></label>
     </div>
-    <div id="t-params-wlan" class="hidden">
-      <p class="muted">Scans nearby access points on each agent's selected wireless
-      interface (set per agent on the Wireless page).</p>
-    </div>
-    <div id="t-params-wlansense" class="hidden">
-      <p class="muted">Passively senses client stations and channel airtime in
-      monitor mode. Needs a monitor-capable adapter and a privileged (root)
-      agent; runs on the agent's selected wireless interface.</p>
-      <div class="grid2">
-        <label>Channels <input type="text" id="t-ws-channels" placeholder="e.g. 1,6,11,36 — blank = all"></label>
-        <label>Dwell per channel (ms) <input type="number" id="t-ws-dwell" min="100" max="2000" value="400"></label>
-      </div>
+    <div id="t-params-wlan_passive" class="hidden">
+      <p class="muted">Passively senses nearby networks and client stations in
+      monitor mode. The agent adapts the scan: first run sweeps all channels,
+      then narrows to "interesting" channels where activity was heard, cutting
+      scan time from ~50s to ~15s on busy phys. Needs a monitor-capable adapter
+      and a privileged (root) agent.</p>
     </div>
     <div id="t-params-speedtest" class="hidden">
       <label>Provider

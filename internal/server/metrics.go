@@ -218,22 +218,15 @@ func (m *Metrics) Record(tenant, site, client string, result *pb.TestResult) {
 		m.tcpConnect.WithLabelValues(labels...).Set(r.Tcp.ConnectMs)
 		m.tcpUp.WithLabelValues(labels...).Set(1)
 
-	case *pb.TestResult_WlanScan:
-		m.resultsTotal.WithLabelValues(append(base, "wlan_scan")...).Inc()
+	case *pb.TestResult_WlanPassive:
+		m.resultsTotal.WithLabelValues(append(base, "wlan_passive")...).Inc()
 		if result.Error != "" {
-			m.errorsTotal.WithLabelValues(append(base, "wlan_scan")...).Inc()
+			m.errorsTotal.WithLabelValues(append(base, "wlan_passive")...).Inc()
 			return
 		}
-		m.wlanApsVisible.WithLabelValues(append(base, r.WlanScan.Interface)...).Set(float64(len(r.WlanScan.AccessPoints)))
-
-	case *pb.TestResult_WlanSense:
-		m.resultsTotal.WithLabelValues(append(base, "wlan_sense")...).Inc()
-		if result.Error != "" {
-			m.errorsTotal.WithLabelValues(append(base, "wlan_sense")...).Inc()
-			return
-		}
-		m.wlanStations.WithLabelValues(append(base, r.WlanSense.Interface)...).Set(float64(len(r.WlanSense.Stations)))
-		for _, ch := range r.WlanSense.Channels {
+		m.wlanApsVisible.WithLabelValues(append(base, r.WlanPassive.Interface)...).Set(float64(len(r.WlanPassive.Networks)))
+		m.wlanStations.WithLabelValues(append(base, r.WlanPassive.Interface)...).Set(float64(len(r.WlanPassive.Stations)))
+		for _, ch := range r.WlanPassive.Channels {
 			channelLabel := append(base, fmt.Sprintf("%d", ch.Channel))
 			m.wlanChannelUtilization.WithLabelValues(channelLabel...).Set(ch.UtilizationPct)
 		}

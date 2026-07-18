@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -16,7 +18,6 @@ import (
 func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-chan *pb.Command, results chan<- *pb.TestResult) {
 	specs := map[string]*pb.TestSpec{}
 	var cancelTests context.CancelFunc
-	wlanIface := "" // per-agent sensor interface, from the pushed config
 
 	defer func() {
 		if cancelTests != nil {
@@ -32,12 +33,11 @@ func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-c
 			}
 			testCtx, cancel := context.WithCancel(ctx)
 			cancelTests = cancel
-			wlanIface = cfg.WlanInterface
 
 			specs = map[string]*pb.TestSpec{}
 			for _, spec := range cfg.Tests {
 				specs[spec.Id] = spec
-				a.startTest(testCtx, spec, wlanIface, results)
+				a.startTest(testCtx, spec, results)
 			}
 			if len(cfg.Tests) == 0 {
 				a.Logger.Info("No tests assigned, idling")
@@ -45,15 +45,10 @@ func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-c
 
 		case cmd := <-cmdCh:
 			if cmd.Type == pb.Command_RUN_TEST {
-				switch {
-				case cmd.TestId == pb.WlanDiscoveryTestID:
-					go a.runWlanDiscovery(ctx, wlanIface, results)
-				default:
-					if spec, ok := specs[cmd.TestId]; ok {
-						go a.runTest(ctx, spec, wlanIface, results)
-					} else {
-						a.Logger.Warn("Command for unknown test", slog.String("testId", cmd.TestId))
-					}
+				if spec, ok := specs[cmd.TestId]; ok {
+					go a.runTest(ctx, spec, results)
+				} else {
+					a.Logger.Warn("Command for unknown test", slog.String("testId", cmd.TestId))
 				}
 			}
 
@@ -63,12 +58,12 @@ func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-c
 	}
 }
 
-func (a *Agent) startTest(ctx context.Context, spec *pb.TestSpec, wlanIface string, results chan<- *pb.TestResult) {
+func (a *Agent) startTest(ctx context.Context, spec *pb.TestSpec, results chan<- *pb.TestResult) {
 	a.Logger.Info("Scheduling test",
 		slog.String("test", spec.Name),
 		slog.Uint64("intervalSeconds", uint64(spec.IntervalSeconds)),
 	)
-	go runEvery(ctx, spec.IntervalSeconds, func() { a.runTest(ctx, spec, wlanIface, results) })
+	go runEvery(ctx, spec.IntervalSeconds, func() { a.runTest(ctx, spec, results) })
 }
 
 // runEvery runs fn immediately and then on every tick until ctx is cancelled.
@@ -90,7 +85,7 @@ func runEvery(ctx context.Context, intervalSeconds uint32, fn func()) {
 	}
 }
 
-func (a *Agent) runTest(ctx context.Context, spec *pb.TestSpec, wlanIface string, results chan<- *pb.TestResult) {
+func (a *Agent) runTest(ctx context.Context, spec *pb.TestSpec, results chan<- *pb.TestResult) {
 	switch params := spec.Params.(type) {
 	case *pb.TestSpec_Speedtest:
 		a.runSpeedtest(ctx, spec, results)
@@ -102,10 +97,8 @@ func (a *Agent) runTest(ctx context.Context, spec *pb.TestSpec, wlanIface string
 		a.runHTTP(ctx, spec, params.Http, results)
 	case *pb.TestSpec_Tcp:
 		a.runTCP(ctx, spec, params.Tcp, results)
-	case *pb.TestSpec_WlanScan:
-		a.runWlanScan(ctx, spec, wlanIface, results)
-	case *pb.TestSpec_WlanSense:
-		a.runWlanSense(ctx, spec, params.WlanSense, wlanIface, results)
+	case *pb.TestSpec_WlanPassive:
+		a.runWlanPassive(ctx, spec, results)
 	case *pb.TestSpec_Traceroute:
 		a.runTraceroute(ctx, spec, params.Traceroute, results)
 	}
@@ -280,61 +273,12 @@ func (a *Agent) runTCP(ctx context.Context, spec *pb.TestSpec, params *pb.TcpPar
 	}
 }
 
-func (a *Agent) runWlanScan(ctx context.Context, spec *pb.TestSpec, wlanIface string, results chan<- *pb.TestResult) {
-	iface := wlanIface
-	if iface == "" {
-		// No interface selected: fall back to the first detected one.
-		if detected := probe.WirelessInterfaces(ctx); len(detected) > 0 {
-			iface = detected[0].Name
-		}
-	}
-
+func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results chan<- *pb.TestResult) {
 	result := newResult(spec)
+
+	// Use override if set; otherwise auto-pick the first monitor-capable interface.
+	iface := a.WlanIface
 	if iface == "" {
-		a.Logger.Warn("WLAN scan skipped: no wireless interface", slog.String("test", spec.Name))
-		result.Error = "no wireless interface available"
-		result.Result = &pb.TestResult_WlanScan{WlanScan: &pb.WlanScanResult{}}
-		sendResult(ctx, results, result)
-		return
-	}
-
-	usedIface, aps, err := probe.Scan(ctx, iface)
-	if err != nil {
-		if ctx.Err() != nil {
-			return
-		}
-		a.Logger.Error("WLAN scan failed",
-			slog.String("test", spec.Name), slog.String("interface", iface), slog.Any("error", err))
-		result.Error = err.Error()
-		result.Result = &pb.TestResult_WlanScan{WlanScan: &pb.WlanScanResult{Interface: iface}}
-		sendResult(ctx, results, result)
-		return
-	}
-
-	pbAPs := make([]*pb.AccessPoint, 0, len(aps))
-	for _, ap := range aps {
-		pbAPs = append(pbAPs, &pb.AccessPoint{
-			Bssid:    ap.BSSID,
-			Ssid:     ap.SSID,
-			Channel:  ap.Channel,
-			FreqMhz:  ap.FreqMHz,
-			Band:     ap.Band,
-			RssiDbm:  ap.RSSIdBm,
-			Security: ap.Security,
-		})
-	}
-	a.Logger.Info("WLAN scan done",
-		slog.String("test", spec.Name), slog.String("interface", usedIface), slog.Int("aps", len(pbAPs)))
-	result.Result = &pb.TestResult_WlanScan{WlanScan: &pb.WlanScanResult{
-		Interface: usedIface, AccessPoints: pbAPs, Demo: probe.DemoMode(),
-	}}
-	sendResult(ctx, results, result)
-}
-
-func (a *Agent) runWlanSense(ctx context.Context, spec *pb.TestSpec, params *pb.WlanSenseParams, wlanIface string, results chan<- *pb.TestResult) {
-	iface := wlanIface
-	if iface == "" {
-		// No interface selected: fall back to the first detected monitor-capable one.
 		if detected := probe.WirelessInterfaces(ctx); len(detected) > 0 {
 			for _, d := range detected {
 				if d.SupportsMonitor {
@@ -343,106 +287,116 @@ func (a *Agent) runWlanSense(ctx context.Context, spec *pb.TestSpec, params *pb.
 				}
 			}
 		}
+	} else {
+		// Validate override: check that the interface exists and is monitor-capable.
+		if detected := probe.WirelessInterfaces(ctx); len(detected) > 0 {
+			found := false
+			for _, d := range detected {
+				if d.Name == iface {
+					found = true
+					if !d.SupportsMonitor {
+						a.Logger.Warn("WLAN passive skipped: interface is not monitor-capable", slog.String("test", spec.Name), slog.String("interface", iface))
+						result.Error = fmt.Sprintf("interface %q is not monitor-capable", iface)
+						result.Result = &pb.TestResult_WlanPassive{WlanPassive: &pb.WlanPassiveResult{}}
+						sendResult(ctx, results, result)
+						return
+					}
+					break
+				}
+			}
+			if !found {
+				a.Logger.Warn("WLAN passive skipped: interface not found", slog.String("test", spec.Name), slog.String("interface", iface))
+				result.Error = fmt.Sprintf("interface %q not found", iface)
+				result.Result = &pb.TestResult_WlanPassive{WlanPassive: &pb.WlanPassiveResult{}}
+				sendResult(ctx, results, result)
+				return
+			}
+		}
 	}
 
-	result := newResult(spec)
 	// Demo mode synthesizes data and needs no real interface.
-	if iface == "" && !probe.DemoModeWlanSense() {
-		a.Logger.Warn("WLAN sense skipped: no monitor-capable interface", slog.String("test", spec.Name))
+	if iface == "" && !probe.DemoMode() {
+		a.Logger.Warn("WLAN passive skipped: no monitor-capable interface", slog.String("test", spec.Name))
 		result.Error = "no monitor-capable wireless interface available"
-		result.Result = &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{}}
+		result.Result = &pb.TestResult_WlanPassive{WlanPassive: &pb.WlanPassiveResult{}}
 		sendResult(ctx, results, result)
 		return
 	}
 
-	channels := params.Channels
-	dwell := params.DwellMs
-	if dwell == 0 {
-		dwell = 400
+	// Determine whether to do a full sweep or narrow sweep based on agent state
+	a.wlanMu.Lock()
+	testKey := spec.Id
+	state, hasState := a.wlanState[testKey]
+
+	var channels []uint32
+	if !hasState || len(state.InterestingChannels) == 0 {
+		// First run or no interesting channels yet: full sweep
+		channels = nil // nil means all channels
+		a.Logger.Info("WLAN passive sweep starting (full spectrum)", slog.String("test", spec.Name), slog.String("interface", iface))
+	} else {
+		// Subsequent runs: narrow to interesting channels
+		channels = state.InterestingChannels
+		a.Logger.Info("WLAN passive sweep starting (narrowed channels)",
+			slog.String("test", spec.Name), slog.String("interface", iface),
+			slog.Int("channelCount", len(channels)))
 	}
 
-	// Serialize with any concurrent discovery sweep on the same radio.
-	a.wlanMu.Lock()
-	usedIface, stations, channelStats, networks, sweepMs, err := probe.Sense(ctx, iface, channels, dwell)
-	a.wlanMu.Unlock()
+	usedIface, stations, channelStats, networks, sweepMs, err := probe.Sense(ctx, iface, channels, 400)
 	if err != nil {
+		a.wlanMu.Unlock()
 		if ctx.Err() != nil {
 			return
 		}
-		a.Logger.Error("WLAN sense failed",
+		a.Logger.Error("WLAN passive failed",
 			slog.String("test", spec.Name), slog.String("interface", iface), slog.Any("error", err))
 		result.Error = err.Error()
-		result.Result = &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{Interface: iface}}
+		result.Result = &pb.TestResult_WlanPassive{WlanPassive: &pb.WlanPassiveResult{Interface: iface}}
 		sendResult(ctx, results, result)
 		return
 	}
 
-	a.Logger.Info("WLAN sense done",
-		slog.String("test", spec.Name), slog.String("interface", usedIface),
-		slog.Int("stations", len(stations)), slog.Int("channels", len(channelStats)),
-		slog.Int("networks", len(networks)), slog.Uint64("sweepMs", uint64(sweepMs)))
-	result.Result = wlanSenseResult(usedIface, stations, channelStats, networks, sweepMs)
-	sendResult(ctx, results, result)
-}
-
-// runWlanDiscovery performs a one-off full-spectrum sweep (all channels the
-// phy supports) and reports it under the reserved discovery test id. The
-// server triggers this once, on a monitor sensor's first connect, so the UI
-// can show the complete channel + SSID map before the operator narrows the
-// recurring test to the interesting channels.
-func (a *Agent) runWlanDiscovery(ctx context.Context, wlanIface string, results chan<- *pb.TestResult) {
-	iface := wlanIface
-	if iface == "" {
-		if detected := probe.WirelessInterfaces(ctx); len(detected) > 0 {
-			for _, d := range detected {
-				if d.SupportsMonitor {
-					iface = d.Name
-					break
-				}
-			}
-		}
+	// Update interesting channels from this sweep
+	interestingChannels := extractInterestingChannels(networks, stations)
+	if len(interestingChannels) == 0 && hasState && len(state.InterestingChannels) > 0 {
+		// If this sweep found nothing but we had previous results, keep the old set
+		interestingChannels = state.InterestingChannels
 	}
 
-	result := &pb.TestResult{
-		Time:     timestamppb.Now(),
-		TestId:   pb.WlanDiscoveryTestID,
-		TestName: pb.WlanDiscoveryTestName,
+	if a.wlanState == nil {
+		a.wlanState = make(map[string]*wlanPassiveState)
 	}
-	if iface == "" && !probe.DemoModeWlanSense() {
-		a.Logger.Warn("WLAN discovery skipped: no monitor-capable interface")
-		result.Error = "no monitor-capable wireless interface available"
-		result.Result = &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{}}
-		sendResult(ctx, results, result)
-		return
+	a.wlanState[testKey] = &wlanPassiveState{
+		InterestingChannels: interestingChannels,
 	}
-
-	a.Logger.Info("WLAN discovery starting (all channels)", slog.String("interface", iface))
-	// nil channels => probe.Sense enumerates every channel the phy supports.
-	a.wlanMu.Lock()
-	usedIface, stations, channelStats, networks, sweepMs, err := probe.Sense(ctx, iface, nil, pb.WlanDiscoveryDwellMs)
 	a.wlanMu.Unlock()
-	if err != nil {
-		if ctx.Err() != nil {
-			return
-		}
-		a.Logger.Error("WLAN discovery failed", slog.String("interface", iface), slog.Any("error", err))
-		result.Error = err.Error()
-		result.Result = &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{Interface: iface}}
-		sendResult(ctx, results, result)
-		return
-	}
 
-	a.Logger.Info("WLAN discovery done",
-		slog.String("interface", usedIface),
-		slog.Int("stations", len(stations)), slog.Int("channels", len(channelStats)),
-		slog.Int("networks", len(networks)), slog.Uint64("sweepMs", uint64(sweepMs)))
-	result.Result = wlanSenseResult(usedIface, stations, channelStats, networks, sweepMs)
+	a.Logger.Info("WLAN passive done",
+		slog.String("test", spec.Name), slog.String("interface", usedIface),
+		slog.Int("stations", len(stations)), slog.Int("networks", len(networks)),
+		slog.Uint64("sweepMs", uint64(sweepMs)))
+	result.Result = wlanPassiveResult(usedIface, stations, channelStats, networks, sweepMs)
 	sendResult(ctx, results, result)
 }
 
-// wlanSenseResult converts probe results into the protobuf WlanSenseResult
-// payload shared by the recurring wlan_sense test and the discovery sweep.
-func wlanSenseResult(iface string, stations []probe.WlanStation, channelStats []probe.WlanChannelStat, networks []probe.WlanNetwork, sweepMs uint32) *pb.TestResult_WlanSense {
+// extractInterestingChannels returns the set of channels where APs or stations were heard
+func extractInterestingChannels(networks []probe.WlanNetwork, stations []probe.WlanStation) []uint32 {
+	seen := make(map[uint32]bool)
+	for _, n := range networks {
+		if n.Channel > 0 {
+			seen[n.Channel] = true
+		}
+	}
+	var result []uint32
+	for ch := range seen {
+		result = append(result, ch)
+	}
+	// Sort for deterministic ordering
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	return result
+}
+
+// wlanPassiveResult converts probe results into the protobuf WlanPassiveResult payload.
+func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats []probe.WlanChannelStat, networks []probe.WlanNetwork, sweepMs uint32) *pb.TestResult_WlanPassive {
 	pbStations := make([]*pb.WlanStation, 0, len(stations))
 	for _, st := range stations {
 		pbStations = append(pbStations, &pb.WlanStation{
@@ -485,13 +439,13 @@ func wlanSenseResult(iface string, stations []probe.WlanStation, channelStats []
 		})
 	}
 
-	return &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{
+	return &pb.TestResult_WlanPassive{WlanPassive: &pb.WlanPassiveResult{
 		Interface: iface,
 		Stations:  pbStations,
 		Channels:  pbChannels,
 		Networks:  pbNetworks,
 		SweepMs:   sweepMs,
-		Demo:      probe.DemoModeWlanSense(),
+		Demo:      probe.DemoMode(),
 	}}
 }
 

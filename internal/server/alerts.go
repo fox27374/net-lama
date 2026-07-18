@@ -261,9 +261,9 @@ func extractResultMetric(testType string, result *pb.TestResult) *float64 {
 		if r.Traceroute != nil {
 			val = float64(len(r.Traceroute.Hops))
 		}
-	case *pb.TestResult_WlanScan:
-		if r.WlanScan != nil {
-			val = float64(len(r.WlanScan.AccessPoints))
+	case *pb.TestResult_WlanPassive:
+		if r.WlanPassive != nil {
+			val = float64(len(r.WlanPassive.Networks))
 		}
 	}
 	if val > 0 {

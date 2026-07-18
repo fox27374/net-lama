@@ -14,7 +14,6 @@ type Agent struct {
 	SiteName           string          `json:"siteName,omitempty"`
 	Name               string          `json:"name"`
 	Token              string          `json:"token,omitempty"`
-	WlanInterface      string          `json:"wlanInterface"`
 	WirelessInterfaces json.RawMessage `json:"wirelessInterfaces"`
 	Capabilities       json.RawMessage `json:"capabilities"`
 	Stats              json.RawMessage `json:"stats,omitempty"`
@@ -72,16 +71,15 @@ func (s *Store) CreateAgent(tenantID, siteID, name string) (*Agent, error) {
 
 func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	a := &Agent{}
-	var wlanIface, wireless, capabilities, stats string
+	var wireless, capabilities, stats string
 	err := row.Scan(&a.ID, &a.TenantID, &a.SiteID, &a.SiteName, &a.Name, &a.Token,
-		&wlanIface, &wireless, &capabilities, &stats, &a.CreatedAt)
+		&wireless, &capabilities, &stats, &a.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	a.WlanInterface = wlanIface
 	if wireless == "" {
 		wireless = "[]"
 	}
@@ -97,7 +95,7 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 }
 
 const agentCols = `a.id, a.tenant_id, a.site_id, s.name, a.name, a.token,
-	COALESCE(a.wlan_interface, ''), COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.created_at`
+	COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.created_at`
 const agentFrom = ` FROM agents a JOIN sites s ON s.id = a.site_id `
 
 func (s *Store) GetAgent(id string) (*Agent, error) {
@@ -141,10 +139,10 @@ func (s *Store) DeleteAgent(id string) error {
 
 // UpdateAgent renames an agent, moves it to another site and sets its
 // WLAN sensor interface.
-func (s *Store) UpdateAgent(id, name, siteID, wlanInterface string) error {
+func (s *Store) UpdateAgent(id, name, siteID string) error {
 	res, err := s.db.Exec(
-		`UPDATE agents SET name = ?, site_id = ?, wlan_interface = ? WHERE id = ?`,
-		name, siteID, wlanInterface, id)
+		`UPDATE agents SET name = ?, site_id = ? WHERE id = ?`,
+		name, siteID, id)
 	if err != nil {
 		return err
 	}
@@ -152,27 +150,6 @@ func (s *Store) UpdateAgent(id, name, siteID, wlanInterface string) error {
 		return ErrNotFound
 	}
 	return nil
-}
-
-// AgentWlanDiscovered reports whether the agent has already completed its
-// one-off full-spectrum WLAN discovery sweep.
-func (s *Store) AgentWlanDiscovered(id string) (bool, error) {
-	var done bool
-	err := s.db.QueryRow(
-		`SELECT wlan_discovered_at IS NOT NULL FROM agents WHERE id = ?`, id).Scan(&done)
-	if err == sql.ErrNoRows {
-		return false, ErrNotFound
-	}
-	return done, err
-}
-
-// MarkWlanDiscovered records that the agent has completed WLAN discovery.
-// It only stamps the time on the first successful discovery.
-func (s *Store) MarkWlanDiscovered(id string) error {
-	_, err := s.db.Exec(
-		`UPDATE agents SET wlan_discovered_at = CURRENT_TIMESTAMP
-		 WHERE id = ? AND wlan_discovered_at IS NULL`, id)
-	return err
 }
 
 // SetAgentInterfaces records the wireless interfaces an agent reported.

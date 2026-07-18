@@ -81,6 +81,10 @@ type Agent struct {
 	TLSCertFile string // client certificate for mTLS (issued per agent)
 	TLSKeyFile  string // key for TLSCertFile
 
+	// WlanIface overrides the monitor-capable interface for wlan_passive tests;
+	// empty = auto-pick the first monitor-capable interface.
+	WlanIface string
+
 	// logBuf holds Info+ log lines (Logger tees into it) until the send
 	// loop can ship them to the server; it survives across reconnects so
 	// nothing logged while disconnected is lost (up to its capacity).
@@ -89,10 +93,13 @@ type Agent struct {
 	// statsCollector gathers CPU, memory, and disk statistics.
 	statsCollector *probe.StatsCollector
 
-	// wlanMu serializes access to the monitor interface so a one-off
-	// discovery sweep and the recurring wlan_sense test never fight over
-	// the radio (both retune it channel by channel).
-	wlanMu sync.Mutex
+	// wlanMu serializes access to the monitor interface and wlan state
+	wlanMu    sync.Mutex
+	wlanState map[string]*wlanPassiveState // per test ID
+}
+
+type wlanPassiveState struct {
+	InterestingChannels []uint32
 }
 
 // Run connects to the server and keeps the control stream alive,

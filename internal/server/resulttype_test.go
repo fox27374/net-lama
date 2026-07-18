@@ -11,14 +11,13 @@ import (
 // case would store "unknown" and hide results from the per-type views.
 func TestResultTestType(t *testing.T) {
 	cases := map[string]*pb.TestResult{
-		"ping":       {Result: &pb.TestResult_Ping{Ping: &pb.PingResult{}}},
-		"dns":        {Result: &pb.TestResult_Dns{Dns: &pb.DnsResult{}}},
-		"http":       {Result: &pb.TestResult_Http{Http: &pb.HttpResult{}}},
-		"tcp":        {Result: &pb.TestResult_Tcp{Tcp: &pb.TcpResult{}}},
-		"speedtest":  {Result: &pb.TestResult_Speedtest{Speedtest: &pb.SpeedtestResult{}}},
-		"traceroute": {Result: &pb.TestResult_Traceroute{Traceroute: &pb.TracerouteResult{}}},
-		"wlan_scan":  {Result: &pb.TestResult_WlanScan{WlanScan: &pb.WlanScanResult{}}},
-		"wlan_sense": {Result: &pb.TestResult_WlanSense{WlanSense: &pb.WlanSenseResult{}}},
+		"ping":        {Result: &pb.TestResult_Ping{Ping: &pb.PingResult{}}},
+		"dns":         {Result: &pb.TestResult_Dns{Dns: &pb.DnsResult{}}},
+		"http":        {Result: &pb.TestResult_Http{Http: &pb.HttpResult{}}},
+		"tcp":         {Result: &pb.TestResult_Tcp{Tcp: &pb.TcpResult{}}},
+		"speedtest":   {Result: &pb.TestResult_Speedtest{Speedtest: &pb.SpeedtestResult{}}},
+		"traceroute":  {Result: &pb.TestResult_Traceroute{Traceroute: &pb.TracerouteResult{}}},
+		"wlan_passive": {Result: &pb.TestResult_WlanPassive{WlanPassive: &pb.WlanPassiveResult{}}},
 	}
 	for want, res := range cases {
 		if got := resultTestType(res); got != want {

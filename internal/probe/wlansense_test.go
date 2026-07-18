@@ -8,8 +8,8 @@ import (
 
 func TestWlanSenseDemoMode(t *testing.T) {
 	// Enable demo mode
-	os.Setenv("NETLAMA_WLAN_SENSE_DEMO", "1")
-	defer os.Unsetenv("NETLAMA_WLAN_SENSE_DEMO")
+	os.Setenv("NETLAMA_WLAN_DEMO", "1")
+	defer os.Unsetenv("NETLAMA_WLAN_DEMO")
 
 	ctx := context.Background()
 	iface, stations, channels, networks, sweepMs, err := Sense(ctx, "wlan0", nil, 0)

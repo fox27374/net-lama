@@ -213,7 +213,20 @@ func (s *Store) migrate() error {
 	}
 
 	// Migration: move webhook_url entries to alert_targets
-	return s.migrateWebhookTargets()
+	if err := s.migrateWebhookTargets(); err != nil {
+		return err
+	}
+
+	// Migration: delete stale wlan_scan and wlan_sense test definitions
+	// (replaced by wlan_passive with adaptive channel narrowing)
+	_, err = s.db.Exec(`DELETE FROM site_tests WHERE test_id IN (
+		SELECT id FROM tests WHERE type IN ('wlan_scan', 'wlan_sense')
+	)`)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`DELETE FROM tests WHERE type IN ('wlan_scan', 'wlan_sense')`)
+	return err
 }
 
 // addColumnIfMissing adds a column to a table if it is not already present.

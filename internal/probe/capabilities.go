@@ -20,15 +20,9 @@ func DetectCapabilities(hasWireless bool, wifaces []WirelessInterface) []string 
 		caps = append(caps, "traceroute")
 	}
 
-	// wlan_scan: needs at least one detected wireless interface (which
-	// implies `iw` is available), or demo mode enabled
-	if wlanDemo() || hasWireless {
-		caps = append(caps, "wlan_scan")
-	}
-
-	// wlan_sense: needs monitor-capable interface and privilege, or demo mode
-	if wlanSenseDemo() || hasMonitorCapableIface(wifaces) && isPrivileged() {
-		caps = append(caps, "wlan_sense")
+	// wlan: needs monitor-capable interface and privilege, or demo mode enabled
+	if wlanDemo() || hasMonitorCapableIface(wifaces) && isPrivileged() {
+		caps = append(caps, "wlan")
 	}
 
 	return caps

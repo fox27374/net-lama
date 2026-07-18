@@ -680,11 +680,80 @@ What has been done so far, in chronological order. Planned work lives in
 - **Channel list: top 10 + collapse.** Rows now sort by utilization desc and
   show only the top 10 by default, with a "Show all N channels" toggle.
 
+## 2026-07-18 — WLAN rebuild: unified test type with adaptive channel narrowing
+
+- **Single unified `wlan_passive` test type** replaces `wlan_scan` (managed-mode)
+  and `wlan_sense` (monitor-mode), inheriting the monitor-mode capability since
+  that provides the superset of data. Minimum interval 60 seconds (server-side
+  validation). No parameters beyond interval (channels/dwell are now managed
+  adaptively by the agent).
+- **Agent-side adaptive channel narrowing**: on first run, sweeps all channels
+  the phy supports (full spectrum, via existing discovery sweep code path);
+  from beacons + client frames heard, derives the set of "interesting" channels
+  (those where activity occurred). Subsequent runs sweep only interesting channels,
+  cutting scan time from ~50s to ~15s on a busy phy. State lives in per-test-ID
+  agent memory; config replacement triggers a fresh full sweep. Empty interesting
+  set reverts to full sweep.
+- **Capability tag consolidation**: single `wlan` capability (dropped `wlan_scan`
+  + `wlan_sense`), granted when agent has a real monitor-capable interface AND
+  privilege, OR demo mode enabled. Capability filtering only pushes `wlan_passive`
+  to agents advertising `wlan`.
+- **Demo mode consolidation**: one flag `NETLAMA_WLAN_DEMO` (dropped
+  `NETLAMA_WLAN_SENSE_DEMO`); demos produce synthetic `WlanPassiveResult` data.
+- **Proto changes**: removed `WlanScanParams`, `WlanSenseParams` (kept as
+  reserved for field numbers); added `WlanPassiveParams` (empty). Result oneof
+  removed `wlan_scan` (field 10) + `wlan_sense` (field 12), added `wlan_passive`
+  (field 13). Reserved field numbers prevent accidental reuse.
+- **Config validation** (`internal/server/config.go`): accept only `wlan_passive`
+  with interval ≥60s; removed all `wlan_scan`/`wlan_sense` handling.
+- **Server cleanup**: removed discovery machinery (`maybeStartDiscovery`,
+  `AgentWlanDiscovered`, `MarkWlanDiscovered`, discovering map); removed
+  per-agent interface selection (`Config.wlan_interface`, proto field 2 reserved).
+- **DB migration**: on startup, delete from `site_tests` and `tests` where
+  `type IN ('wlan_scan', 'wlan_sense')` so old test definitions never push to
+  agents. Agent columns `wlan_interface`, `wlan_discovered_at` left in place
+  (dormant, never read/written).
+- **Result type handling** (`internal/server/server.go`, `alerts.go`, `metrics.go`):
+  all `WlanScan`/`WlanSense` cases replaced with `WlanPassive` (single case).
+  Health metric = network count (> 0 is ok).
+- **Wireless page rebuilt** (UI-only, no Go changes pending): when a `wlan_passive`
+  test is assigned, show a networks table (SSID/BSSID/Signal/Channel/Band/Mode/
+  Security/Clients/Last seen), sortable by column. Empty state if no test assigned.
+- **README updated**: WLAN sections rewritten for `wlan_passive` and adaptive
+  channel narrowing; demo mode consolidated to `NETLAMA_WLAN_DEMO`.
+- **ROADMAP updated**: replaced 5 unchecked WLAN Phase items with 1 checked
+  "WLAN rebuild: single passive test type, agent-side adaptive channel narrowing,
+  WLAN capability tag, Explorer-style networks table" entry; added unchecked
+  "WLAN active tests: on-demand association/throughput/auth tests against
+  selected SSIDs".
+- **Test changes** (`internal/server/wlan_test.go`, `server_test.go`):
+  `TestWlanSenseMetricExtraction` now uses `WlanPassiveResult`; `TestWlanSenseValidation`
+  validates `wlan_passive` with 60s interval; capability test constants updated to
+  use "wlan" (no "wlan_scan"/"wlan_sense").
+- **Verification**: `make build` passes; `make vet` clean; `go test ./...` all green.
+  E2E (self-signed TLS, scratch GHCR image, tenant/site/agent via JSON API):
+  agent without wlan capability doesn't receive `wlan_passive` test; agent with
+  wlan capability receives test, first run scans full spectrum (~39 channels,
+  ~50s), second run narrows to active channels (~15s). Results land via API with
+  correct `WlanPassiveResult` shape.
+
+## 2026-07-18 — WLAN interface override
+
+- **Agent-side interface selection** (`-wlan-iface` / `NETLAMA_WLAN_IFACE`):
+  added flag and env var to override which wireless interface the `wlan_passive`
+  test uses. Useful when multiple monitor-capable adapters are present (e.g.,
+  onboard wlan0 + USB MT7612U wlan1) and the agent must use a specific one.
+  Empty (default) auto-picks the first monitor-capable interface as before.
+  If the override is set, the agent validates that the interface exists and is
+  monitor-capable, returning a result error if not. Wired in `cmd/agent/main.go`
+  (flag + env), added to `Agent` struct, and validated in `internal/agent/scheduler.go`
+  `runWlanPassive()`. Documented in README (WLAN passive section), both compose
+  files (commented env line with description).
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
   message, before the server accepts it — a rejected agent briefly logs
   success. Pre-existing, not yet fixed.
-- A full "all channels" discovery/recurring sweep on a busy phy (~39 channels)
-  takes ~50 s; keep the recurring `wlan_sense` interval well above the sweep
-  time, or narrow it to the discovered channels (the reason discovery exists).
+- **Older deployed agents** (pre-rebuild binaries) will not understand
+  `wlan_passive` tests and must be updated to the new build.

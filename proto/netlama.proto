@@ -53,9 +53,8 @@ message WirelessInterface {
 // replaces the previous configuration.
 message Config {
   repeated TestSpec tests = 1;
-  // wlan_interface is the agent's selected wireless sensor interface,
-  // used by WLAN tests. Empty = let the agent auto-pick.
-  string wlan_interface = 2;
+  // wlan_interface is reserved (previously used for per-agent interface selection)
+  reserved 2;
 }
 
 // TestSpec is one named test definition to be executed periodically.
@@ -69,9 +68,10 @@ message TestSpec {
     DnsParams dns = 6;
     HttpParams http = 7;
     TcpParams tcp = 8;
-    WlanScanParams wlan_scan = 9;
+    // wlan_scan (9) is reserved
     TracerouteParams traceroute = 10;
-    WlanSenseParams wlan_sense = 11;
+    // wlan_sense (11) is reserved
+    WlanPassiveParams wlan_passive = 12;
   }
 }
 
@@ -103,16 +103,20 @@ message TcpParams {
   uint32 timeout_seconds = 2;
 }
 
-// WlanScanParams configures a managed-mode scan of nearby access points.
-// The interface is per-agent (Config.wlan_interface), not part of the test.
+// WlanScanParams is reserved (previously used for managed-mode scans)
 message WlanScanParams {}
 
-// WlanSenseParams configures a monitor-mode sweep. The interface is the
-// per-agent Config.wlan_interface (must be monitor-capable).
+// WlanSenseParams is reserved (previously used for monitor-mode sweeps)
 message WlanSenseParams {
   repeated uint32 channels = 1; // empty = all channels the phy supports
   uint32 dwell_ms = 2;          // per-channel capture time, default 400
 }
+
+// WlanPassiveParams configures a passive monitor-mode sweep.
+// The agent auto-picks the interface and adapts the channel set based on
+// previous sweeps: full spectrum on first run, then narrowed to "interesting"
+// channels (where APs or stations were heard).
+message WlanPassiveParams {}
 
 message TracerouteParams {
   string target = 1;        // host or IP
@@ -145,9 +149,10 @@ message TestResult {
     DnsResult dns = 7;
     HttpResult http = 8;
     TcpResult tcp = 9;
-    WlanScanResult wlan_scan = 10;
+    // wlan_scan (10) is reserved
     TracerouteResult traceroute = 11;
-    WlanSenseResult wlan_sense = 12;
+    // wlan_sense (12) is reserved
+    WlanPassiveResult wlan_passive = 13;
   }
 }
 
@@ -221,6 +226,15 @@ message AccessPoint {
 message WlanSenseResult {
   string interface = 1;
   bool demo = 2;                    // synthetic (NETLAMA_WLAN_SENSE_DEMO)
+  repeated WlanStation stations = 3;
+  repeated WlanChannelStat channels = 4;
+  uint32 sweep_ms = 5;              // total sweep duration
+  repeated WlanNetwork networks = 6; // APs/SSIDs heard from beacons
+}
+
+message WlanPassiveResult {
+  string interface = 1;
+  bool demo = 2;                    // synthetic (NETLAMA_WLAN_DEMO)
   repeated WlanStation stations = 3;
   repeated WlanChannelStat channels = 4;
   uint32 sweep_ms = 5;              // total sweep duration

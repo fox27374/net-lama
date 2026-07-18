@@ -52,22 +52,12 @@ type WlanNetwork struct {
 	Standards string // PHY generations from IEs, e.g. "n/ac/ax"
 }
 
-// wlanSenseDemo reports whether to emit synthetic WLAN sense data.
-func wlanSenseDemo() bool {
-	return envEnabled("NETLAMA_WLAN_SENSE_DEMO")
-}
-
-// DemoModeWlanSense reports whether WLAN sense results are synthetic.
-func DemoModeWlanSense() bool {
-	return wlanSenseDemo()
-}
-
 // Sense performs a monitor-mode sweep, capturing stations, per-channel
 // utilization, and the networks (APs) heard from beacons. Returns interface
 // name, stations, channel stats, networks, total sweep time, and error.
 // Requires monitor-capable interface, NET_ADMIN + NET_RAW.
 func Sense(ctx context.Context, iface string, channels []uint32, dwellMs uint32) (string, []WlanStation, []WlanChannelStat, []WlanNetwork, uint32, error) {
-	if wlanSenseDemo() {
+	if wlanDemo() {
 		return demoSense(iface)
 	}
 	// Real implementation is in wlansense_linux.go or wlansense_other.go

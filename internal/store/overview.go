@@ -391,16 +391,10 @@ func extractMetricValue(testType, payload string) *float64 {
 				val = float64(len(hops))
 			}
 		}
-	case "wlan_scan":
-		if ws, ok := data["wlanScan"].(map[string]interface{}); ok {
-			if aps, ok := ws["accessPoints"].([]interface{}); ok {
-				val = float64(len(aps))
-			}
-		}
-	case "wlan_sense":
-		if ws, ok := data["wlanSense"].(map[string]interface{}); ok {
-			if channels, ok := ws["channels"].([]interface{}); ok {
-				// Extract max utilization across all channels
+	case "wlan_passive":
+		if wp, ok := data["wlanPassive"].(map[string]interface{}); ok {
+			// Extract max utilization across all channels
+			if channels, ok := wp["channels"].([]interface{}); ok {
 				for _, chData := range channels {
 					if ch, ok := chData.(map[string]interface{}); ok {
 						if util, ok := ch["utilizationPct"].(float64); ok && util > val {
@@ -480,12 +474,9 @@ func (s *Store) extractSeries(testType, testID, tenantID, siteID string) (string
 	case "traceroute":
 		unit = "hops"
 		series, current = extractTracerouteMetric(payloads)
-	case "wlan_scan":
-		unit = "APs"
-		series, current = extractWLANMetric(payloads)
-	case "wlan_sense":
+	case "wlan_passive":
 		unit = "%"
-		series, current = extractWlanSenseMetric(payloads)
+		series, current = extractWlanPassiveMetric(payloads)
 	}
 
 	return unit, series, current
@@ -579,44 +570,21 @@ func extractTracerouteMetric(payloads []string) ([]float64, *float64) {
 	return series, &last
 }
 
-// extractWLANMetric uses the number of access points seen per scan.
-func extractWLANMetric(payloads []string) ([]float64, *float64) {
+// extractWlanPassiveMetric extracts the max channel utilization from WLAN passive results.
+func extractWlanPassiveMetric(payloads []string) ([]float64, *float64) {
 	var series []float64
 	for _, p := range payloads {
 		var data map[string]interface{}
 		if err := json.Unmarshal([]byte(p), &data); err != nil {
 			continue
 		}
-		ws, ok := data["wlanScan"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if aps, ok := ws["accessPoints"].([]interface{}); ok {
-			series = append(series, float64(len(aps)))
-		}
-	}
-	if len(series) == 0 {
-		return series, nil
-	}
-	last := series[len(series)-1]
-	return series, &last
-}
-
-// extractWlanSenseMetric extracts the max channel utilization from WLAN sense results.
-func extractWlanSenseMetric(payloads []string) ([]float64, *float64) {
-	var series []float64
-	for _, p := range payloads {
-		var data map[string]interface{}
-		if err := json.Unmarshal([]byte(p), &data); err != nil {
-			continue
-		}
-		ws, ok := data["wlanSense"].(map[string]interface{})
+		wp, ok := data["wlanPassive"].(map[string]interface{})
 		if !ok {
 			continue
 		}
 		// Extract max utilization across all channels
 		var maxUtil float64
-		if channels, ok := ws["channels"].([]interface{}); ok {
+		if channels, ok := wp["channels"].([]interface{}); ok {
 			for _, chData := range channels {
 				if ch, ok := chData.(map[string]interface{}); ok {
 					if util, ok := ch["utilizationPct"].(float64); ok && util > maxUtil {

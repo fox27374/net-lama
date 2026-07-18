@@ -37,24 +37,13 @@ Planned work, roughly grouped. Not ordered by priority yet.
       throughput thresholds) with consecutive-breach counts, per-target alert
       state, webhook notification, Alerts UI + nav badge. Later: email/SMTP,
       more metrics, maintenance windows, per-rule scoping to sites/agents.
-- [x] WLAN Phase 1: interface inventory + managed-mode AP/SSID scan (agent reports
-      wireless interfaces, per-agent interface selection, periodic scan, Wireless UI)
-- [x] WLAN Phase 2: monitor-mode client sensing — per-station MAC/RSSI/SNR/rate/MCS
-      per SSID; needs a monitor-capable adapter and a rootful container with host
-      network + NET_ADMIN/NET_RAW; capture via gopacket/afpacket + radiotap/Dot11
-- [x] WLAN discovery: automatic full-spectrum sweep (every channel the phy
-      supports, incl. DFS) on a monitor sensor's first connect, with a Wireless
-      page panel and an assisted button to narrow the recurring test to the
-      channels that had activity
-- [ ] WLAN tests on a channel or SSID basis: define a wlan_sense test that
-      targets a specific SSID (sensor follows it across channels) or a fixed
-      channel set per test
-- [x] Improve the channel and SSID overview on the Wireless discovery panel:
-      2.4/5/6 GHz band filters, "active channels only" filter, a dedicated
-      SSID table (grouped across BSSIDs/bands), channel list sorted by
-      utilization and collapsed to the top 10 with a "show all" toggle
-- [ ] AP vendor info: resolve BSSID OUIs to manufacturer names in the
-      Wireless views
+- [x] WLAN rebuild: single unified `wlan_passive` test type with agent-side adaptive
+      channel narrowing (full spectrum on first run, then narrowed to "interesting"
+      channels where APs or clients were heard), single `wlan` capability tag,
+      networks table UI with SSID/BSSID/RSSI/channel/band/security/standards/clients/
+      last-seen columns, and consolidated demo mode (`NETLAMA_WLAN_DEMO`)
+- [ ] WLAN active tests: on-demand association/throughput/auth tests against selected
+      SSIDs
 - [x] SSID security + PHY standards: security (Open/WEP/WPA2/WPA3/WPA2-WPA3
       transition/Enterprise/OWE) and PHY generation (n/ac/ax/be) parsed from
       RSN/HT/VHT/HE/EHT beacon information elements, shown in the SSID table

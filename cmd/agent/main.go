@@ -22,6 +22,7 @@ func main() {
 	tlsInsecure := flag.Bool("tls-insecure", envEnabled("NETLAMA_TLS_INSECURE"), "Skip server certificate verification (still encrypted)")
 	tlsCert := flag.String("tls-cert", envOr("NETLAMA_TLS_CERT", ""), "Client certificate for mTLS (issued per agent by the server)")
 	tlsKey := flag.String("tls-key", envOr("NETLAMA_TLS_KEY", ""), "Key for the mTLS client certificate")
+	wlanIface := flag.String("wlan-iface", envOr("NETLAMA_WLAN_IFACE", ""), "Override wireless interface for wlan_passive tests (empty = auto-pick first monitor-capable)")
 	flag.Parse()
 
 	logger := newLogger()
@@ -54,6 +55,7 @@ func main() {
 		TLSInsecure: *tlsInsecure,
 		TLSCertFile: *tlsCert,
 		TLSKeyFile:  *tlsKey,
+		WlanIface:   *wlanIface,
 	}
 
 	logger.Info("Agent starting",

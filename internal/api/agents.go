@@ -118,9 +118,8 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 	}
 
 	var req struct {
-		Name          string `json:"name"`
-		SiteID        string `json:"siteId"`
-		WlanInterface string `json:"wlanInterface"`
+		Name   string `json:"name"`
+		SiteID string `json:"siteId"`
 	}
 	if !decodeBody(w, r, &req) {
 		return
@@ -137,7 +136,7 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 		return
 	}
 
-	if err := a.Store.UpdateAgent(agent.ID, req.Name, site.ID, req.WlanInterface); err != nil {
+	if err := a.Store.UpdateAgent(agent.ID, req.Name, site.ID); err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}

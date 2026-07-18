@@ -78,7 +78,7 @@ The UI (login with username/password, dark/light theme) has a fixed left sidebar
 * **Dashboard** — the tenant landing page with a site filter; shows stat tiles (sites,
   agents, tests, active alerts), a sites table, active & recent alerts, tests with
   inline sparklines showing metric trends, and the latest wireless scans
-* **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_scan/wlan_sense/speedtest) with interval and parameters
+* **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_passive/speedtest) with interval and parameters
   * `speedtest` tests pick a **provider**: `ookla` (default, speedtest.net via the
     unofficial `showwin/speedtest-go` client against volunteer-run servers — the
     most widely available but occasionally untrustworthy, so results are
@@ -90,8 +90,10 @@ The UI (login with username/password, dark/light theme) has a fixed left sidebar
     throughput (all three providers measure over HTTPS/WSS) caps what any of
     them can report on fast links — expect the ceiling to be the Pi's, not the
     link's, above a few hundred Mbps.
-* **Wireless** — per agent: pick its WLAN sensor interface and view the nearby access
-  points (SSID, BSSID, band, channel, RSSI, security) from its latest scan
+* **Wireless** — when a `wlan_passive` test is assigned to a site, view the nearby access
+  points (SSID, BSSID, band, channel, RSSI, security, clients associated) from each agent's
+  latest passive monitor-mode sweep; the agent adapts its scan to narrow from all channels
+  on first run to just the "interesting" channels (where APs or clients were heard)
 * **Path** — traceroute path visualization: the hop chain from an agent to a target
   (TCP/ICMP/UDP), per-hop latency and loss, and where a failing path breaks
 * **Alerts** — define rules (a test is unhealthy, or a metric such as latency/loss
@@ -220,15 +222,15 @@ avoid pushing unsupported tests to agents—**an old agent that never re-registe
 still receives all tests (backward compatible)**. The web UI shows capability badges
 per agent, and warns when an assigned test won't run on some agents.
 
-### Sensor agents (WLAN scan and traceroute)
+### Sensor agents (WLAN passive and traceroute)
 
-The WLAN scan and traceroute probes shell out to external tools (`iw`, `mtr`) that
+The WLAN passive and traceroute probes shell out to external tools (`iw`, `mtr`) that
 are **not** in the default distroless agent image and need raw-socket access. Use
 the ready-made [compose.sensor.yaml](compose.sensor.yaml), which runs the agent as:
 
 1. **the sensor image** (`agent-sensor` target — Debian-slim with `iw` + `mtr`);
 2. with **`cap_add: [NET_RAW, NET_ADMIN]`** — `NET_RAW` for traceroute (custom-TTL
-   packets + receiving ICMP), `NET_ADMIN` for WLAN scanning; and
+   packets + receiving ICMP), `NET_ADMIN` for WLAN passive scanning; and
 3. with **`network_mode: host`**. This is required for path tracing: rootless
    user-mode network stacks (`slirp4netns` / `pasta`) NAT everything, so the agent
    would only ever see the destination and *none* of the intermediate routers. With
@@ -256,16 +258,22 @@ traceroute shows only hops that return ICMP for TCP-SYN probes — many networks
 answer for ICMP-mode traceroute but not TCP, so an ICMP test often shows a fuller
 path while a TCP test better reflects the real application path and port reachability.
 
-Until the above is in place, set `NETLAMA_WLAN_DEMO=1`, `NETLAMA_WLAN_SENSE_DEMO=1`
-and/or `NETLAMA_TRACEROUTE_DEMO=1` to emit synthetic data so you can use the
-Wireless and Path UIs on a host without a radio or raw-socket access.
+Until the above is in place, set `NETLAMA_WLAN_DEMO=1` and/or `NETLAMA_TRACEROUTE_DEMO=1`
+to emit synthetic data so you can use the Wireless and Path UIs on a host without a
+radio or raw-socket access.
 
-The `wlan_sense` test does passive **monitor-mode** client sensing: it channel-hops,
-captures 802.11 frames (via `gopacket`/`afpacket`, no CGO), and reports per-station
-MAC/RSSI/rate/MCS grouped by SSID plus per-channel airtime utilization. It needs a
-monitor-capable adapter and a **privileged (root) agent with a host-network,
-`NET_ADMIN`/`NET_RAW` container** — the agent switches the interface into monitor
-mode and back. Native-Go traceroute is a later phase — see [ROADMAP.md](ROADMAP.md).
+The `wlan_passive` test does passive **monitor-mode** network sensing: it channel-hops,
+captures 802.11 frames (via `gopacket`/`afpacket`, no CGO), and reports per-network
+AP BSSID/SSID/channel/RSSI/security/standards plus per-client MAC/RSSI/rate/MCS and
+per-channel airtime utilization. On first run it sweeps all channels the phy supports;
+subsequent runs narrow to "interesting" channels (where APs or clients were heard),
+cutting the scan time significantly. It needs a monitor-capable adapter and a
+**privileged (root) agent with a host-network, `NET_ADMIN`/`NET_RAW` container** —
+the agent auto-picks a monitor-capable interface and switches it into monitor
+mode and back. To force a specific interface (e.g., if multiple monitor-capable adapters
+are present), set `-wlan-iface` or `NETLAMA_WLAN_IFACE` on the agent; if the interface
+doesn't exist or isn't monitor-capable, the test will error. Native-Go traceroute is a
+later phase — see [ROADMAP.md](ROADMAP.md).
 
 ## TLS
 

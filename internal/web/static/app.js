@@ -358,15 +358,9 @@ async function renderDashboardWireless(siteId) {
   const tbody = $("#db-wireless-table tbody");
   tbody.innerHTML = "";
 
-  // Fetch agents for the site (or all if no site filter)
-  let agentsData = agents;
-  if (siteId && agents.length) {
-    agentsData = agents.filter(a => a.siteId === siteId);
-  }
-
   try {
-    // Fetch latest wireless scans
-    let resultsUrl = "/api/v1/results?testType=wlan_scan&limit=100" + tenantParam();
+    // Fetch latest wlan_passive results
+    let resultsUrl = "/api/v1/results?testType=wlan_passive&limit=100" + tenantParam();
     if (siteId) resultsUrl += (tenantParam() ? "&" : "?") + `siteId=${siteId}`;
     const results = await api("GET", resultsUrl);
 
@@ -378,26 +372,28 @@ async function renderDashboardWireless(siteId) {
       }
     }
 
-    const aPs = Object.values(latestByAgent);
-    $("#db-wireless-empty").classList.toggle("hidden", aPs.length > 0);
+    const rslt = Object.values(latestByAgent);
+    $("#db-wireless-empty").classList.toggle("hidden", rslt.length > 0);
 
-    // Parse payloads and render APs
-    for (const result of aPs.slice(0, 20)) { // Show latest 20 APs
+    // Parse payloads and render networks
+    for (const result of rslt.slice(0, 20)) { // Show latest 20 networks
       try {
         const payload = typeof result.payload === "string" ? JSON.parse(result.payload) : result.payload;
-        const aps = payload.APs || [];
-        for (const ap of aps.slice(0, 3)) { // Show top 3 per agent
+        const wp = payload.wlanPassive || {};
+        const networks = (wp.networks || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
+        for (const net of networks.slice(0, 5)) { // Show top 5 per agent
           const tr = document.createElement("tr");
           tr.classList.add("clickable-row");
           tr.tabIndex = 0;
+          const rssi = net.rssiDbm || 0;
+          const sigClass = rssi >= -60 ? "healthy" : rssi >= -75 ? "degraded" : "failing";
           tr.innerHTML = `
             <td>${esc(result.agentName)}</td>
-            <td>${esc(ap.SSID)}</td>
-            <td class="mono">${esc(ap.BSSID)}</td>
-            <td>${esc(ap.Band)}</td>
-            <td class="num">${ap.Channel}</td>
-            <td class="num sig-${ap.RSSI > -70 ? 'good' : (ap.RSSI > -80 ? 'ok' : 'weak')}">${ap.RSSI}</td>
-            <td>${esc(ap.Security)}</td>`;
+            <td>${net.ssid ? esc(net.ssid) : '<span class="muted">(hidden)</span>'}</td>
+            <td class="mono">${esc(net.bssid)}</td>
+            <td class="num"><span class="health ${sigClass}">${rssi}</span></td>
+            <td class="num">${net.channel || "—"}</td>
+            <td>${net.security || "Open"}</td>`;
           tr.addEventListener("click", () => navTo("wireless"));
           tr.addEventListener("keydown", (e) => {
             if (e.key === "Enter") navTo("wireless");
@@ -521,8 +517,9 @@ async function loadAgents() {
   for (const a of agents) {
     // Capability badges; an empty/missing list (old agent that never
     // reported capabilities) renders nothing.
+    const capabilityLabel = (c) => c === "wlan" ? "WLAN" : c;
     const caps = (a.capabilities || [])
-      .map((c) => `<span class="chip type-${esc(c)}">${esc(c)}</span>`).join(" ");
+      .map((c) => `<span class="chip type-${esc(c)}">${capabilityLabel(c)}</span>`).join(" ");
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><span class="badge ${a.connected ? "on" : "off"}">${a.connected ? "connected" : "offline"}</span></td>
@@ -618,11 +615,7 @@ function paramsSummary(t) {
   if (t.type === "dns") return `${(p.queries || []).join(", ")} @ ${(p.servers || []).join(", ")}`;
   if (t.type === "http") return p.url || "";
   if (t.type === "tcp") return (p.targets || []).join(", ");
-  if (t.type === "wlan_scan") return "nearby access points";
-  if (t.type === "wlan_sense") {
-    const ch = (p.channels || []).length ? (p.channels || []).join(",") : "all channels";
-    return `monitor sense · ${ch} · ${p.dwellMs || 400}ms`;
-  }
+  if (t.type === "wlan_passive") return "passive monitor-mode sweep";
   if (t.type === "traceroute") {
     const proto = (p.protocol || "tcp").toUpperCase();
     const port = (p.protocol === "icmp") ? "" : `:${p.port || 443}`;
@@ -677,8 +670,7 @@ function updateTestParamFields() {
   $("#t-params-dns").classList.toggle("hidden", type !== "dns");
   $("#t-params-http").classList.toggle("hidden", type !== "http");
   $("#t-params-tcp").classList.toggle("hidden", type !== "tcp");
-  $("#t-params-wlan").classList.toggle("hidden", type !== "wlan_scan");
-  $("#t-params-wlansense").classList.toggle("hidden", type !== "wlan_sense");
+  $("#t-params-wlan_passive").classList.toggle("hidden", type !== "wlan_passive");
   $("#t-params-traceroute").classList.toggle("hidden", type !== "traceroute");
   $("#t-params-speedtest").classList.toggle("hidden", type !== "speedtest");
   // Re-filter alert rules when test type changes
@@ -714,7 +706,7 @@ function populateAlertRuleSelect(testType) {
 // Backed by the same {warn, crit} model: warn is the green|orange boundary,
 // crit the orange|red one. For speedtest lower is worse, so the band order
 // flips (green on top) and warn > crit.
-const BAND_UNIT = { ping: "ms", dns: "ms", http: "ms", tcp: "ms", speedtest: "Mbps", traceroute: "hops", wlan_scan: "APs", wlan_sense: "%" };
+const BAND_UNIT = { ping: "ms", dns: "ms", http: "ms", tcp: "ms", speedtest: "Mbps", traceroute: "hops", wlan_passive: "%" };
 // null = band absent, "" = band added but value not typed yet, "40" = value
 let bandTh = { warn: null, crit: null };
 let bandType = "ping";
@@ -857,8 +849,6 @@ function openTestDialog(test) {
   $("#t-tr-maxhops").value = (test && test.type === "traceroute" && p.maxHops) || 30;
   $("#t-tr-probes").value = (test && test.type === "traceroute" && p.probesPerHop) || 5;
   $("#t-st-provider").value = (test && test.type === "speedtest" && p.provider) || "ookla";
-  $("#t-ws-channels").value = (test && test.type === "wlan_sense" ? (p.channels || []) : []).join(",");
-  $("#t-ws-dwell").value = (test && test.type === "wlan_sense" && p.dwellMs) || 400;
   updateTestParamFields();
 
   // State thresholds band editor
@@ -915,9 +905,8 @@ $("#form-test").addEventListener("submit", async (e) => {
     };
   } else if (type === "speedtest") {
     params = { provider: $("#t-st-provider").value };
-  } else if (type === "wlan_sense") {
-    const channels = $("#t-ws-channels").value.split(",").map((s) => +s.trim()).filter((n) => n > 0);
-    params = { channels, dwellMs: +$("#t-ws-dwell").value };
+  } else if (type === "wlan_passive") {
+    params = {};
   }
   // Build thresholds from the band editor (undefined => validation error)
   const thresholds = readThresholdBands();
@@ -1029,6 +1018,12 @@ let assigningSite = null;
 
 // capabilityWarnings lists, for the given site's agents, every selected
 // test whose type is missing from an agent's non-empty capability list.
+// Maps test type to required capability (e.g., wlan_passive → wlan).
+function requiredCapability(testType) {
+  if (testType === "wlan_passive") return "wlan";
+  return testType;
+}
+
 // Agents with an empty list (old versions that never reported
 // capabilities) are treated as able to run everything — no warning.
 function capabilityWarnings(site, selectedTestIds) {
@@ -1039,8 +1034,9 @@ function capabilityWarnings(site, selectedTestIds) {
     if (!t) continue;
     for (const a of siteAgents) {
       const caps = a.capabilities || [];
-      if (caps.length && !caps.includes(t.type)) {
-        warnings.push(`${t.name} won't run on ${a.name} (no ${t.type} capability)`);
+      const reqCap = requiredCapability(t.type);
+      if (caps.length && !caps.includes(reqCap)) {
+        warnings.push(`${t.name} won't run on ${a.name} (no ${reqCap} capability)`);
       }
     }
   }
@@ -1156,9 +1152,10 @@ function resultDetails(r) {
       ? `${esc(t.target)} · connect ${fmt(t.connectMs)} ms`
       : `${esc(t.target)} · <span class="error">refused</span>`;
   }
-  if (p.wlanScan) {
-    const n = (p.wlanScan.accessPoints || []).length;
-    return `${n} access point${n === 1 ? "" : "s"} on ${esc(p.wlanScan.interface || "?")}`;
+  if (p.wlanPassive) {
+    const n = (p.wlanPassive.networks || []).length;
+    const m = (p.wlanPassive.stations || []).length;
+    return `${n} network${n === 1 ? "" : "s"}, ${m} client${m === 1 ? "" : "s"}`;
   }
   if (p.traceroute) {
     const t = p.traceroute;
@@ -1484,11 +1481,25 @@ window.addEventListener("resize", () => {
 let wlAgents = [];
 
 async function loadWireless() {
+  // Check if any wlan_passive tests exist
+  const tests = await api("GET", "/api/v1/tests" + tenantParam());
+  const hasWlanPassive = tests.some((t) => t.type === "wlan_passive");
+
+  if (!hasWlanPassive) {
+    $("#wl-notest").classList.remove("hidden");
+    $("#wl-body").classList.add("hidden");
+    return;
+  }
+
+  $("#wl-notest").classList.add("hidden");
+
+  // Get WLAN-capable agents
   wlAgents = await api("GET", "/api/v1/agents" + tenantParam());
+  wlAgents = wlAgents.filter((a) => (a.capabilities || []).includes("wlan"));
+
   const sel = $("#wl-agent");
   const prev = sel.value;
   sel.innerHTML = wlAgents.map((a) => `<option value="${a.id}">${esc(a.name)} (${esc(a.siteName)})</option>`).join("");
-  $("#wl-noagents").classList.toggle("hidden", wlAgents.length > 0);
   $("#wl-body").classList.toggle("hidden", wlAgents.length === 0);
   if (!wlAgents.length) return;
   if (prev && wlAgents.some((a) => a.id === prev)) sel.value = prev;
@@ -1507,41 +1518,13 @@ async function renderWirelessAgent() {
   const agent = currentWlAgent();
   if (!agent) return;
 
-  const ifaces = agent.wirelessInterfaces || [];
-  const isel = $("#wl-iface");
-  if (!ifaces.length) {
-    isel.innerHTML = '<option value="">— none reported —</option>';
-    $("#wl-iface-hint").textContent =
-      "This agent reported no wireless interfaces. It needs a wireless adapter and the iw tool (or run it with NETLAMA_WLAN_DEMO=1 to try the workflow).";
-  } else {
-    isel.innerHTML = ifaces.map((w) => {
-      const mon = w.supportsMonitor ? " · monitor-capable" : "";
-      const selected = w.name === agent.wlanInterface ? "selected" : "";
-      return `<option value="${esc(w.name)}" ${selected}>${esc(w.name)} (${esc(w.phy)})${mon}</option>`;
-    }).join("");
-    $("#wl-iface-hint").textContent = "The interface used for WLAN scan and monitor-mode sensing tests on this agent.";
-  }
-  $("#wl-iface-msg").textContent = "";
-
-  // Latest WLAN scan result for this agent
-  const params = new URLSearchParams({ agentId: agent.id, type: "wlan_scan", limit: "1" });
+  // Latest wlan_passive result for this agent
+  const params = new URLSearchParams({ agentId: agent.id, type: "wlan_passive", limit: "1" });
   const tid = tenantParam("");
   if (tid) params.set("tenantId", tid.split("=")[1]);
   const results = await api("GET", "/api/v1/results?" + params.toString());
-  renderScan(results[0]);
-
-  // Latest monitor-mode sense result. The one-off first-connect discovery
-  // sweep shares the wlan_sense type under a reserved test id — skip it so
-  // it doesn't get shown as if it were the latest recurring sweep.
-  const sparams = new URLSearchParams({ agentId: agent.id, type: "wlan_sense", limit: "10" });
-  if (tid) sparams.set("tenantId", tid.split("=")[1]);
-  const sresults = await api("GET", "/api/v1/results?" + sparams.toString());
-  renderSense(sresults.find((r) => r.testId !== WLAN_DISCOVERY_TEST_ID));
+  renderWirelessNetworks(results[0]);
 }
-
-// Sentinel test id for the automatic full-spectrum discovery sweep
-// (mirrors proto.WlanDiscoveryTestID on the server side).
-const WLAN_DISCOVERY_TEST_ID = "__wlan_discovery__";
 
 // signalClass buckets an RSSI (dBm) into a health color: >=-60 ok,
 // -75..-60 warn, <-75 bad.
@@ -1551,208 +1534,69 @@ function signalClass(rssi) {
   return "failing";
 }
 
-function renderSense(result) {
-  const box = $("#wl-sense");
-  const w = result && result.payload && result.payload.wlanSense;
-  // Hide the whole block when this agent has no sense results at all
-  box.classList.toggle("hidden", !result);
-  if (!result) return;
-
-  const meta = $("#wl-sense-meta");
-  meta.innerHTML = "";
-  if (w && w.demo) {
-    const badge = document.createElement("span");
-    badge.className = "demo-badge";
-    badge.textContent = "DEMO DATA";
-    meta.appendChild(badge);
-  }
-  if (result.error) {
-    meta.appendChild(document.createTextNode("Last sweep failed: " + result.error));
-  } else if (w) {
-    meta.appendChild(document.createTextNode(
-      `${(w.channels || []).length} channels · ${w.sweepMs || 0}ms sweep · ${new Date(result.time).toLocaleString()}`));
-  }
-
-  // Channel utilization bars (highest utilization first)
-  const bars = $("#wl-chan-bars");
-  bars.innerHTML = "";
-  const channels = ((w && w.channels) || []).slice().sort((a, b) => b.utilizationPct - a.utilizationPct);
-  for (const c of channels) {
-    const pct = Math.max(0, Math.min(100, c.utilizationPct || 0));
-    const cls = pct >= 75 ? "failing" : pct >= 40 ? "degraded" : "healthy";
-    const band = c.freqMhz >= 5000 ? "5 GHz" : "2.4 GHz";
-    const row = document.createElement("div");
-    row.className = "chan-bar";
-    row.innerHTML =
-      `<span class="chan-label">ch ${c.channel} <span class="muted">${band}</span></span>` +
-      `<span class="chan-track"><span class="chan-fill ${cls}" style="width:${pct}%"></span></span>` +
-      `<span class="chan-val">${pct.toFixed(0)}%</span>`;
-    bars.appendChild(row);
-  }
-  if (!channels.length) {
-    bars.innerHTML = '<p class="muted">No channel data in the last sweep.</p>';
-  }
-
-  // Networks heard from beacons feed the shared "SSIDs" and "Accesspoints"
-  // boxes (a monitor sensor doesn't run a managed WLAN scan).
-  const networks = ((w && w.networks) || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
-  if (networks.length) {
-    // SSID list: one entry per SSID with its security + PHY standards,
-    // aggregated across every BSSID/channel it was heard on.
-    const ssidBox = $("#wl-ssids");
-    ssidBox.innerHTML = "";
-    const bySsid = new Map();
-    for (const n of networks) {
-      const name = n.ssid || "— hidden —";
-      let e = bySsid.get(name);
-      if (!e) {
-        e = { name, aps: 0, security: new Set(), standards: new Set() };
-        bySsid.set(name, e);
-      }
-      e.aps++;
-      if (n.security) e.security.add(n.security);
-      if (n.standards) e.standards.add(n.standards);
-    }
-    for (const e of [...bySsid.values()].sort((a, b) => a.name.localeCompare(b.name))) {
-      const row = document.createElement("div");
-      row.className = "ssid-detail-row";
-      const capBits = [];
-      if (e.security.size) capBits.push([...e.security].join(", "));
-      if (e.standards.size) capBits.push("802.11" + [...e.standards].join("/"));
-      capBits.push(e.aps > 1 ? `${e.aps} APs` : "1 AP");
-      row.innerHTML =
-        `<span class="ssid-detail-name">${esc(e.name)}</span>` +
-        `<span class="muted ssid-detail-caps">${capBits.map(esc).join(" · ")}</span>`;
-      ssidBox.appendChild(row);
-    }
-
-    const apBody = $("#wl-ap-table tbody");
-    apBody.innerHTML = "";
-    for (const n of networks) {
-      const band = n.freqMhz >= 5000 ? "5 GHz" : "2.4 GHz";
-      const tr = document.createElement("tr");
-      tr.innerHTML =
-        `<td>${n.ssid ? esc(n.ssid) : '<span class="muted">— hidden —</span>'}</td>` +
-        `<td class="mono">${esc(n.bssid)}</td><td>${band}</td>` +
-        `<td class="num">${n.channel || "—"}</td>` +
-        `<td class="num"><span class="health ${signalClass(n.rssiDbm)}">${n.rssiDbm}</span></td>`;
-      apBody.appendChild(tr);
-    }
-    $("#wl-empty").classList.add("hidden");
-  }
-
-  // Client stations, strongest signal first
-  const tbody = $("#wl-sta-table tbody");
+function renderWirelessNetworks(result) {
+  const tbody = $("#wl-networks-table tbody");
   tbody.innerHTML = "";
-  const stations = ((w && w.stations) || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
-  $("#wl-sta-count").textContent = stations.length ? `${stations.length} stations` : "";
-  $("#wl-sta-empty").classList.toggle("hidden", stations.length > 0);
-  for (const s of stations) {
-    const ssid = s.probeOnly ? '<span class="muted">probing…</span>' : (s.ssid ? esc(s.ssid) : '<span class="muted">—</span>');
-    const rate = s.rateMbps ? (+s.rateMbps).toFixed(0) : "—";
-    const mcs = (s.mcs != null && s.mcs >= 0) ? s.mcs : "—";
-    const seen = s.lastSeenMs ? new Date(+s.lastSeenMs).toLocaleTimeString() : "";
-    const tr = document.createElement("tr");
-    tr.innerHTML =
-      `<td class="mono">${esc(s.mac)}</td><td>${ssid}</td>` +
-      `<td class="num"><span class="health ${signalClass(s.rssiDbm)}">${s.rssiDbm}</span></td>` +
-      `<td class="num">${rate}</td><td class="num">${mcs}</td>` +
-      `<td class="num">${s.frames || 0}</td><td class="muted nowrap">${seen}</td>`;
-    tbody.appendChild(tr);
-  }
-}
 
-function renderScan(result) {
-  const tbody = $("#wl-ap-table tbody");
-  const ssidBox = $("#wl-ssids");
-  tbody.innerHTML = "";
-  ssidBox.innerHTML = "";
+  const wp = result && result.payload && result.payload.wlanPassive;
+  const networks = ((wp && wp.networks) || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
 
-  const aps = (result && result.payload && result.payload.wlanScan &&
-    result.payload.wlanScan.accessPoints) || [];
-  $("#wl-empty").classList.toggle("hidden", aps.length > 0 || !!result);
-  const demo = result && result.payload && result.payload.wlanScan && result.payload.wlanScan.demo;
-  const meta = $("#wl-scan-meta");
+  const meta = $("#wl-meta");
   meta.textContent = "";
   if (result) {
-    if (demo) {
+    if (wp && wp.demo) {
       const badge = document.createElement("span");
       badge.className = "demo-badge";
       badge.textContent = "DEMO DATA";
       meta.appendChild(badge);
     }
-    meta.appendChild(document.createTextNode(
-      `${aps.length} APs · ${new Date(result.time).toLocaleString()}`));
+    if (result.error) {
+      meta.appendChild(document.createTextNode("Last sweep failed: " + result.error));
+    } else if (wp) {
+      meta.appendChild(document.createTextNode(
+        `${networks.length} networks · ${(wp.channels || []).length} channels · ${wp.sweepMs || 0}ms sweep · ${new Date(result.time).toLocaleString()}`));
+    }
   }
+
+  $("#wl-empty").classList.toggle("hidden", networks.length > 0 || !!result);
   if (result && result.error) {
-    $("#wl-empty").textContent = "Last scan failed: " + result.error;
+    $("#wl-empty").textContent = "Last sweep failed: " + result.error;
     $("#wl-empty").classList.remove("hidden");
   }
-  if (!aps.length) return;
+  if (!networks.length) return;
 
-  // SSID list (grouped, hidden networks folded together), with security
-  // shown as a capability since a managed-mode scan reports it per AP.
-  const bySsid = new Map();
-  for (const ap of aps) {
-    const name = ap.ssid || "— hidden —";
-    let e = bySsid.get(name);
-    if (!e) {
-      e = { name, aps: 0, security: new Set() };
-      bySsid.set(name, e);
+  // Count clients per BSSID
+  const clientsPerBssid = new Map();
+  if (wp && wp.stations) {
+    for (const s of wp.stations) {
+      if (s.bssid) {
+        clientsPerBssid.set(s.bssid, (clientsPerBssid.get(s.bssid) || 0) + 1);
+      }
     }
-    e.aps++;
-    if (ap.security) e.security.add(ap.security);
-  }
-  for (const e of [...bySsid.values()].sort((a, b) => a.name.localeCompare(b.name))) {
-    const row = document.createElement("div");
-    row.className = "ssid-detail-row";
-    const capBits = [];
-    if (e.security.size) capBits.push([...e.security].join(", "));
-    capBits.push(e.aps > 1 ? `${e.aps} APs` : "1 AP");
-    row.innerHTML =
-      `<span class="ssid-detail-name">${esc(e.name)}</span>` +
-      `<span class="muted ssid-detail-caps">${capBits.map(esc).join(" · ")}</span>`;
-    ssidBox.appendChild(row);
   }
 
-  // AP table, strongest signal first
-  const sorted = [...aps].sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
-  for (const ap of sorted) {
+  // Render networks table
+  for (const n of networks) {
+    const freq = n.freqMhz || 0;
+    const band = freq >= 5955 ? "6 GHz" : freq >= 5000 ? "5 GHz" : "2.4 GHz";
+    const rssiClass = signalClass(n.rssiDbm);
+    const clients = clientsPerBssid.get(n.bssid) || 0;
+    const lastSeen = result ? new Date(result.time).toLocaleTimeString() : "";
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${esc(ap.ssid || "— hidden —")}</strong></td>
-      <td class="muted mono">${esc(ap.bssid)}</td>
-      <td>${esc(ap.band || "")}</td>
-      <td class="num">${ap.channel || "–"}</td>
-      <td class="num">${signalCell(ap.rssiDbm)}</td>`;
+      <td>${n.ssid ? esc(n.ssid) : '<span class="muted">(hidden)</span>'}</td>
+      <td class="mono">${esc(n.bssid)}</td>
+      <td class="num"><span class="health ${rssiClass}">${n.rssiDbm || 0}</span></td>
+      <td class="num">${n.channel || "—"}</td>
+      <td>${band}</td>
+      <td>${n.standards || "—"}</td>
+      <td>${n.security || "Open"}</td>
+      <td class="num">${clients}</td>
+      <td class="muted nowrap">${lastSeen}</td>`;
     tbody.appendChild(tr);
   }
 }
-
-// signalCell colours the RSSI by rough quality.
-function signalCell(rssi) {
-  if (rssi === undefined || rssi === null) return "–";
-  let cls = "sig-weak";
-  if (rssi >= -60) cls = "sig-good";
-  else if (rssi >= -72) cls = "sig-ok";
-  return `<span class="${cls}">${fmt(rssi, 0)}</span>`;
-}
-
-$("#wl-iface-save").addEventListener("click", async () => {
-  const agent = currentWlAgent();
-  if (!agent) return;
-  try {
-    await api("PUT", `/api/v1/agents/${agent.id}`, {
-      name: agent.name,
-      siteId: agent.siteId,
-      wlanInterface: $("#wl-iface").value,
-    });
-    agent.wlanInterface = $("#wl-iface").value;
-    $("#wl-iface-msg").textContent = "Saved — pushed to the agent if connected.";
-  } catch (err) {
-    $("#wl-iface-msg").textContent = "Error: " + err.message;
-  }
-});
 
 // --- Path (traceroute) ---
 let paAgents = [];
@@ -2577,7 +2421,7 @@ const METRIC_LABEL = {
 
 // Metric applicability map: which test types can use which metrics
 const METRIC_APPLICABILITY = {
-  unhealthy: ["ping", "dns", "http", "tcp", "traceroute", "wlan_scan", "wlan_sense", "speedtest"],
+  unhealthy: ["ping", "dns", "http", "tcp", "traceroute", "wlan_passive", "speedtest"],
   latency_ms: ["ping", "dns", "http", "tcp", "traceroute", "speedtest"],
   loss_percent: ["ping"],
   download_mbps: ["speedtest"],
