@@ -406,9 +406,10 @@ func extractMetricValue(testType, payload string) *float64 {
 		}
 	case "wlan_active":
 		if wa, ok := data["wlanActive"].(map[string]interface{}); ok {
-			if total, ok := wa["totalMs"].(float64); ok {
-				val = total
-			}
+			assoc, _ := wa["associateMs"].(float64)
+			auth, _ := wa["authenticateMs"].(float64)
+			dhcp, _ := wa["dhcpMs"].(float64)
+			val = assoc + auth + dhcp
 		}
 	}
 
@@ -579,7 +580,9 @@ func extractTracerouteMetric(payloads []string) ([]float64, *float64) {
 	return series, &last
 }
 
-// extractWlanActiveMetric extracts the total connection time from WLAN active results.
+// extractWlanActiveMetric extracts the connect time (associate + authenticate
+// + DHCP) from WLAN active results. Scan time is excluded — SSID discovery is
+// harness-internal and its variance would drown the signal.
 func extractWlanActiveMetric(payloads []string) ([]float64, *float64) {
 	var series []float64
 	for _, p := range payloads {
@@ -591,8 +594,11 @@ func extractWlanActiveMetric(payloads []string) ([]float64, *float64) {
 		if !ok {
 			continue
 		}
-		if total, ok := wa["totalMs"].(float64); ok && total > 0 {
-			series = append(series, total)
+		assoc, _ := wa["associateMs"].(float64)
+		auth, _ := wa["authenticateMs"].(float64)
+		dhcp, _ := wa["dhcpMs"].(float64)
+		if connect := assoc + auth + dhcp; connect > 0 {
+			series = append(series, connect)
 		}
 	}
 	if len(series) == 0 {

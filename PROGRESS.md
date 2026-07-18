@@ -881,8 +881,11 @@ What has been done so far, in chronological order. Planned work lives in
      retransmit default; now 1.5s timeout × 6 retries.
   3. `totalMs` included teardown and monitor-mode restore (~2.3s); it now
      spans supplicant start through the last completed step only.
-- UI: waterfall gets a muted "Scan" bar; active card shows "Connect time"
-  (assoc+auth+dhcp, with scan in parentheses); Results summary includes scan.
+- UI follow-up: scan time is payload-only (harness-internal metric) — not in
+  the waterfall, card, Results summary, or the dashboard series; the card and
+  the overview sparkline use connect time (assoc+auth+dhcp). `scan_ssid=1`
+  added to the supplicant config (directed probes: faster, more reliable SSID
+  discovery, works for hidden SSIDs).
 
 ## Known issues
 

@@ -56,6 +56,9 @@ func wpaSupplicantConf(opts WlanActiveOpts, caCertPath string) string {
 	b.WriteString("ctrl_interface=/tmp/netlama-wpa\n")
 	b.WriteString("network={\n")
 	fmt.Fprintf(&b, "  ssid=\"%s\"\n", wpaEscape(opts.SSID))
+	// Directed probe requests: finds the SSID faster and more reliably than
+	// passive listening (and is required for hidden SSIDs)
+	b.WriteString("  scan_ssid=1\n")
 	switch opts.Security {
 	case "eap-peap":
 		b.WriteString("  key_mgmt=WPA-EAP\n")
