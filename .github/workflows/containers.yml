@@ -43,7 +43,9 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/netlama-${{ matrix.component }}
         tags: |
-          type=raw,value=latest,enable={{is_default_branch}}
+          # latest follows every build here — only main and v* tags trigger,
+          # and a release tag build must update latest too (agents pull it)
+          type=raw,value=latest
           type=semver,pattern={{version}}
           type=sha
 
@@ -60,7 +62,7 @@ jobs:
         platforms: linux/amd64,linux/arm64
         push: true
         build-args: |
-          VERSION=git-${{ steps.sha.outputs.short }}
+          VERSION=${{ github.ref_type == 'tag' && github.ref_name || format('git-{0}', steps.sha.outputs.short) }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha,scope=${{ matrix.component }}
