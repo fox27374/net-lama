@@ -813,6 +813,22 @@ What has been done so far, in chronological order. Planned work lives in
   columns and the detail panel use the per-AP/station timestamp; rows not heard
   for >2 minutes are dimmed (`wl-stale`).
 
+## 2026-07-18 — Build version tags for server and agents
+
+- **Version stamping** (`internal/version`): `Version` is set via
+  `-ldflags -X` from `git describe --tags --always --dirty` in the Makefile
+  (build + pi targets), and from a `VERSION` build-arg in the Containerfile;
+  the containers CI workflow passes `VERSION=git-<short-sha>`. Plain
+  `go build` yields "dev". The agent's hardcoded "0.1.0" register version is
+  replaced by the stamped value; the server logs its version at startup.
+- **Agent version in UI/API**: the server persists the version an agent
+  reports on register (`agents.version` column, `SetAgentVersion`), it's
+  included in `GET /api/v1/agents`, and the Agents view shows a Version
+  column. `GET /api/v1/me` returns `serverVersion`, displayed in the sidebar
+  footer.
+- **Note**: deployed-from-tarball builds (tpr06) must pass
+  `--build-arg VERSION=...` since the source tarball has no `.git`.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

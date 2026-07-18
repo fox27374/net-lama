@@ -47,6 +47,10 @@ jobs:
           type=semver,pattern={{version}}
           type=sha
 
+    - name: Short SHA
+      id: sha
+      run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
     - name: Build and push
       uses: docker/build-push-action@v6
       with:
@@ -55,6 +59,8 @@ jobs:
         target: ${{ matrix.component }}
         platforms: linux/amd64,linux/arm64
         push: true
+        build-args: |
+          VERSION=git-${{ steps.sha.outputs.short }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha,scope=${{ matrix.component }}

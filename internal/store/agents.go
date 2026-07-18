@@ -17,6 +17,7 @@ type Agent struct {
 	WirelessInterfaces json.RawMessage `json:"wirelessInterfaces"`
 	Capabilities       json.RawMessage `json:"capabilities"`
 	Stats              json.RawMessage `json:"stats,omitempty"`
+	Version            string          `json:"version,omitempty"`
 	CreatedAt          time.Time       `json:"createdAt"`
 }
 
@@ -73,7 +74,7 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	a := &Agent{}
 	var wireless, capabilities, stats string
 	err := row.Scan(&a.ID, &a.TenantID, &a.SiteID, &a.SiteName, &a.Name, &a.Token,
-		&wireless, &capabilities, &stats, &a.CreatedAt)
+		&wireless, &capabilities, &stats, &a.Version, &a.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -95,7 +96,7 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 }
 
 const agentCols = `a.id, a.tenant_id, a.site_id, s.name, a.name, a.token,
-	COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.created_at`
+	COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.version, a.created_at`
 const agentFrom = ` FROM agents a JOIN sites s ON s.id = a.site_id `
 
 func (s *Store) GetAgent(id string) (*Agent, error) {
@@ -150,6 +151,12 @@ func (s *Store) UpdateAgent(id, name, siteID string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// SetAgentVersion records the build version an agent reported on register.
+func (s *Store) SetAgentVersion(id, version string) error {
+	_, err := s.db.Exec(`UPDATE agents SET version = ? WHERE id = ?`, version, id)
+	return err
 }
 
 // SetAgentInterfaces records the wireless interfaces an agent reported.

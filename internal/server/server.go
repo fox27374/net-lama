@@ -207,6 +207,14 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 		}
 	}
 
+	// Record the build version the agent reported, shown in the agent views.
+	if v := register.Version; v != "" && v != agent.Version {
+		if err := s.Store.SetAgentVersion(agent.ID, v); err != nil {
+			s.Logger.Warn("Storing agent version failed", slog.Any("error", err))
+		}
+		agent.Version = v
+	}
+
 	tenantName := agent.TenantID
 	if tenants, err := s.Store.ListTenants(); err == nil {
 		for _, t := range tenants {

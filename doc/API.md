@@ -386,6 +386,14 @@ E.g. for `testType: "speedtest"` the payload is
 `{"provider": "ookla"|"ndt7"|"cloudflare", "serverName": "...",
 "latencyMs": 12.3, "downloadMbps": 280.1, "uploadMbps": 110.5, ...}`.
 
+### `GET /api/v1/me`
+
+Returns the authenticated user plus `serverVersion` (the server's build
+version tag, e.g. `git-abc1234`, `dev` for unstamped builds). Agent objects
+from `GET /api/v1/agents` carry a `version` field with the build version the
+agent reported on its last register (empty until an agent with a stamped
+build connects).
+
 ### `GET /api/v1/oui`
 
 Query: `macs` — comma-separated MAC addresses. Resolves each MAC's OUI prefix

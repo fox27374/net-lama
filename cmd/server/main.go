@@ -23,6 +23,7 @@ import (
 	"github.com/fox27374/net-lama/internal/api"
 	"github.com/fox27374/net-lama/internal/server"
 	"github.com/fox27374/net-lama/internal/store"
+	"github.com/fox27374/net-lama/internal/version"
 	"github.com/fox27374/net-lama/internal/web"
 	pb "github.com/fox27374/net-lama/proto"
 )
@@ -36,6 +37,7 @@ func main() {
 	flag.Parse()
 
 	logger := newLogger()
+	logger.Info("net-lama server starting", slog.String("version", version.Version))
 
 	if *issueAgentCert != "" {
 		certPath, keyPath, err := server.IssueAgentCert(filepath.Dir(*dbPath), *issueAgentCert)

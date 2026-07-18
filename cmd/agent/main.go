@@ -9,9 +9,10 @@ import (
 	"syscall"
 
 	"github.com/fox27374/net-lama/internal/agent"
+	buildver "github.com/fox27374/net-lama/internal/version"
 )
 
-const version = "0.1.0"
+var version = buildver.Version
 
 func main() {
 	serverAddr := flag.String("server", envOr("NETLAMA_SERVER", "localhost:50051"), "Address of the net-lama server (host:port)")

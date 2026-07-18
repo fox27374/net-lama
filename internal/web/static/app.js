@@ -73,6 +73,7 @@ async function showApp() {
   $("#login-view").classList.add("hidden");
   $("#app-view").classList.remove("hidden");
   $("#whoami").textContent = me.username + (me.isAdmin ? " · admin" : "");
+  $("#server-version").textContent = me.serverVersion ? "net-lama " + me.serverVersion : "";
   $("#nav-admin-btn").classList.toggle("hidden", !me.isAdmin);
   if (me.isAdmin) {
     tenants = await api("GET", "/api/v1/tenants");
@@ -570,6 +571,7 @@ async function loadAgents() {
       <td><span class="badge ${a.connected ? "on" : "off"}">${a.connected ? "connected" : "offline"}</span></td>
       <td><strong>${esc(a.name)}</strong></td>
       <td>${esc(a.siteName)}</td>
+      <td class="mono muted">${esc(a.version || "—")}</td>
       <td>${caps}</td>
       <td class="muted">${statsText(a.stats)}</td>
       <td class="muted">${memoryText(a.stats)}</td>

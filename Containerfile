@@ -5,12 +5,13 @@
 #   podman build --target agent-sensor  -t netlama-agent-sensor .   # + iw, mtr
 
 FROM docker.io/library/golang:1.25 AS build
+ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /out/netlama-server ./cmd/server && \
-    CGO_ENABLED=0 go build -o /out/netlama-agent ./cmd/agent
+RUN CGO_ENABLED=0 go build -ldflags "-X github.com/fox27374/net-lama/internal/version.Version=${VERSION}" -o /out/netlama-server ./cmd/server && \
+    CGO_ENABLED=0 go build -ldflags "-X github.com/fox27374/net-lama/internal/version.Version=${VERSION}" -o /out/netlama-agent ./cmd/agent
 
 FROM gcr.io/distroless/static-debian12:nonroot AS server
 COPY --from=build /out/netlama-server /netlama-server

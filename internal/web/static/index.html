@@ -67,6 +67,7 @@
     <div class="sidebar-footer">
       <select id="tenant-context" class="compact hidden" title="Tenant"></select>
       <span id="whoami" class="muted"></span>
+      <span id="server-version" class="muted mono"></span>
       <div class="sidebar-actions">
         <button id="theme-toggle" class="icon" title="Toggle dark mode" aria-label="Toggle dark mode"></button>
         <button id="logout" class="ghost">Sign out</button>
@@ -158,7 +159,7 @@
       </div>
       <div class="card table-card">
         <table id="agents-table">
-          <thead><tr><th>Status</th><th>Name</th><th>Site</th><th>Capabilities</th><th>CPU</th><th>Memory</th><th>Disk</th><th>Health</th><th></th></tr></thead>
+          <thead><tr><th>Status</th><th>Name</th><th>Site</th><th>Version</th><th>Capabilities</th><th>CPU</th><th>Memory</th><th>Disk</th><th>Health</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
         <p id="agents-empty" class="empty hidden">No agents yet. Create a site first, then add an agent to it.</p>

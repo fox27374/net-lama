@@ -121,7 +121,7 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] Alert-rule configuration UI as its own menu item
 - [x] Logo for the web UI (theme-aware transparent logo in sidebar/login +
       light/dark favicons)
-- [ ] Version tag reported by server and agent, shown in UI/API (incl. the
+- [x] Version tag reported by server and agent, shown in UI/API (incl. the
       agent overview listing each agent's version)
 - [ ] Configurable result retention: time-based (e.g. "keep 30 days") and/or
       per-test caps instead of the fixed 5000-results-per-agent limit, which

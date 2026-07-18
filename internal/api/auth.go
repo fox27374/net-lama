@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/fox27374/net-lama/internal/store"
+	"github.com/fox27374/net-lama/internal/version"
 )
 
 func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -54,5 +55,8 @@ func (a *API) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleMe(w http.ResponseWriter, r *http.Request, user *store.User) {
-	writeJSON(w, http.StatusOK, user)
+	writeJSON(w, http.StatusOK, struct {
+		*store.User
+		ServerVersion string `json:"serverVersion"`
+	}{user, version.Version})
 }
