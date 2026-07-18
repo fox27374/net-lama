@@ -376,29 +376,74 @@ async function renderDashboardWireless(siteId) {
     $("#db-wireless-empty").classList.toggle("hidden", rslt.length > 0);
 
     // Parse payloads and render networks
-    for (const result of rslt.slice(0, 20)) { // Show latest 20 networks
+    for (const result of rslt.slice(0, 20)) { // Show latest 20 agents
       try {
         const payload = typeof result.payload === "string" ? JSON.parse(result.payload) : result.payload;
         const wp = payload.wlanPassive || {};
-        const networks = (wp.networks || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
-        for (const net of networks.slice(0, 5)) { // Show top 5 per agent
+        const allNetworks = (wp.networks || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
+
+        // Group by SSID (non-empty only)
+        const groupedBySSID = new Map();
+        const hiddenNetworks = [];
+        for (const n of allNetworks) {
+          if (!n.ssid) {
+            hiddenNetworks.push(n);
+          } else {
+            if (!groupedBySSID.has(n.ssid)) {
+              groupedBySSID.set(n.ssid, []);
+            }
+            groupedBySSID.get(n.ssid).push(n);
+          }
+        }
+
+        // Render grouped SSIDs (show top 5)
+        let count = 0;
+        for (const [ssid, networks] of groupedBySSID.entries()) {
+          if (count >= 5) break;
+          const strongest = networks[0]; // Already sorted by RSSI
+          const rssi = strongest.rssiDbm || 0;
+          const sigClass = signalClass(rssi);
+          const apCountText = networks.length > 1 ? ` <span class="ap-count">${networks.length} APs</span>` : "";
+
           const tr = document.createElement("tr");
           tr.classList.add("clickable-row");
           tr.tabIndex = 0;
-          const rssi = net.rssiDbm || 0;
-          const sigClass = rssi >= -60 ? "healthy" : rssi >= -75 ? "degraded" : "failing";
           tr.innerHTML = `
             <td>${esc(result.agentName)}</td>
-            <td>${net.ssid ? esc(net.ssid) : '<span class="muted">(hidden)</span>'}</td>
-            <td class="mono">${esc(net.bssid)}</td>
-            <td class="num"><span class="health ${sigClass}">${rssi}</span></td>
-            <td class="num">${net.channel || "—"}</td>
-            <td>${net.security || "Open"}</td>`;
+            <td>${esc(ssid)}${apCountText}</td>
+            <td class="mono">${esc(strongest.bssid)}</td>
+            <td class="num"><span class="health ${sigClass}">${rssi}</span> ${renderSignalBar(rssi)}</td>
+            <td class="num">${strongest.channel || "—"}</td>
+            <td>${strongest.security || "Open"}</td>`;
           tr.addEventListener("click", () => navTo("wireless"));
           tr.addEventListener("keydown", (e) => {
             if (e.key === "Enter") navTo("wireless");
           });
           tbody.appendChild(tr);
+          count++;
+        }
+
+        // Show hidden networks (not grouped)
+        for (const n of hiddenNetworks) {
+          if (count >= 5) break;
+          const rssi = n.rssiDbm || 0;
+          const sigClass = signalClass(rssi);
+          const tr = document.createElement("tr");
+          tr.classList.add("clickable-row");
+          tr.tabIndex = 0;
+          tr.innerHTML = `
+            <td>${esc(result.agentName)}</td>
+            <td><span class="muted">(hidden)</span></td>
+            <td class="mono">${esc(n.bssid)}</td>
+            <td class="num"><span class="health ${sigClass}">${rssi}</span> ${renderSignalBar(rssi)}</td>
+            <td class="num">${n.channel || "—"}</td>
+            <td>${n.security || "Open"}</td>`;
+          tr.addEventListener("click", () => navTo("wireless"));
+          tr.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") navTo("wireless");
+          });
+          tbody.appendChild(tr);
+          count++;
         }
       } catch (e) {
         // Skip malformed results
@@ -1534,12 +1579,27 @@ function signalClass(rssi) {
   return "failing";
 }
 
+// signalBarPercent converts RSSI (dBm) to a 0-100% fill level.
+// Scale: -90 dBm → 0%, -30 dBm → 100% (clamped).
+function signalBarPercent(rssi) {
+  if (!rssi) rssi = -90;
+  const percent = ((rssi + 90) / 60) * 100;
+  return Math.max(0, Math.min(100, percent));
+}
+
+// renderSignalBar creates a signal strength bar HTML element.
+function renderSignalBar(rssi) {
+  const percent = signalBarPercent(rssi);
+  const color = signalClass(rssi);
+  return `<div class="signal-bar"><div class="signal-fill ${color}" style="width: ${percent}%"></div></div>`;
+}
+
 function renderWirelessNetworks(result) {
   const tbody = $("#wl-networks-table tbody");
   tbody.innerHTML = "";
 
   const wp = result && result.payload && result.payload.wlanPassive;
-  const networks = ((wp && wp.networks) || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
+  const allNetworks = ((wp && wp.networks) || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
 
   const meta = $("#wl-meta");
   meta.textContent = "";
@@ -1554,16 +1614,16 @@ function renderWirelessNetworks(result) {
       meta.appendChild(document.createTextNode("Last sweep failed: " + result.error));
     } else if (wp) {
       meta.appendChild(document.createTextNode(
-        `${networks.length} networks · ${(wp.channels || []).length} channels · ${wp.sweepMs || 0}ms sweep · ${new Date(result.time).toLocaleString()}`));
+        `${allNetworks.length} networks · ${(wp.channels || []).length} channels · ${wp.sweepMs || 0}ms sweep · ${new Date(result.time).toLocaleString()}`));
     }
   }
 
-  $("#wl-empty").classList.toggle("hidden", networks.length > 0 || !!result);
+  $("#wl-empty").classList.toggle("hidden", allNetworks.length > 0 || !!result);
   if (result && result.error) {
     $("#wl-empty").textContent = "Last sweep failed: " + result.error;
     $("#wl-empty").classList.remove("hidden");
   }
-  if (!networks.length) return;
+  if (!allNetworks.length) return;
 
   // Count clients per BSSID
   const clientsPerBssid = new Map();
@@ -1575,8 +1635,22 @@ function renderWirelessNetworks(result) {
     }
   }
 
-  // Render networks table
-  for (const n of networks) {
+  // Group networks by SSID (non-empty only)
+  const groupedBySSID = new Map(); // ssid → [networks]
+  const hiddenNetworks = [];
+  for (const n of allNetworks) {
+    if (!n.ssid) {
+      hiddenNetworks.push(n);
+    } else {
+      if (!groupedBySSID.has(n.ssid)) {
+        groupedBySSID.set(n.ssid, []);
+      }
+      groupedBySSID.get(n.ssid).push(n);
+    }
+  }
+
+  // Helper to render a single network row
+  function renderNetworkRow(n, isChild = false) {
     const freq = n.freqMhz || 0;
     const band = freq >= 5955 ? "6 GHz" : freq >= 5000 ? "5 GHz" : "2.4 GHz";
     const rssiClass = signalClass(n.rssiDbm);
@@ -1584,17 +1658,78 @@ function renderWirelessNetworks(result) {
     const lastSeen = result ? new Date(result.time).toLocaleTimeString() : "";
 
     const tr = document.createElement("tr");
+    if (isChild) tr.className = "wl-child-row";
     tr.innerHTML = `
-      <td>${n.ssid ? esc(n.ssid) : '<span class="muted">(hidden)</span>'}</td>
+      <td>${isChild ? "&nbsp;&nbsp;" : ""}${n.ssid ? esc(n.ssid) : '<span class="muted">(hidden)</span>'}</td>
       <td class="mono">${esc(n.bssid)}</td>
-      <td class="num"><span class="health ${rssiClass}">${n.rssiDbm || 0}</span></td>
+      <td class="num"><span class="health ${rssiClass}">${n.rssiDbm || 0}</span> ${renderSignalBar(n.rssiDbm)}</td>
       <td class="num">${n.channel || "—"}</td>
       <td>${band}</td>
       <td>${n.standards || "—"}</td>
       <td>${n.security || "Open"}</td>
       <td class="num">${clients}</td>
       <td class="muted nowrap">${lastSeen}</td>`;
-    tbody.appendChild(tr);
+    return tr;
+  }
+
+  // Render grouped SSIDs
+  for (const [ssid, networks] of groupedBySSID.entries()) {
+    if (networks.length === 1) {
+      // Single AP: render as plain row without chevron
+      tbody.appendChild(renderNetworkRow(networks[0]));
+    } else {
+      // Multiple APs: create group row with chevron and count
+      const strongest = networks[0]; // Already sorted by RSSI
+      const freq = strongest.freqMhz || 0;
+      const band = freq >= 5955 ? "6 GHz" : freq >= 5000 ? "5 GHz" : "2.4 GHz";
+      const rssiClass = signalClass(strongest.rssiDbm);
+      const clients = clientsPerBssid.get(strongest.bssid) || 0;
+      const lastSeen = result ? new Date(result.time).toLocaleTimeString() : "";
+
+      const groupTr = document.createElement("tr");
+      groupTr.className = "wl-group-row";
+      groupTr.innerHTML = `
+        <td><span class="chevron">▸</span> ${esc(ssid)} <span class="ap-count">${networks.length} APs</span></td>
+        <td class="mono">${esc(strongest.bssid)}</td>
+        <td class="num"><span class="health ${rssiClass}">${strongest.rssiDbm || 0}</span> ${renderSignalBar(strongest.rssiDbm)}</td>
+        <td class="num">${strongest.channel || "—"}</td>
+        <td>${band}</td>
+        <td>${strongest.standards || "—"}</td>
+        <td>${strongest.security || "Open"}</td>
+        <td class="num">${clients}</td>
+        <td class="muted nowrap">${lastSeen}</td>`;
+      groupTr.style.cursor = "pointer";
+      tbody.appendChild(groupTr);
+
+      // Store expanded state in the row
+      let expanded = false;
+      const childRows = [];
+      for (let i = 1; i < networks.length; i++) {
+        const childTr = renderNetworkRow(networks[i], true);
+        childRows.push(childTr);
+        childTr.classList.add("hidden");
+      }
+
+      // Toggle expansion on click
+      groupTr.addEventListener("click", () => {
+        expanded = !expanded;
+        const chevron = groupTr.querySelector(".chevron");
+        chevron.textContent = expanded ? "▾" : "▸";
+        for (const childTr of childRows) {
+          childTr.classList.toggle("hidden", !expanded);
+        }
+      });
+
+      // Add child rows after the group row
+      for (const childTr of childRows) {
+        tbody.appendChild(childTr);
+      }
+    }
+  }
+
+  // Render hidden networks (not grouped)
+  for (const n of hiddenNetworks) {
+    tbody.appendChild(renderNetworkRow(n));
   }
 }
 

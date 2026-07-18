@@ -988,6 +988,54 @@ svg { display: inline-block; }
 .log-level.debug { color: var(--muted-solid); }
 .log-msg { font-family: var(--mono); font-size: var(--text-sm); word-break: break-word; }
 
+/* Wireless signal bar */
+.signal-bar {
+  display: inline-block;
+  width: 60px;
+  height: 12px;
+  background: var(--border);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  vertical-align: middle;
+  margin-left: var(--space-1);
+}
+.signal-fill {
+  height: 100%;
+  border-radius: var(--radius-xs);
+  transition: width 0.2s ease;
+}
+.signal-fill.healthy { background: var(--ok); }
+.signal-fill.degraded { background: var(--warn); }
+.signal-fill.failing { background: var(--bad); }
+
+/* Wireless table grouping */
+.wl-group-row {
+  font-weight: 500;
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.wl-group-row:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.wl-group-row .chevron {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  user-select: none;
+}
+.wl-group-row .ap-count {
+  font-size: var(--text-sm);
+  color: var(--muted-solid);
+  font-weight: normal;
+  margin-left: var(--space-1);
+}
+.wl-child-row {
+  background: color-mix(in srgb, var(--accent) 2%, transparent);
+  opacity: 0.8;
+}
+.wl-child-row.hidden {
+  display: none;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   * {
