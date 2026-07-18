@@ -452,6 +452,7 @@ func (a *Agent) runWlanActive(ctx context.Context, spec *pb.TestSpec, params *pb
 		Demo:           probe.DemoMode(),
 		Success:        out.Success,
 		FailedStep:     out.FailedStep,
+		ScanMs:         out.ScanMs,
 		AssociateMs:    out.AssociateMs,
 		AuthenticateMs: out.AuthenticateMs,
 		DhcpMs:         out.DHCPMs,

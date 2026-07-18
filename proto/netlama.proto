@@ -268,7 +268,8 @@ message WlanActiveResult {
   double throughput_mbps = 13;
   double throughput_ms = 14;  // duration of the throughput download
   int32 rssi_dbm = 15;        // signal to the AP during the test
-  double total_ms = 16;       // whole test wall time
+  double total_ms = 16;       // scan through last step (excludes teardown/mode restore)
+  double scan_ms = 17;        // supplicant start → SSID found (scan phase)
 }
 
 message WlanPassiveResult {

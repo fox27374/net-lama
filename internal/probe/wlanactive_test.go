@@ -48,7 +48,9 @@ func TestParseWpaEvent(t *testing.T) {
 		{"wlan1: CTRL-EVENT-ASSOC-REJECT bssid=aa:bb:cc:dd:ee:ff status_code=17", wpaEventAssocFail, ""},
 		{"wlan1: CTRL-EVENT-SSID-TEMP-DISABLED id=0 ssid=\"lab\" auth_failures=1 reason=WRONG_KEY", wpaEventAuthFail, ""},
 		{"wlan1: CTRL-EVENT-EAP-FAILURE EAP authentication failed", wpaEventAuthFail, ""},
-		{"wlan1: SME: Trying to authenticate with dc:ce:c1:2c:b2:cf", wpaEventNone, ""},
+		{"wlan1: SME: Trying to authenticate with dc:ce:c1:2c:b2:cf", wpaEventTrying, ""},
+		{"wlan1: Trying to associate with dc:ce:c1:2c:b2:cf (SSID='lab' freq=5500 MHz)", wpaEventTrying, ""},
+		{"wlan1: Scan completed in 8.2 seconds", wpaEventNone, ""},
 	}
 	for _, tc := range tests {
 		ev, bssid := parseWpaEvent(tc.line)

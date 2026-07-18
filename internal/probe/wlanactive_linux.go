@@ -27,8 +27,6 @@ const (
 
 func wlanActiveImpl(ctx context.Context, iface string, opts WlanActiveOpts) (*WlanActiveOutcome, error) {
 	out := &WlanActiveOutcome{Interface: iface, SSID: opts.SSID}
-	start := time.Now()
-	defer func() { out.TotalMs = float64(time.Since(start).Microseconds()) / 1000 }()
 
 	// Remember and restore the interface mode (monitor sensors share the
 	// radio with the passive sweep; the caller serializes on wlanMu).
@@ -80,8 +78,15 @@ func wlanActiveImpl(ctx context.Context, iface string, opts WlanActiveOpts) (*Wl
 		cmd.Wait()
 	}()
 
+	// TotalMs spans supplicant start (scan begin) through the last completed
+	// step — teardown and mode restore are harness overhead, not connection
+	// experience, so they are excluded.
 	connStart := time.Now()
-	var assocAt time.Time
+	done := func() (*WlanActiveOutcome, error) {
+		out.TotalMs = float64(time.Since(connStart).Microseconds()) / 1000
+		return out, nil
+	}
+	var tryingAt, assocAt time.Time
 	events := make(chan struct {
 		ev    wpaEvent
 		bssid string
@@ -104,16 +109,26 @@ connect:
 	for {
 		select {
 		case <-connectCtx.Done():
-			return out, nil // timed out in associate or authenticate step
+			return done() // timed out in associate or authenticate step
 		case e, ok := <-events:
 			if !ok {
-				return out, nil // supplicant exited without connecting
+				return done() // supplicant exited without connecting
 			}
 			switch e.ev {
+			case wpaEventTrying:
+				// SSID found — everything before this was the scan phase
+				if tryingAt.IsZero() {
+					tryingAt = time.Now()
+					out.ScanMs = float64(tryingAt.Sub(connStart).Microseconds()) / 1000
+				}
 			case wpaEventAssociated:
 				if assocAt.IsZero() {
 					assocAt = time.Now()
-					out.AssociateMs = float64(assocAt.Sub(connStart).Microseconds()) / 1000
+					from := tryingAt
+					if from.IsZero() {
+						from = connStart
+					}
+					out.AssociateMs = float64(assocAt.Sub(from).Microseconds()) / 1000
 					out.BSSID = strings.ToLower(e.bssid)
 					out.FailedStep = "authenticate"
 				}
@@ -125,10 +140,10 @@ connect:
 				break connect
 			case wpaEventAssocFail:
 				out.FailedStep = "associate"
-				return out, nil
+				return done()
 			case wpaEventAuthFail:
 				out.FailedStep = "authenticate"
-				return out, nil
+				return done()
 			}
 		}
 	}
@@ -140,14 +155,17 @@ connect:
 	dhcpStart := time.Now()
 	dhcpCtx, cancelDHCP := context.WithTimeout(ctx, wlanActiveDHCPTimeout)
 	defer cancelDHCP()
-	client, err := nclient4.New(iface)
+	// Short retransmit: the first DISCOVER right after the key handshake is
+	// often lost while the link settles; the default 5s timeout dominated the
+	// measured DHCP time (observed as a constant ~5.1s). 1.5s x 6 retries.
+	client, err := nclient4.New(iface, nclient4.WithTimeout(1500*time.Millisecond), nclient4.WithRetry(6))
 	if err != nil {
-		return out, nil
+		return done()
 	}
 	lease, err := client.Request(dhcpCtx)
 	client.Close()
 	if err != nil || lease == nil || lease.ACK == nil {
-		return out, nil
+		return done()
 	}
 	out.DHCPMs = float64(time.Since(dhcpStart).Microseconds()) / 1000
 	out.IP = lease.ACK.YourIPAddr.String()
@@ -162,24 +180,24 @@ connect:
 	if opts.ThroughputURL == "" {
 		out.Success = true
 		out.FailedStep = ""
-		return out, nil
+		return done()
 	}
 	out.FailedStep = "throughput"
 	maskBits, _ := net.IPMask(net.ParseIP(out.Netmask).To4()).Size()
 	if err := setupTestRoute(ctx, iface, out.IP, maskBits, out.Gateway); err != nil {
-		return out, nil
+		return done()
 	}
 	defer teardownTestRoute(context.WithoutCancel(ctx), iface, out.IP, maskBits)
 
 	mbps, ms, err := downloadVia(ctx, out.IP, opts.ThroughputURL)
 	if err != nil {
-		return out, nil
+		return done()
 	}
 	out.ThroughputMbps = mbps
 	out.ThroughputMs = ms
 	out.Success = true
 	out.FailedStep = ""
-	return out, nil
+	return done()
 }
 
 // setupTestRoute assigns the leased address and installs a source-routed

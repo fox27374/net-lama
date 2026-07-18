@@ -2193,7 +2193,8 @@ type WlanActiveResult struct {
 	ThroughputMbps float64                `protobuf:"fixed64,13,opt,name=throughput_mbps,json=throughputMbps,proto3" json:"throughput_mbps,omitempty"`
 	ThroughputMs   float64                `protobuf:"fixed64,14,opt,name=throughput_ms,json=throughputMs,proto3" json:"throughput_ms,omitempty"` // duration of the throughput download
 	RssiDbm        int32                  `protobuf:"varint,15,opt,name=rssi_dbm,json=rssiDbm,proto3" json:"rssi_dbm,omitempty"`                 // signal to the AP during the test
-	TotalMs        float64                `protobuf:"fixed64,16,opt,name=total_ms,json=totalMs,proto3" json:"total_ms,omitempty"`                // whole test wall time
+	TotalMs        float64                `protobuf:"fixed64,16,opt,name=total_ms,json=totalMs,proto3" json:"total_ms,omitempty"`                // scan through last step (excludes teardown/mode restore)
+	ScanMs         float64                `protobuf:"fixed64,17,opt,name=scan_ms,json=scanMs,proto3" json:"scan_ms,omitempty"`                   // supplicant start → SSID found (scan phase)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2336,6 +2337,13 @@ func (x *WlanActiveResult) GetRssiDbm() int32 {
 func (x *WlanActiveResult) GetTotalMs() float64 {
 	if x != nil {
 		return x.TotalMs
+	}
+	return 0
+}
+
+func (x *WlanActiveResult) GetScanMs() float64 {
+	if x != nil {
+		return x.ScanMs
 	}
 	return 0
 }
@@ -3411,7 +3419,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bstations\x18\x03 \x03(\v2\x17.netlama.v1.WlanStationR\bstations\x127\n" +
 	"\bchannels\x18\x04 \x03(\v2\x1b.netlama.v1.WlanChannelStatR\bchannels\x12\x19\n" +
 	"\bsweep_ms\x18\x05 \x01(\rR\asweepMs\x123\n" +
-	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xd6\x03\n" +
+	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xef\x03\n" +
 	"\x10WlanActiveResult\x12\x1c\n" +
 	"\tinterface\x18\x01 \x01(\tR\tinterface\x12\x12\n" +
 	"\x04ssid\x18\x02 \x01(\tR\x04ssid\x12\x14\n" +
@@ -3430,7 +3438,8 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\x0fthroughput_mbps\x18\r \x01(\x01R\x0ethroughputMbps\x12#\n" +
 	"\rthroughput_ms\x18\x0e \x01(\x01R\fthroughputMs\x12\x19\n" +
 	"\brssi_dbm\x18\x0f \x01(\x05R\arssiDbm\x12\x19\n" +
-	"\btotal_ms\x18\x10 \x01(\x01R\atotalMs\"\x83\x02\n" +
+	"\btotal_ms\x18\x10 \x01(\x01R\atotalMs\x12\x17\n" +
+	"\ascan_ms\x18\x11 \x01(\x01R\x06scanMs\"\x83\x02\n" +
 	"\x11WlanPassiveResult\x12\x1c\n" +
 	"\tinterface\x18\x01 \x01(\tR\tinterface\x12\x12\n" +
 	"\x04demo\x18\x02 \x01(\bR\x04demo\x123\n" +

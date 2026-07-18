@@ -10,6 +10,7 @@ func demoWlanActive(iface string, opts WlanActiveOpts) *WlanActiveOutcome {
 		SSID:           opts.SSID,
 		BSSID:          "a0:f8:49:74:8b:20",
 		Success:        true,
+		ScanMs:         float64(1500 + rand.Intn(2500)),
 		AssociateMs:    float64(20 + rand.Intn(40)),
 		AuthenticateMs: float64(30 + rand.Intn(80)),
 		DHCPMs:         float64(50 + rand.Intn(200)),
@@ -22,6 +23,6 @@ func demoWlanActive(iface string, opts WlanActiveOpts) *WlanActiveOutcome {
 		out.ThroughputMbps = float64(120 + rand.Intn(180))
 		out.ThroughputMs = float64(3000 + rand.Intn(2000))
 	}
-	out.TotalMs = out.AssociateMs + out.AuthenticateMs + out.DHCPMs + out.ThroughputMs
+	out.TotalMs = out.ScanMs + out.AssociateMs + out.AuthenticateMs + out.DHCPMs + out.ThroughputMs
 	return out
 }

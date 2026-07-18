@@ -1244,7 +1244,7 @@ function resultDetails(r) {
       return `${esc(w.ssid)} · <span class="error">${esc(w.failedStep || "failed")}</span>` +
         (w.associateMs ? ` · assoc ${fmt(w.associateMs)} ms` : "");
     }
-    let out = `${esc(w.ssid)} · assoc ${fmt(w.associateMs)} ms · auth ${fmt(w.authenticateMs)} ms · dhcp ${fmt(w.dhcpMs)} ms · ${esc(w.ip)}`;
+    let out = `${esc(w.ssid)}${w.scanMs ? ` · scan ${fmt(w.scanMs / 1000)} s` : ""} · assoc ${fmt(w.associateMs)} ms · auth ${fmt(w.authenticateMs)} ms · dhcp ${fmt(w.dhcpMs)} ms · ${esc(w.ip)}`;
     if (w.gateway) out += ` gw ${esc(w.gateway)}`;
     if (w.throughputMbps) out += ` · ${fmt(w.throughputMbps)} Mbps`;
     return out;
@@ -1665,6 +1665,8 @@ async function renderWirelessActive(agent) {
     ["Gateway", wa.gateway ? `<span class="mono">${esc(wa.gateway)}</span>` : "—"],
     ["Signal", wa.rssiDbm ? `<span class="health ${signalClass(wa.rssiDbm)}">${wa.rssiDbm} dBm</span>` : "—"],
     ["Throughput", wa.throughputMbps ? `${fmt(wa.throughputMbps)} Mbps` : "—"],
+    ["Connect time", `${fmt((wa.associateMs || 0) + (wa.authenticateMs || 0) + (wa.dhcpMs || 0))} ms` +
+      (wa.scanMs ? ` <span class="muted">(+ ${fmt(wa.scanMs / 1000)} s scan)</span>` : "")],
     ["Total", `${fmt(wa.totalMs)} ms`],
   ];
   $("#wl-active-summary").innerHTML = rows
@@ -1679,11 +1681,15 @@ async function renderWirelessActive(agent) {
 // bar offset by the cumulative time of the previous steps.
 function renderWlActiveWaterfall(wa) {
   const container = $("#wl-active-waterfall");
-  const steps = [
+  const steps = [];
+  if (wa.scanMs) {
+    steps.push({ name: "Scan", ms: wa.scanMs, key: "scan" });
+  }
+  steps.push(
     { name: "Association", ms: wa.associateMs || 0, key: "associate" },
     { name: "Authentication", ms: wa.authenticateMs || 0, key: "authenticate" },
     { name: "DHCP", ms: wa.dhcpMs || 0, key: "dhcp" },
-  ];
+  );
   if (wa.throughputMs) {
     steps.push({ name: "Throughput", ms: wa.throughputMs, key: "throughput" });
   }
@@ -1699,10 +1705,9 @@ function renderWlActiveWaterfall(wa) {
   let cumulative = 0;
   for (const s of steps) {
     baseData.push(cumulative);
-    barData.push({
-      value: s.ms,
-      itemStyle: { color: wa.failedStep === s.key ? badColor : accentColor },
-    });
+    // Scan is SSID discovery, not connection work — muted to set it apart
+    const color = wa.failedStep === s.key ? badColor : s.key === "scan" ? mutedColor : accentColor;
+    barData.push({ value: s.ms, itemStyle: { color } });
     cumulative += s.ms;
   }
   const maxNice = niceMax(Math.max(cumulative, 1) * 1.1);

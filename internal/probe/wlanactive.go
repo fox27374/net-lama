@@ -24,6 +24,7 @@ type WlanActiveOutcome struct {
 	BSSID          string
 	Success        bool
 	FailedStep     string // "associate", "authenticate", "dhcp", "throughput"
+	ScanMs         float64 // supplicant start → SSID found
 	AssociateMs    float64
 	AuthenticateMs float64
 	DHCPMs         float64
@@ -89,6 +90,7 @@ type wpaEvent int
 
 const (
 	wpaEventNone       wpaEvent = iota
+	wpaEventTrying              // SSID found, starting to authenticate/associate
 	wpaEventAssociated          // 802.11 association done
 	wpaEventConnected           // key handshake / EAP completed
 	wpaEventAssocFail           // association rejected / not found
@@ -99,6 +101,9 @@ const (
 // BSSID when present.
 func parseWpaEvent(line string) (wpaEvent, string) {
 	switch {
+	case strings.Contains(line, "Trying to associate"),
+		strings.Contains(line, "Trying to authenticate"):
+		return wpaEventTrying, ""
 	case strings.Contains(line, "Associated with "):
 		bssid := ""
 		if i := strings.Index(line, "Associated with "); i >= 0 {

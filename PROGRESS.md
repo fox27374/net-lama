@@ -868,6 +868,22 @@ What has been done so far, in chronological order. Planned work lives in
   red. Hidden entirely when no wlan_active test produces results for that
   agent. Theme-toggle and resize re-render like the Path waterfall.
 
+## 2026-07-18 — wlan_active timing accuracy
+
+- **Investigated a reported ~16s total** on the first real `wlan_active` runs
+  (rp01, SSID atalt-test: assoc ~9.3s, dhcp ~5.08s constant, total ~16.8s) —
+  three measurement artifacts, not a slow WLAN:
+  1. "Association" was timed from wpa_supplicant start and included the full
+     SSID scan (~9s on the MT7612U). New `scanMs` field (proto 17) splits the
+     scan phase (start → "Trying to associate/authenticate"); `associateMs`
+     now measures only the real 802.11 exchange.
+  2. DHCP's constant ~5.08s was a lost first DISCOVER plus nclient4's 5s
+     retransmit default; now 1.5s timeout × 6 retries.
+  3. `totalMs` included teardown and monitor-mode restore (~2.3s); it now
+     spans supplicant start through the last completed step only.
+- UI: waterfall gets a muted "Scan" bar; active card shows "Connect time"
+  (assoc+auth+dhcp, with scan in parentheses); Results summary includes scan.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
