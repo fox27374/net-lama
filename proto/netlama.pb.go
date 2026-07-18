@@ -2146,6 +2146,12 @@ type WlanNetwork struct {
 	LoadChannelUtilPct float64                `protobuf:"fixed64,14,opt,name=load_channel_util_pct,json=loadChannelUtilPct,proto3" json:"load_channel_util_pct,omitempty"` // AP-reported channel utilization 0-100
 	SecurityDetail     string                 `protobuf:"bytes,15,opt,name=security_detail,json=securityDetail,proto3" json:"security_detail,omitempty"`                   // AKM + cipher, e.g. "PSK+SAE · CCMP"
 	Roaming            string                 `protobuf:"bytes,16,opt,name=roaming,proto3" json:"roaming,omitempty"`                                                       // 802.11 roaming amendments seen, e.g. "k/r/v"
+	Mfp                string                 `protobuf:"bytes,17,opt,name=mfp,proto3" json:"mfp,omitempty"`                                                               // management frame protection: "", "capable", "required"
+	GroupCipher        string                 `protobuf:"bytes,18,opt,name=group_cipher,json=groupCipher,proto3" json:"group_cipher,omitempty"`                            // RSN group cipher, e.g. "CCMP"
+	DtimPeriod         uint32                 `protobuf:"varint,19,opt,name=dtim_period,json=dtimPeriod,proto3" json:"dtim_period,omitempty"`                              // DTIM period from the TIM element
+	Wps                bool                   `protobuf:"varint,20,opt,name=wps,proto3" json:"wps,omitempty"`                                                              // WPS vendor element present
+	Streams            uint32                 `protobuf:"varint,21,opt,name=streams,proto3" json:"streams,omitempty"`                                                      // spatial streams from HT/VHT MCS maps (0 = unknown)
+	MaxRateMbps        float64                `protobuf:"fixed64,22,opt,name=max_rate_mbps,json=maxRateMbps,proto3" json:"max_rate_mbps,omitempty"`                        // estimated max PHY rate from gen/width/streams
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -2290,6 +2296,48 @@ func (x *WlanNetwork) GetRoaming() string {
 		return x.Roaming
 	}
 	return ""
+}
+
+func (x *WlanNetwork) GetMfp() string {
+	if x != nil {
+		return x.Mfp
+	}
+	return ""
+}
+
+func (x *WlanNetwork) GetGroupCipher() string {
+	if x != nil {
+		return x.GroupCipher
+	}
+	return ""
+}
+
+func (x *WlanNetwork) GetDtimPeriod() uint32 {
+	if x != nil {
+		return x.DtimPeriod
+	}
+	return 0
+}
+
+func (x *WlanNetwork) GetWps() bool {
+	if x != nil {
+		return x.Wps
+	}
+	return false
+}
+
+func (x *WlanNetwork) GetStreams() uint32 {
+	if x != nil {
+		return x.Streams
+	}
+	return 0
+}
+
+func (x *WlanNetwork) GetMaxRateMbps() float64 {
+	if x != nil {
+		return x.MaxRateMbps
+	}
+	return 0
 }
 
 type WlanStation struct {
@@ -3054,7 +3102,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bstations\x18\x03 \x03(\v2\x17.netlama.v1.WlanStationR\bstations\x127\n" +
 	"\bchannels\x18\x04 \x03(\v2\x1b.netlama.v1.WlanChannelStatR\bchannels\x12\x19\n" +
 	"\bsweep_ms\x18\x05 \x01(\rR\asweepMs\x123\n" +
-	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xfe\x03\n" +
+	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xa4\x05\n" +
 	"\vWlanNetwork\x12\x14\n" +
 	"\x05bssid\x18\x01 \x01(\tR\x05bssid\x12\x12\n" +
 	"\x04ssid\x18\x02 \x01(\tR\x04ssid\x12\x18\n" +
@@ -3072,7 +3120,14 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\rload_stations\x18\r \x01(\rR\floadStations\x121\n" +
 	"\x15load_channel_util_pct\x18\x0e \x01(\x01R\x12loadChannelUtilPct\x12'\n" +
 	"\x0fsecurity_detail\x18\x0f \x01(\tR\x0esecurityDetail\x12\x18\n" +
-	"\aroaming\x18\x10 \x01(\tR\aroaming\"\x8e\x02\n" +
+	"\aroaming\x18\x10 \x01(\tR\aroaming\x12\x10\n" +
+	"\x03mfp\x18\x11 \x01(\tR\x03mfp\x12!\n" +
+	"\fgroup_cipher\x18\x12 \x01(\tR\vgroupCipher\x12\x1f\n" +
+	"\vdtim_period\x18\x13 \x01(\rR\n" +
+	"dtimPeriod\x12\x10\n" +
+	"\x03wps\x18\x14 \x01(\bR\x03wps\x12\x18\n" +
+	"\astreams\x18\x15 \x01(\rR\astreams\x12\"\n" +
+	"\rmax_rate_mbps\x18\x16 \x01(\x01R\vmaxRateMbps\"\x8e\x02\n" +
 	"\vWlanStation\x12\x10\n" +
 	"\x03mac\x18\x01 \x01(\tR\x03mac\x12\x14\n" +
 	"\x05bssid\x18\x02 \x01(\tR\x05bssid\x12\x12\n" +

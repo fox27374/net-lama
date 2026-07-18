@@ -53,6 +53,10 @@ Planned work, roughly grouped. Not ordered by priority yet.
       vendor (embedded IEEE OUI registry via `GET /api/v1/oui`), channel
       width, beacon interval, country, BSS load, AKM/cipher detail,
       802.11k/r/v roaming, and the clients observed on that BSSID
+- [x] Wireless pro view: SSID/band filters on the networks table, a client
+      stations table (MAC/vendor/network/signal/rate/MCS/frames), and more
+      beacon detail — MFP (802.11w), group cipher, DTIM period, WPS,
+      spatial streams, estimated max PHY rate
 - [x] Traceroute / path analysis Phase 1: mtr-based path test (TCP/ICMP/UDP),
       per-hop RTT and loss, failure localization, hop-chain Path visualization
 - [ ] SaaS / cloud service tests: reachability and quality checks for online

@@ -258,6 +258,12 @@ message WlanNetwork {
   double load_channel_util_pct = 14; // AP-reported channel utilization 0-100
   string security_detail = 15;   // AKM + cipher, e.g. "PSK+SAE · CCMP"
   string roaming = 16;           // 802.11 roaming amendments seen, e.g. "k/r/v"
+  string mfp = 17;               // management frame protection: "", "capable", "required"
+  string group_cipher = 18;      // RSN group cipher, e.g. "CCMP"
+  uint32 dtim_period = 19;       // DTIM period from the TIM element
+  bool wps = 20;                 // WPS vendor element present
+  uint32 streams = 21;           // spatial streams from HT/VHT MCS maps (0 = unknown)
+  double max_rate_mbps = 22;     // estimated max PHY rate from gen/width/streams
 }
 
 message WlanStation {

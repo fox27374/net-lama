@@ -772,6 +772,27 @@ What has been done so far, in chronological order. Planned work lives in
 - **Verification**: build/vet/tests green; e2e with demo agent confirms the new
   payload fields via `/api/v1/results` and vendor resolution via `/api/v1/oui`.
 
+## 2026-07-18 — Wireless pro view: filters, stations table, MFP & more
+
+- **More beacon detail** (`internal/probe/wlansense.go`): MFP status from RSN
+  capabilities (MFPC/MFPR bits → "capable"/"required", shown as 802.11w),
+  group cipher, DTIM period (TIM IE), WPS presence (Microsoft vendor IE type 4),
+  spatial streams (HT RX MCS bitmask / VHT Rx MCS map), and an estimated max
+  PHY rate (top-MCS short-GI per-stream table by generation × width; legacy APs
+  use the highest advertised supported rate). Proto fields 17–22; demo data and
+  tests (`TestParseBeaconBodyProDetails`, `TestParseBeaconBodyVHTStreamsAndLegacyRate`)
+  updated.
+- **Wireless UI**: SSID text filter + per-band (2.4/5/6 GHz) checkboxes on the
+  networks table with filtered/total counts; new "Client stations" card listing
+  every station from the sweep (MAC, vendor, network, signal, rate, MCS, frames,
+  last seen; associated vs. probing in the meta line). Detail panel now shows
+  group cipher, management frame protection, WPS (flagged as degraded when
+  enabled), spatial streams, max PHY rate, and DTIM period; roaming amendments
+  renamed to their real names — Radio Measurement (802.11k), Fast BSS
+  Transition (802.11r), BSS Transition Mgmt (802.11v).
+- **Verification**: build/vet/tests green; e2e demo agent payload carries
+  mfp/groupCipher/dtimPeriod/streams/maxRateMbps.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

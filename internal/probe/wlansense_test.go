@@ -496,3 +496,58 @@ func TestParseBeaconBodyVHTWidth(t *testing.T) {
 		t.Errorf("plain: expected 20, got %d", w)
 	}
 }
+
+func TestParseBeaconBodyProDetails(t *testing.T) {
+	elems := []byte{}
+	elems = append(elems, 1, 4, 0x82, 0x84, 0x0B, 0x6C)  // rates: 1/2/5.5/54(basic)
+	elems = append(elems, 5, 4, 0, 3, 0, 0)              // TIM: DTIM period 3
+	// RSN with group TKIP, pairwise CCMP, AKM PSK, caps MFPC|MFPR
+	rsn := []byte{1, 0, 0x00, 0x0F, 0xAC, 2, 1, 0, 0x00, 0x0F, 0xAC, 4, 1, 0, 0x00, 0x0F, 0xAC, 2, 0xC0, 0x00}
+	elems = append(elems, append([]byte{48, byte(len(rsn))}, rsn...)...)
+	// HT cap: 2 RX MCS bitmask bytes set → 2 streams
+	htcap := make([]byte, 26)
+	htcap[3], htcap[4] = 0xFF, 0xFF
+	elems = append(elems, append([]byte{45, byte(len(htcap))}, htcap...)...)
+	elems = append(elems, 61, 3, 6, 0x01, 0)             // HT op → 40 MHz
+	elems = append(elems, 221, 5, 0x00, 0x50, 0xF2, 0x04, 0x10) // WPS
+
+	info := parseBeaconBody(fixedBody(true, elems...))
+	if info.MFP != "required" {
+		t.Errorf("mfp: expected required, got %q", info.MFP)
+	}
+	if info.GroupCipher != "TKIP" {
+		t.Errorf("group cipher: expected TKIP, got %q", info.GroupCipher)
+	}
+	if info.DTIMPeriod != 3 {
+		t.Errorf("dtim: expected 3, got %d", info.DTIMPeriod)
+	}
+	if !info.WPS {
+		t.Error("wps: expected true")
+	}
+	if info.Streams != 2 {
+		t.Errorf("streams: expected 2, got %d", info.Streams)
+	}
+	if info.MaxRateMbps != 300 { // n, 40 MHz, 2 streams = 150*2
+		t.Errorf("max rate: expected 300, got %f", info.MaxRateMbps)
+	}
+}
+
+func TestParseBeaconBodyVHTStreamsAndLegacyRate(t *testing.T) {
+	// VHT cap with Rx MCS map: 4 streams supported (0xFFAA → pairs 2,2,2,2,3,3,3,3... check)
+	vhtcap := make([]byte, 12)
+	vhtcap[4], vhtcap[5] = 0xAA, 0xFF // streams 1-4 = MCS0-9 (0b10), 5-8 unsupported (0b11)
+	body := fixedBody(false, append(append([]byte{191, byte(len(vhtcap))}, vhtcap...), 192, 5, 1, 42, 0, 0, 0)...)
+	info := parseBeaconBody(body)
+	if info.Streams != 4 {
+		t.Errorf("vht streams: expected 4, got %d", info.Streams)
+	}
+	if info.MaxRateMbps != 433.3*4 {
+		t.Errorf("max rate: expected %f, got %f", 433.3*4, info.MaxRateMbps)
+	}
+
+	// Legacy-only AP: max from supported rates
+	legacy := fixedBody(false, 1, 4, 0x82, 0x84, 0x0B, 0x6C)
+	if r := parseBeaconBody(legacy).MaxRateMbps; r != 54 {
+		t.Errorf("legacy rate: expected 54, got %f", r)
+	}
+}

@@ -240,6 +240,11 @@
         <div class="card table-card">
           <div class="section-head">
             <h3>Nearby networks</h3>
+            <input type="search" id="wl-filter-ssid" class="compact" placeholder="Filter SSID…">
+            <label class="wl-band-check"><input type="checkbox" id="wl-band-24" checked> 2.4 GHz</label>
+            <label class="wl-band-check"><input type="checkbox" id="wl-band-5" checked> 5 GHz</label>
+            <label class="wl-band-check"><input type="checkbox" id="wl-band-6" checked> 6 GHz</label>
+            <span class="spacer"></span>
             <span class="muted" id="wl-meta"></span>
           </div>
           <table id="wl-networks-table">
@@ -276,6 +281,28 @@
               <tbody></tbody>
             </table>
           </div>
+        </div>
+        <div class="card table-card">
+          <div class="section-head">
+            <h3>Client stations</h3>
+            <span class="muted" id="wl-stations-meta"></span>
+          </div>
+          <table id="wl-stations-table">
+            <thead>
+              <tr>
+                <th>MAC</th>
+                <th>Vendor</th>
+                <th>Network</th>
+                <th class="num">Signal (dBm)</th>
+                <th class="num">Rate (Mbps)</th>
+                <th class="num">MCS</th>
+                <th class="num">Frames</th>
+                <th>Last seen</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p id="wl-stations-empty" class="empty hidden">No client stations seen in the last sweep.</p>
         </div>
       </div>
     </section>

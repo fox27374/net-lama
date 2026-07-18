@@ -1035,6 +1035,18 @@ svg { display: inline-block; }
 .wl-child-row.hidden {
   display: none;
 }
+.wl-band-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--muted-solid);
+  white-space: nowrap;
+  cursor: pointer;
+}
+#wl-filter-ssid {
+  max-width: 180px;
+}
 #wl-detail {
   margin-top: var(--space-4);
 }

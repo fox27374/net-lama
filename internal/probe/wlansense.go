@@ -59,6 +59,12 @@ type WlanNetwork struct {
 	LoadChannelUtilPct float64 // AP-reported channel utilization 0-100
 	SecurityDetail     string  // AKM + cipher, e.g. "PSK+SAE · CCMP"
 	Roaming            string  // 802.11 roaming amendments seen, e.g. "k/r/v"
+	MFP                string  // management frame protection: "", "capable", "required"
+	GroupCipher        string  // RSN group cipher, e.g. "CCMP"
+	DTIMPeriod         uint32  // DTIM period from the TIM element
+	WPS                bool    // WPS vendor element present
+	Streams            uint32  // spatial streams from HT/VHT MCS maps (0 = unknown)
+	MaxRateMbps        float64 // estimated max PHY rate from gen/width/streams
 }
 
 // Sense performs a monitor-mode sweep, capturing stations, per-channel
@@ -252,6 +258,24 @@ func recordNetwork(networks map[string]*WlanNetwork, bssid string, info beaconIn
 	if info.Roaming != "" {
 		n.Roaming = info.Roaming
 	}
+	if info.MFP != "" {
+		n.MFP = info.MFP
+	}
+	if info.GroupCipher != "" {
+		n.GroupCipher = info.GroupCipher
+	}
+	if info.DTIMPeriod > 0 {
+		n.DTIMPeriod = info.DTIMPeriod
+	}
+	if info.WPS {
+		n.WPS = true
+	}
+	if info.Streams > n.Streams {
+		n.Streams = info.Streams
+	}
+	if info.MaxRateMbps > n.MaxRateMbps {
+		n.MaxRateMbps = info.MaxRateMbps
+	}
 	if rssi > n.RSSIdBm {
 		n.RSSIdBm = rssi
 	}
@@ -403,6 +427,12 @@ type beaconInfo struct {
 	LoadChannelUtilPct float64
 	SecurityDetail     string // AKM + pairwise cipher, e.g. "PSK+SAE · CCMP"
 	Roaming            string // "k/r/v" from RM/Mobility-Domain/BSS-Transition
+	MFP                string // "", "capable", "required" from RSN capabilities
+	GroupCipher        string // RSN group cipher name
+	DTIMPeriod         uint32 // from the TIM element
+	WPS                bool   // WPS vendor element present
+	Streams            uint32 // spatial streams from HT/VHT MCS maps
+	MaxRateMbps        float64 // estimated max PHY rate
 }
 
 // parseBeaconBody parses a beacon/probe-response frame body: 12 fixed bytes
@@ -421,6 +451,8 @@ func parseBeaconBody(body []byte) beaconInfo {
 	var akms, ciphers []byte
 	var ht, vht, he, eht bool
 	var rm, ft, btm bool // 802.11k / 802.11r / 802.11v
+	var htStreams, vhtStreams uint32
+	var legacyMax float64
 	info.WidthMHz = 20
 
 	for i := 0; i+2 <= len(data); {
@@ -434,6 +466,16 @@ func parseBeaconBody(body []byte) beaconInfo {
 			if length > 0 {
 				info.SSID = string(v)
 			}
+		case 1, 50: // Supported Rates / Extended Supported Rates (500 kbps units)
+			for _, r := range v {
+				if mbps := float64(r&0x7F) * 0.5; mbps > legacyMax {
+					legacyMax = mbps
+				}
+			}
+		case 5: // TIM: DTIM count(1), DTIM period(1), ...
+			if length >= 2 {
+				info.DTIMPeriod = uint32(v[1])
+			}
 		case 7: // Country: 2-char code + environment byte
 			if length >= 2 && v[0] >= 'A' && v[0] <= 'Z' && v[1] >= 'A' && v[1] <= 'Z' {
 				info.Country = string(v[:2])
@@ -444,13 +486,29 @@ func parseBeaconBody(body []byte) beaconInfo {
 				info.LoadStations = uint32(v[0]) | uint32(v[1])<<8
 				info.LoadChannelUtilPct = float64(v[2]) / 255.0 * 100.0
 			}
-		case 45: // HT capabilities → 802.11n
+		case 45: // HT capabilities → 802.11n; MCS set at offset 3, one RX bitmask byte per stream
 			ht = true
+			for s := 0; s < 4 && 3+s < len(v); s++ {
+				if v[3+s] != 0 {
+					htStreams = uint32(s + 1)
+				}
+			}
 		case 48: // RSN
 			hasRSN = true
-			a, c := parseRSNSuites(v)
-			akms = append(akms, a...)
-			ciphers = append(ciphers, c...)
+			r := parseRSN(v)
+			akms = append(akms, r.akms...)
+			ciphers = append(ciphers, r.ciphers...)
+			if r.group != 0 {
+				info.GroupCipher = cipherName(r.group)
+			}
+			if r.capsOK {
+				switch {
+				case r.caps&0x40 != 0: // MFPR
+					info.MFP = "required"
+				case r.caps&0x80 != 0: // MFPC
+					info.MFP = "capable"
+				}
+			}
 		case 54: // Mobility Domain → 802.11r
 			ft = true
 		case 61: // HT operation: secondary channel offset (byte1 bits 0-1) → 40 MHz
@@ -463,8 +521,16 @@ func parseBeaconBody(body []byte) beaconInfo {
 			if length >= 3 && v[2]&0x08 != 0 {
 				btm = true
 			}
-		case 191: // VHT capabilities → 802.11ac
+		case 191: // VHT capabilities → 802.11ac; Rx MCS map at bytes 4-5 (2 bits/stream, 3=unsupported)
 			vht = true
+			if length >= 6 {
+				rxMap := uint16(v[4]) | uint16(v[5])<<8
+				for s := 0; s < 8; s++ {
+					if (rxMap>>(2*s))&0x3 != 0x3 {
+						vhtStreams = uint32(s + 1)
+					}
+				}
+			}
 		case 192: // VHT operation: width byte 1+ → 80, CCFS1 set → 160
 			if length >= 3 && v[0] >= 1 {
 				if v[2] != 0 || v[0] >= 2 {
@@ -473,9 +539,14 @@ func parseBeaconBody(body []byte) beaconInfo {
 					info.WidthMHz = 80
 				}
 			}
-		case 221: // vendor: Microsoft WPA1 OUI 00:50:F2 type 1
-			if length >= 4 && v[0] == 0x00 && v[1] == 0x50 && v[2] == 0xF2 && v[3] == 0x01 {
-				hasWPA = true
+		case 221: // vendor elements (Microsoft OUI 00:50:F2: type 1 = WPA1, type 4 = WPS)
+			if length >= 4 && v[0] == 0x00 && v[1] == 0x50 && v[2] == 0xF2 {
+				switch v[3] {
+				case 0x01:
+					hasWPA = true
+				case 0x04:
+					info.WPS = true
+				}
 			}
 		case 255: // element ID extension
 			if length >= 1 {
@@ -519,33 +590,97 @@ func parseBeaconBody(body []byte) beaconInfo {
 		roam = append(roam, "v")
 	}
 	info.Roaming = strings.Join(roam, "/")
+
+	info.Streams = max(htStreams, vhtStreams)
+	info.MaxRateMbps = estimateMaxRate(ht, vht, he || eht, info.WidthMHz, info.Streams, legacyMax)
 	return info
 }
 
-// parseRSNSuites pulls the AKM and pairwise-cipher suite-type bytes out of an
-// RSN element body: version(2) group-cipher(4) pairwise-count(2) pairwise(4n)
-// akm-count(2) akm(4m); the type is the 4th byte of each 00-0F-AC-XX suite.
-func parseRSNSuites(v []byte) (akms, ciphers []byte) {
+// estimateMaxRate estimates the max PHY rate (Mbps) from the newest PHY
+// generation, channel width, and spatial streams. Top-MCS short-GI rates per
+// stream; legacy APs report the highest advertised supported rate.
+// ponytail: HE streams aren't parsed from HE caps — 6 GHz-only ax APs fall
+// back to the HT/VHT stream count (or 1); refine when HE cap parsing lands.
+func estimateMaxRate(ht, vht, he bool, widthMHz, streams uint32, legacyMax float64) float64 {
+	perStream := map[uint32]float64{}
+	switch {
+	case he: // 802.11ax MCS 11
+		perStream = map[uint32]float64{20: 143.4, 40: 287.1, 80: 600.5, 160: 1201.0}
+	case vht: // 802.11ac MCS 9
+		perStream = map[uint32]float64{20: 86.7, 40: 200.0, 80: 433.3, 160: 866.7}
+	case ht: // 802.11n MCS 7 short-GI
+		perStream = map[uint32]float64{20: 72.2, 40: 150.0}
+	default:
+		return legacyMax
+	}
+	rate, ok := perStream[widthMHz]
+	if !ok { // clamp to the widest rate the table knows below the width
+		for w, r := range perStream {
+			if w <= widthMHz && r > rate {
+				rate = r
+			}
+		}
+	}
+	if streams == 0 {
+		streams = 1
+	}
+	return rate * float64(streams)
+}
+
+// rsnInfo is what parseRSN extracts from an RSN element body.
+type rsnInfo struct {
+	akms    []byte // AKM suite types
+	ciphers []byte // pairwise cipher suite types
+	group   byte   // group cipher suite type (0 = absent)
+	caps    uint16 // RSN capabilities field
+	capsOK  bool   // capabilities field present
+}
+
+// parseRSN parses an RSN element body: version(2) group-cipher(4)
+// pairwise-count(2) pairwise(4n) akm-count(2) akm(4m) rsn-caps(2);
+// the type is the 4th byte of each 00-0F-AC-XX suite.
+func parseRSN(v []byte) rsnInfo {
+	var r rsnInfo
+	if len(v) >= 6 {
+		r.group = v[5]
+	}
 	off := 2 + 4
 	if off+2 > len(v) {
-		return nil, nil
+		return r
 	}
 	pairwise := int(v[off]) | int(v[off+1])<<8
 	off += 2
 	for j := 0; j < pairwise && off+4 <= len(v); j++ {
-		ciphers = append(ciphers, v[off+3])
+		r.ciphers = append(r.ciphers, v[off+3])
 		off += 4
 	}
 	if off+2 > len(v) {
-		return nil, ciphers
+		return r
 	}
 	akmCount := int(v[off]) | int(v[off+1])<<8
 	off += 2
 	for j := 0; j < akmCount && off+4 <= len(v); j++ {
-		akms = append(akms, v[off+3])
+		r.akms = append(r.akms, v[off+3])
 		off += 4
 	}
-	return akms, ciphers
+	if off+2 <= len(v) {
+		r.caps = uint16(v[off]) | uint16(v[off+1])<<8
+		r.capsOK = true
+	}
+	return r
+}
+
+var cipherNames = map[byte]string{
+	1: "WEP-40", 2: "TKIP", 4: "CCMP", 5: "WEP-104",
+	8: "GCMP", 9: "GCMP-256", 10: "CCMP-256",
+}
+
+// cipherName maps an RSN cipher suite type (00-0F-AC-XX) to its display name.
+func cipherName(b byte) string {
+	if s, ok := cipherNames[b]; ok {
+		return s
+	}
+	return "type-" + strconv.Itoa(int(b))
 }
 
 // securityDetail renders AKM and pairwise cipher names, e.g. "PSK+SAE · CCMP".
@@ -554,10 +689,6 @@ func securityDetail(akms, ciphers []byte) string {
 		1: "802.1X", 2: "PSK", 3: "FT-802.1X", 4: "FT-PSK", 5: "802.1X-SHA256",
 		6: "PSK-SHA256", 8: "SAE", 9: "FT-SAE", 11: "802.1X-SuiteB", 12: "802.1X-SuiteB-192",
 		13: "FT-802.1X-SHA384", 18: "OWE",
-	}
-	cipherNames := map[byte]string{
-		1: "WEP-40", 2: "TKIP", 4: "CCMP", 5: "WEP-104",
-		8: "GCMP", 9: "GCMP-256", 10: "CCMP-256",
 	}
 	name := func(m map[byte]string, b byte) string {
 		if s, ok := m[b]; ok {

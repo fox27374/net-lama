@@ -444,6 +444,12 @@ func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats 
 			LoadChannelUtilPct: n.LoadChannelUtilPct,
 			SecurityDetail:     n.SecurityDetail,
 			Roaming:            n.Roaming,
+			Mfp:                n.MFP,
+			GroupCipher:        n.GroupCipher,
+			DtimPeriod:         n.DTIMPeriod,
+			Wps:                n.WPS,
+			Streams:            n.Streams,
+			MaxRateMbps:        n.MaxRateMbps,
 		})
 	}
 

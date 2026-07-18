@@ -1607,12 +1607,28 @@ async function lookupVendors(macs) {
   return macs.map((m) => ouiCache.get(m) || "");
 }
 
+// fillVendors resolves and fills all .wl-vendor placeholders under rootSel.
+async function fillVendors(rootSel) {
+  const els = [...document.querySelectorAll(rootSel + " .wl-vendor")];
+  await lookupVendors(els.map((el) => el.dataset.mac));
+  for (const el of els) {
+    const v = ouiCache.get(el.dataset.mac) || "";
+    el.textContent = v || "unknown";
+    el.classList.toggle("muted", !v);
+  }
+}
+
 let wlDetailBssid = null; // BSSID of the open detail panel, null = closed
+let wlLastResult = null; // latest wlan_passive result, for filter re-renders
 
 $("#wl-detail-close").addEventListener("click", () => {
   wlDetailBssid = null;
   $("#wl-detail").classList.add("hidden");
 });
+
+for (const id of ["wl-filter-ssid", "wl-band-24", "wl-band-5", "wl-band-6"]) {
+  $("#" + id).addEventListener("input", () => renderWirelessNetworks(wlLastResult));
+}
 
 // showApDetail fills the AP detail panel for one network from the latest sweep.
 async function showApDetail(n, wp, result) {
@@ -1622,15 +1638,32 @@ async function showApDetail(n, wp, result) {
 
   const freq = n.freqMhz || 0;
   const band = freq >= 5955 ? "6 GHz" : freq >= 5000 ? "5 GHz" : "2.4 GHz";
+  const roamNames = {
+    k: "Radio Measurement (802.11k)",
+    r: "Fast BSS Transition (802.11r)",
+    v: "BSS Transition Mgmt (802.11v)",
+  };
+  const roaming = n.roaming
+    ? n.roaming.split("/").map((x) => roamNames[x] || esc(x)).join("<br>")
+    : "—";
+  const mfp = n.mfp === "required" ? "Required (802.11w)"
+    : n.mfp === "capable" ? "Capable (802.11w)"
+    : "Not supported";
   const rows = [
     ["Vendor", '<span class="wl-vendor muted" data-mac="' + esc(n.bssid) + '">resolving…</span>'],
     ["Signal", `<span class="health ${signalClass(n.rssiDbm)}">${n.rssiDbm || 0} dBm</span> ${renderSignalBar(n.rssiDbm)}`],
     ["Channel", `${n.channel || "—"} · ${band}${n.widthMhz ? ` · ${n.widthMhz} MHz` : ""}`],
     ["Frequency", freq ? freq + " MHz" : "—"],
     ["Security", esc(n.security || "Open") + (n.securityDetail ? ` <span class="muted">(${esc(n.securityDetail)})</span>` : "")],
+    ["Group cipher", n.groupCipher ? esc(n.groupCipher) : "—"],
+    ["Mgmt frame protection", mfp],
+    ["WPS", n.wps ? '<span class="health degraded">Enabled</span>' : "—"],
     ["Standards", n.standards ? "802.11 " + esc(n.standards) : "—"],
-    ["Roaming", n.roaming ? "802.11 " + esc(n.roaming) : "—"],
+    ["Spatial streams", n.streams ? `${n.streams}×${n.streams}` : "—"],
+    ["Max PHY rate", n.maxRateMbps ? `~${n.maxRateMbps >= 100 ? n.maxRateMbps.toFixed(0) : n.maxRateMbps.toFixed(1)} Mbps` : "—"],
+    ["Roaming", roaming],
     ["Beacon interval", n.beaconIntervalTu ? `${n.beaconIntervalTu} TU (${(n.beaconIntervalTu * 1.024).toFixed(0)} ms)` : "—"],
+    ["DTIM period", n.dtimPeriod ? String(n.dtimPeriod) : "—"],
     ["Country", n.country ? esc(n.country) : "—"],
     ["AP load", n.loadPresent ? `${n.loadStations || 0} stations · ${(n.loadChannelUtilPct || 0).toFixed(0)}% channel busy` : "—"],
     ["Beacons heard", String(n.beacons || 0)],
@@ -1655,22 +1688,28 @@ async function showApDetail(n, wp, result) {
     </tr>`)
     .join("");
 
-  // Resolve vendors for the AP and its clients, then fill the placeholders
-  const macs = [n.bssid, ...clients.map((c) => c.mac)];
-  await lookupVendors(macs);
-  for (const el of $("#wl-detail").querySelectorAll(".wl-vendor")) {
-    const v = ouiCache.get(el.dataset.mac) || "";
-    el.textContent = v || "unknown";
-    el.classList.toggle("muted", !v);
-  }
+  await fillVendors("#wl-detail");
 }
 
 function renderWirelessNetworks(result) {
+  wlLastResult = result;
   const tbody = $("#wl-networks-table tbody");
   tbody.innerHTML = "";
 
   const wp = result && result.payload && result.payload.wlanPassive;
-  const allNetworks = ((wp && wp.networks) || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
+  const total = (wp && wp.networks) || [];
+
+  // SSID and band filters
+  const q = $("#wl-filter-ssid").value.trim().toLowerCase();
+  const bandOK = {
+    "2.4": $("#wl-band-24").checked,
+    "5": $("#wl-band-5").checked,
+    "6": $("#wl-band-6").checked,
+  };
+  const bandOf = (freq) => (freq >= 5955 ? "6" : freq >= 5000 ? "5" : "2.4");
+  const allNetworks = total
+    .filter((n) => bandOK[bandOf(n.freqMhz || 0)] && (!q || (n.ssid || "").toLowerCase().includes(q)))
+    .sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
 
   const meta = $("#wl-meta");
   meta.textContent = "";
@@ -1684,12 +1723,17 @@ function renderWirelessNetworks(result) {
     if (result.error) {
       meta.appendChild(document.createTextNode("Last sweep failed: " + result.error));
     } else if (wp) {
+      const count = allNetworks.length === total.length ? `${total.length} networks` : `${allNetworks.length}/${total.length} networks`;
       meta.appendChild(document.createTextNode(
-        `${allNetworks.length} networks · ${(wp.channels || []).length} channels · ${wp.sweepMs || 0}ms sweep · ${new Date(result.time).toLocaleString()}`));
+        `${count} · ${(wp.channels || []).length} channels · ${wp.sweepMs || 0}ms sweep · ${new Date(result.time).toLocaleString()}`));
     }
   }
 
-  $("#wl-empty").classList.toggle("hidden", allNetworks.length > 0 || !!result);
+  renderWirelessStations(wp, result);
+
+  const filteredOut = total.length > 0 && allNetworks.length === 0;
+  $("#wl-empty").textContent = filteredOut ? "No networks match the filter." : "No networks detected yet.";
+  $("#wl-empty").classList.toggle("hidden", allNetworks.length > 0 || (!!result && !filteredOut));
   if (result && result.error) {
     $("#wl-empty").textContent = "Last sweep failed: " + result.error;
     $("#wl-empty").classList.remove("hidden");
@@ -1814,6 +1858,44 @@ function renderWirelessNetworks(result) {
   for (const n of hiddenNetworks) {
     tbody.appendChild(renderNetworkRow(n));
   }
+}
+
+// renderWirelessStations fills the client-stations table from the last sweep.
+function renderWirelessStations(wp, result) {
+  const tbody = $("#wl-stations-table tbody");
+  tbody.innerHTML = "";
+  const stations = ((wp && wp.stations) || []).slice().sort((a, b) => (b.rssiDbm || -999) - (a.rssiDbm || -999));
+
+  // Map BSSID → SSID for the network column
+  const ssidByBssid = new Map();
+  for (const n of (wp && wp.networks) || []) {
+    if (n.ssid) ssidByBssid.set(n.bssid, n.ssid);
+  }
+
+  $("#wl-stations-empty").classList.toggle("hidden", stations.length > 0);
+  const assoc = stations.filter((s) => !s.probeOnly).length;
+  $("#wl-stations-meta").textContent = stations.length
+    ? `${stations.length} stations (${assoc} associated, ${stations.length - assoc} probing)`
+    : "";
+  if (!stations.length) return;
+
+  for (const s of stations) {
+    const net = s.probeOnly || !s.bssid
+      ? '<span class="muted">probing</span>'
+      : esc(s.ssid || ssidByBssid.get(s.bssid) || "") || `<span class="mono">${esc(s.bssid)}</span>`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="mono">${esc(s.mac)}</td>
+      <td><span class="wl-vendor muted" data-mac="${esc(s.mac)}"></span></td>
+      <td>${net}</td>
+      <td class="num"><span class="health ${signalClass(s.rssiDbm)}">${s.rssiDbm || 0}</span> ${renderSignalBar(s.rssiDbm)}</td>
+      <td class="num">${s.rateMbps ? s.rateMbps.toFixed(1) : "—"}</td>
+      <td class="num">${s.mcs >= 0 ? s.mcs : "—"}</td>
+      <td class="num">${s.frames || 0}</td>
+      <td class="muted nowrap">${s.lastSeenMs ? new Date(s.lastSeenMs).toLocaleTimeString() : "—"}</td>`;
+    tbody.appendChild(tr);
+  }
+  fillVendors("#wl-stations-table");
 }
 
 // --- Path (traceroute) ---
