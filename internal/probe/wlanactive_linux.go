@@ -150,6 +150,11 @@ connect:
 
 	out.RSSIdBm = iwLinkSignal(ctx, iface)
 
+	// Power save on an otherwise-idle test interface makes the driver drop
+	// the first frames after the handshake (observed: 3 lost DISCOVERs,
+	// ~4.5s constant DHCP). The interface is dedicated to the test here.
+	exec.CommandContext(ctx, "iw", "dev", iface, "set", "power_save", "off").Run()
+
 	// DHCP: full DISCOVER→ACK exchange, no host state touched
 	out.FailedStep = "dhcp"
 	dhcpStart := time.Now()
