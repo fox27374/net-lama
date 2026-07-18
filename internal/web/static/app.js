@@ -1607,6 +1607,9 @@ async function lookupVendors(macs) {
   return macs.map((m) => ouiCache.get(m) || "");
 }
 
+// toMs coerces a protojson int64 (serialized as a string) to a number.
+const toMs = (v) => Number(v) || 0;
+
 // fillVendors resolves and fills all .wl-vendor placeholders under rootSel.
 async function fillVendors(rootSel) {
   const els = [...document.querySelectorAll(rootSel + " .wl-vendor")];
@@ -1667,7 +1670,7 @@ async function showApDetail(n, wp, result) {
     ["Country", n.country ? esc(n.country) : "—"],
     ["AP load", n.loadPresent ? `${n.loadStations || 0} stations · ${(n.loadChannelUtilPct || 0).toFixed(0)}% channel busy` : "—"],
     ["Beacons heard", String(n.beacons || 0)],
-    ["Last seen", n.lastSeenMs ? new Date(n.lastSeenMs).toLocaleString() : result ? new Date(result.time).toLocaleString() : "—"],
+    ["Last seen", toMs(n.lastSeenMs) ? new Date(toMs(n.lastSeenMs)).toLocaleString() : result ? new Date(result.time).toLocaleString() : "—"],
   ];
   $("#wl-detail-grid").innerHTML = rows
     .map(([k, v]) => `<div class="wl-detail-item"><span class="wl-detail-label">${k}</span><span class="wl-detail-value">${v}</span></div>`)
@@ -1684,7 +1687,7 @@ async function showApDetail(n, wp, result) {
       <td class="num"><span class="health ${signalClass(c.rssiDbm)}">${c.rssiDbm || 0}</span></td>
       <td class="num">${c.rateMbps ? c.rateMbps.toFixed(1) : "—"}</td>
       <td class="num">${c.frames || 0}</td>
-      <td class="muted nowrap">${c.lastSeenMs ? new Date(c.lastSeenMs).toLocaleTimeString() : "—"}</td>
+      <td class="muted nowrap">${toMs(c.lastSeenMs) ? new Date(toMs(c.lastSeenMs)).toLocaleTimeString() : "—"}</td>
     </tr>`)
     .join("");
 
@@ -1777,9 +1780,9 @@ function renderWirelessNetworks(result) {
   const bandLabel = (freq) => (freq >= 5955 ? "6 GHz" : freq >= 5000 ? "5 GHz" : "2.4 GHz");
   // Entries retained from earlier sweeps (agent keeps them ~10 min) get dimmed
   const resultMs = result ? new Date(result.time).getTime() : 0;
-  const isStale = (lastSeenMs) => lastSeenMs && resultMs && resultMs - lastSeenMs > 2 * 60 * 1000;
-  const lastSeenText = (lastSeenMs) =>
-    lastSeenMs ? new Date(lastSeenMs).toLocaleTimeString() : result ? new Date(result.time).toLocaleTimeString() : "";
+  const isStale = (v) => toMs(v) && resultMs && resultMs - toMs(v) > 2 * 60 * 1000;
+  const lastSeenText = (v) =>
+    toMs(v) ? new Date(toMs(v)).toLocaleTimeString() : result ? new Date(result.time).toLocaleTimeString() : "";
 
   // Helper to render a single network row
   function renderNetworkRow(n, isChild = false) {
@@ -1815,7 +1818,7 @@ function renderWirelessNetworks(result) {
       const channels = [...new Set(networks.map((n) => n.channel).filter(Boolean))].sort((a, b) => a - b);
       const bands = [...new Set(networks.map((n) => bandLabel(n.freqMhz || 0)))];
       const clients = networks.reduce((sum, n) => sum + (clientsPerBssid.get(n.bssid) || 0), 0);
-      const newestMs = Math.max(...networks.map((n) => n.lastSeenMs || 0));
+      const newestMs = Math.max(...networks.map((n) => toMs(n.lastSeenMs)));
 
       const groupTr = document.createElement("tr");
       groupTr.className = "wl-group-row";
@@ -1883,7 +1886,7 @@ function renderWirelessStations(wp, result) {
       ? '<span class="muted">probing</span>'
       : esc(s.ssid || ssidByBssid.get(s.bssid) || "") || `<span class="mono">${esc(s.bssid)}</span>`;
     const tr = document.createElement("tr");
-    if (s.lastSeenMs && resultMs && resultMs - s.lastSeenMs > 2 * 60 * 1000) tr.classList.add("wl-stale");
+    if (toMs(s.lastSeenMs) && resultMs && resultMs - toMs(s.lastSeenMs) > 2 * 60 * 1000) tr.classList.add("wl-stale");
     tr.innerHTML = `
       <td class="mono">${esc(s.mac)}</td>
       <td><span class="wl-vendor muted" data-mac="${esc(s.mac)}"></span></td>
@@ -1892,7 +1895,7 @@ function renderWirelessStations(wp, result) {
       <td class="num">${s.rateMbps ? s.rateMbps.toFixed(1) : "—"}</td>
       <td class="num">${s.mcs >= 0 ? s.mcs : "—"}</td>
       <td class="num">${s.frames || 0}</td>
-      <td class="muted nowrap">${s.lastSeenMs ? new Date(s.lastSeenMs).toLocaleTimeString() : "—"}</td>`;
+      <td class="muted nowrap">${toMs(s.lastSeenMs) ? new Date(toMs(s.lastSeenMs)).toLocaleTimeString() : "—"}</td>`;
     tbody.appendChild(tr);
   }
   fillVendors("#wl-stations-table");
