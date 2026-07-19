@@ -60,7 +60,14 @@ func WlanActive(ctx context.Context, iface string, opts WlanActiveOpts) (*WlanAc
 func wpaSupplicantConf(opts WlanActiveOpts, caCertPath string) string {
 	var b strings.Builder
 	b.WriteString("ctrl_interface=/tmp/netlama-wpa\n")
+	// Use the adapter's permanent MAC for both scans and association instead
+	// of wpa_supplicant's default per-connection randomization. A fixed sensor
+	// wants ONE stable identity: reused DHCP lease, one entry in the AP's
+	// client table, and a consistent "device" across runs.
+	b.WriteString("mac_addr=0\n")
+	b.WriteString("preassoc_mac_addr=0\n")
 	b.WriteString("network={\n")
+	b.WriteString("  mac_addr=0\n")
 	fmt.Fprintf(&b, "  ssid=\"%s\"\n", wpaEscape(opts.SSID))
 	// Directed probe requests: finds the SSID faster and more reliably than
 	// passive listening (and is required for hidden SSIDs)

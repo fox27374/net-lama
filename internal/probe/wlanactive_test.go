@@ -7,7 +7,7 @@ import (
 
 func TestWpaSupplicantConf(t *testing.T) {
 	psk := wpaSupplicantConf(WlanActiveOpts{SSID: "lab", Security: "psk", Password: "secret"}, "")
-	for _, want := range []string{`ssid="lab"`, `psk="secret"`, "WPA-PSK SAE"} {
+	for _, want := range []string{`ssid="lab"`, `psk="secret"`, "WPA-PSK SAE", "mac_addr=0", "preassoc_mac_addr=0"} {
 		if !strings.Contains(psk, want) {
 			t.Errorf("psk conf missing %q:\n%s", want, psk)
 		}
