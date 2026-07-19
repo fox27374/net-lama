@@ -1253,6 +1253,7 @@ function resultDetails(r) {
     const ip = w.ip ? esc(w.ip) + (w.netmask ? "/" + netmaskToPrefix(w.netmask) : "") : "?";
     let out = `${esc(w.ssid)} · assoc ${fmt(w.associateMs)} ms · auth ${fmt(w.authenticateMs)} ms · dhcp ${fmt(w.dhcpMs)} ms · ${ip}`;
     if (w.gateway) out += ` gw ${esc(w.gateway)}`;
+    if (w.gatewayPingRttMs) out += ` · ping ${fmt(w.gatewayPingLossPct)}% loss/${fmt(w.gatewayPingRttMs)} ms`;
     if (w.throughputMbps) out += ` · ${fmt(w.throughputMbps)} Mbps`;
     return out;
   }
@@ -1635,6 +1636,7 @@ function netmaskToPrefix(mask) {
 }
 
 // --- Active connection test (wlan_active) on the Wireless page ---
+const gatewayPingCount = 20; // must match gatewayPingCount in internal/probe/wlanactive_linux.go
 let wlActiveChart = null;
 let wlActiveLast = null; // latest wlan_active payload, for theme re-render
 
@@ -1683,10 +1685,16 @@ async function renderWirelessActive(agent) {
   // txRetryPct = retries / (packets + retries); with no throughputUrl the
   // only traffic is the DHCP handshake (~10-15 frames), where a single
   // retry swings the result by several points — flag that low a sample.
+  // A gateway ping (20 echoes) runs automatically after DHCP to guarantee
+  // real traffic, so most runs clear this; a small sample here usually means
+  // the ping didn't run (e.g. no router option in the lease).
   const txAttempts = (wa.txPackets || 0) + (wa.txRetries || 0);
   const retrans = wa.txPackets
     ? `${fmt(wa.txRetryPct)}% <span class="muted">(${wa.txRetries}/${txAttempts} attempts)</span>` +
-      (txAttempts < 50 ? ' <span class="muted">— small sample, set a throughput URL for a stable reading</span>' : "")
+      (txAttempts < 25 ? ' <span class="muted">— small sample</span>' : "")
+    : "—";
+  const gwPing = wa.gateway && wa.gatewayPingRttMs
+    ? `${fmt(wa.gatewayPingLossPct)}% loss, ${fmt(wa.gatewayPingRttMs)} ms avg <span class="muted">(${gatewayPingCount} pings)</span>`
     : "—";
   const rows = [
     ["SSID", esc(wa.ssid || "—") + (wa.bssid ? ` <span class="muted mono">${esc(wa.bssid)}</span>` : "")],
@@ -1694,6 +1702,7 @@ async function renderWirelessActive(agent) {
     ["IP address", cidr ? `<span class="mono">${cidr}</span>` : "—"],
     ["Client MAC", wa.mac ? `<span class="mono">${esc(wa.mac)}</span>` : "—"],
     ["Gateway", wa.gateway ? `<span class="mono">${esc(wa.gateway)}</span>` : "—"],
+    ["Gateway ping", gwPing],
     ["DNS servers", dns],
     ["Signal", signal],
     ["TX retransmits", retrans],

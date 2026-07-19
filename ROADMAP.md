@@ -52,6 +52,9 @@ Planned work, roughly grouped. Not ordered by priority yet.
       servers from the DHCP lease and the client IP in CIDR notation
 - [x] WLAN active MAC policy: permanent (default, stable identity) vs random
       per-run MAC, opt-in with a DHCP/AP-churn warning; the MAC used is shown
+- [x] WLAN active traffic generation: a 20-ping burst to the gateway after
+      DHCP guarantees a real TX-retransmit sample (loss %/RTT shown too),
+      independent of the optional throughput download
 - [ ] WLAN roaming observation: detect roaming events of the active test
       station (or tracked clients) and measure roam duration between APs
 - [x] SSID security + PHY standards: security (Open/WEP/WPA2/WPA3/WPA2-WPA3

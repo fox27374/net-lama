@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv4/nclient4"
+	probing "github.com/prometheus-community/pro-bing"
 )
 
 // Step timeouts; the whole test also runs under the caller's context.
@@ -23,6 +24,7 @@ const (
 	wlanActiveDHCPTimeout    = 10 * time.Second
 	wlanActiveDownloadCap    = 12 * time.Second // throughput sample length
 	wlanActiveRouteTable     = "4242"           // policy-routing table for the test flow
+	gatewayPingCount         = 20               // ICMP echoes sent to the gateway after DHCP
 )
 
 func wlanActiveImpl(ctx context.Context, iface string, opts WlanActiveOpts) (*WlanActiveOutcome, error) {
@@ -190,18 +192,40 @@ connect:
 		out.DNSServers = append(out.DNSServers, dns.String())
 	}
 
+	// Assign the leased address so the interface can generate real traffic:
+	// a gateway ping always runs next (DHCP alone is only ~11-15 frames, too
+	// few for a stable TX-retransmit sample), plus the optional throughput
+	// download. Best-effort — a routing failure here doesn't fail the test
+	// (association/auth/DHCP already succeeded) unless throughput was
+	// explicitly requested and can't run.
+	var routeErr error
+	if out.Gateway != "" {
+		if maskAddr := net.ParseIP(out.Netmask).To4(); maskAddr != nil {
+			maskBits, _ := net.IPMask(maskAddr).Size()
+			routeErr = setupTestRoute(ctx, iface, out.IP, maskBits, out.Gateway)
+			if routeErr == nil {
+				defer teardownTestRoute(context.WithoutCancel(ctx), iface, out.IP, maskBits)
+
+				// Gateway ping: one hop, AP-link-only traffic. Distinct from
+				// the throughput step, which (if configured) leaves the AP
+				// and measures the WAN/LAN path beyond it too.
+				if pr, err := pingGateway(ctx, out.IP, out.Gateway, gatewayPingCount); err == nil {
+					out.GatewayPingLossPct = pr.LossPercent
+					out.GatewayPingRttMs = pr.AvgRttMs
+				}
+			}
+		}
+	}
+
 	// Optional throughput download through the WLAN path. Link quality
 	// (RSSI/SNR/retransmits) is sampled at the end so the tx counters
-	// reflect any load the throughput step generated.
+	// reflect the ping + any throughput load.
 	if opts.ThroughputURL != "" {
 		out.FailedStep = "throughput"
-		maskBits, _ := net.IPMask(net.ParseIP(out.Netmask).To4()).Size()
-		if err := setupTestRoute(ctx, iface, out.IP, maskBits, out.Gateway); err != nil {
+		if routeErr != nil {
 			collectLinkQuality(ctx, iface, out)
 			return done()
 		}
-		defer teardownTestRoute(context.WithoutCancel(ctx), iface, out.IP, maskBits)
-
 		mbps, ms, err := downloadVia(ctx, out.IP, opts.ThroughputURL)
 		if err != nil {
 			collectLinkQuality(ctx, iface, out)
@@ -215,6 +239,31 @@ connect:
 	out.Success = true
 	out.FailedStep = ""
 	return done()
+}
+
+// pingGateway sends count ICMP echoes to the gateway, sourced from the
+// leased address so replies are guaranteed to traverse the WLAN interface
+// rather than the host's default route.
+func pingGateway(ctx context.Context, sourceIP, gateway string, count int) (*PingResult, error) {
+	pinger, err := probing.NewPinger(gateway)
+	if err != nil {
+		return nil, err
+	}
+	pinger.Source = sourceIP
+	pinger.Count = count
+	pinger.Interval = 100 * time.Millisecond
+	pinger.Timeout = time.Duration(count)*100*time.Millisecond + 3*time.Second
+	pinger.SetPrivileged(false)
+	if err := pinger.RunWithContext(ctx); err != nil {
+		return nil, err
+	}
+	stats := pinger.Statistics()
+	return &PingResult{
+		PacketsSent:     stats.PacketsSent,
+		PacketsReceived: stats.PacketsRecv,
+		LossPercent:     stats.PacketLoss,
+		AvgRttMs:        float64(stats.AvgRtt.Microseconds()) / 1000,
+	}, nil
 }
 
 // collectLinkQuality reads the associated-AP station stats (RSSI, tx frames

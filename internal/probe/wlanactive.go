@@ -20,29 +20,31 @@ type WlanActiveOpts struct {
 
 // WlanActiveOutcome is the timed result of one active connection test.
 type WlanActiveOutcome struct {
-	Interface      string
-	SSID           string
-	BSSID          string
-	Success        bool
-	FailedStep     string // "associate", "authenticate", "dhcp", "throughput"
-	ScanMs         float64 // supplicant start → SSID found
-	AssociateMs    float64
-	AuthenticateMs float64
-	DHCPMs         float64
-	IP             string
-	Netmask        string
-	Gateway        string
-	DNSServers     []string
-	ThroughputMbps float64
-	ThroughputMs   float64
-	RSSIdBm        int32
-	NoiseDBm       int32
-	SNRdB          float64
-	TxRetryPct     float64
-	TxPackets      uint32
-	TxRetries      uint32
-	MAC            string // client MAC actually used
-	TotalMs        float64
+	Interface          string
+	SSID               string
+	BSSID              string
+	Success            bool
+	FailedStep         string  // "associate", "authenticate", "dhcp", "throughput"
+	ScanMs             float64 // supplicant start → SSID found
+	AssociateMs        float64
+	AuthenticateMs     float64
+	DHCPMs             float64
+	IP                 string
+	Netmask            string
+	Gateway            string
+	DNSServers         []string
+	ThroughputMbps     float64
+	ThroughputMs       float64
+	RSSIdBm            int32
+	NoiseDBm           int32
+	SNRdB              float64
+	TxRetryPct         float64
+	TxPackets          uint32
+	TxRetries          uint32
+	MAC                string  // client MAC actually used
+	GatewayPingLossPct float64 // ICMP loss to the gateway (one hop, AP link only)
+	GatewayPingRttMs   float64 // average RTT to the gateway
+	TotalMs            float64
 }
 
 // WlanActive runs an active connection test: associate + authenticate via

@@ -280,6 +280,8 @@ message WlanActiveResult {
   uint32 tx_packets = 22;     // frames transmitted to the AP during the test
   uint32 tx_retries = 23;     // retransmitted frames
   string mac = 24;            // the client MAC actually used for this test
+  double gateway_ping_loss_pct = 25; // ICMP loss to the gateway (one hop, AP link only)
+  double gateway_ping_rtt_ms = 26;   // average RTT to the gateway
 }
 
 message WlanPassiveResult {

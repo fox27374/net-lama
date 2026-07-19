@@ -2187,33 +2187,35 @@ func (x *WlanSenseResult) GetNetworks() []*WlanNetwork {
 // WlanActiveResult reports one active connection test with per-step timing.
 // A failed step sets success=false and failed_step; later steps are zero.
 type WlanActiveResult struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Interface      string                 `protobuf:"bytes,1,opt,name=interface,proto3" json:"interface,omitempty"`
-	Ssid           string                 `protobuf:"bytes,2,opt,name=ssid,proto3" json:"ssid,omitempty"`
-	Bssid          string                 `protobuf:"bytes,3,opt,name=bssid,proto3" json:"bssid,omitempty"` // AP the test associated with
-	Demo           bool                   `protobuf:"varint,4,opt,name=demo,proto3" json:"demo,omitempty"`
-	Success        bool                   `protobuf:"varint,5,opt,name=success,proto3" json:"success,omitempty"`
-	FailedStep     string                 `protobuf:"bytes,6,opt,name=failed_step,json=failedStep,proto3" json:"failed_step,omitempty"`               // "associate" | "authenticate" | "dhcp" | "throughput"
-	AssociateMs    float64                `protobuf:"fixed64,7,opt,name=associate_ms,json=associateMs,proto3" json:"associate_ms,omitempty"`          // start → 802.11 association
-	AuthenticateMs float64                `protobuf:"fixed64,8,opt,name=authenticate_ms,json=authenticateMs,proto3" json:"authenticate_ms,omitempty"` // association → key handshake/EAP complete
-	DhcpMs         float64                `protobuf:"fixed64,9,opt,name=dhcp_ms,json=dhcpMs,proto3" json:"dhcp_ms,omitempty"`                         // DHCP DISCOVER → ACK
-	Ip             string                 `protobuf:"bytes,10,opt,name=ip,proto3" json:"ip,omitempty"`                                                // leased address
-	Netmask        string                 `protobuf:"bytes,11,opt,name=netmask,proto3" json:"netmask,omitempty"`
-	Gateway        string                 `protobuf:"bytes,12,opt,name=gateway,proto3" json:"gateway,omitempty"`
-	ThroughputMbps float64                `protobuf:"fixed64,13,opt,name=throughput_mbps,json=throughputMbps,proto3" json:"throughput_mbps,omitempty"`
-	ThroughputMs   float64                `protobuf:"fixed64,14,opt,name=throughput_ms,json=throughputMs,proto3" json:"throughput_ms,omitempty"` // duration of the throughput download
-	RssiDbm        int32                  `protobuf:"varint,15,opt,name=rssi_dbm,json=rssiDbm,proto3" json:"rssi_dbm,omitempty"`                 // signal to the AP during the test
-	TotalMs        float64                `protobuf:"fixed64,16,opt,name=total_ms,json=totalMs,proto3" json:"total_ms,omitempty"`                // scan through last step (excludes teardown/mode restore)
-	ScanMs         float64                `protobuf:"fixed64,17,opt,name=scan_ms,json=scanMs,proto3" json:"scan_ms,omitempty"`                   // supplicant start → SSID found (scan phase)
-	DnsServers     []string               `protobuf:"bytes,18,rep,name=dns_servers,json=dnsServers,proto3" json:"dns_servers,omitempty"`         // DNS servers from the DHCP lease (option 6)
-	NoiseDbm       int32                  `protobuf:"varint,19,opt,name=noise_dbm,json=noiseDbm,proto3" json:"noise_dbm,omitempty"`              // channel noise floor from the survey (0 = unavailable)
-	SnrDb          float64                `protobuf:"fixed64,20,opt,name=snr_db,json=snrDb,proto3" json:"snr_db,omitempty"`                      // rssi_dbm − noise_dbm (0 = unavailable)
-	TxRetryPct     float64                `protobuf:"fixed64,21,opt,name=tx_retry_pct,json=txRetryPct,proto3" json:"tx_retry_pct,omitempty"`     // retransmitted frames / transmitted frames × 100
-	TxPackets      uint32                 `protobuf:"varint,22,opt,name=tx_packets,json=txPackets,proto3" json:"tx_packets,omitempty"`           // frames transmitted to the AP during the test
-	TxRetries      uint32                 `protobuf:"varint,23,opt,name=tx_retries,json=txRetries,proto3" json:"tx_retries,omitempty"`           // retransmitted frames
-	Mac            string                 `protobuf:"bytes,24,opt,name=mac,proto3" json:"mac,omitempty"`                                         // the client MAC actually used for this test
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Interface          string                 `protobuf:"bytes,1,opt,name=interface,proto3" json:"interface,omitempty"`
+	Ssid               string                 `protobuf:"bytes,2,opt,name=ssid,proto3" json:"ssid,omitempty"`
+	Bssid              string                 `protobuf:"bytes,3,opt,name=bssid,proto3" json:"bssid,omitempty"` // AP the test associated with
+	Demo               bool                   `protobuf:"varint,4,opt,name=demo,proto3" json:"demo,omitempty"`
+	Success            bool                   `protobuf:"varint,5,opt,name=success,proto3" json:"success,omitempty"`
+	FailedStep         string                 `protobuf:"bytes,6,opt,name=failed_step,json=failedStep,proto3" json:"failed_step,omitempty"`               // "associate" | "authenticate" | "dhcp" | "throughput"
+	AssociateMs        float64                `protobuf:"fixed64,7,opt,name=associate_ms,json=associateMs,proto3" json:"associate_ms,omitempty"`          // start → 802.11 association
+	AuthenticateMs     float64                `protobuf:"fixed64,8,opt,name=authenticate_ms,json=authenticateMs,proto3" json:"authenticate_ms,omitempty"` // association → key handshake/EAP complete
+	DhcpMs             float64                `protobuf:"fixed64,9,opt,name=dhcp_ms,json=dhcpMs,proto3" json:"dhcp_ms,omitempty"`                         // DHCP DISCOVER → ACK
+	Ip                 string                 `protobuf:"bytes,10,opt,name=ip,proto3" json:"ip,omitempty"`                                                // leased address
+	Netmask            string                 `protobuf:"bytes,11,opt,name=netmask,proto3" json:"netmask,omitempty"`
+	Gateway            string                 `protobuf:"bytes,12,opt,name=gateway,proto3" json:"gateway,omitempty"`
+	ThroughputMbps     float64                `protobuf:"fixed64,13,opt,name=throughput_mbps,json=throughputMbps,proto3" json:"throughput_mbps,omitempty"`
+	ThroughputMs       float64                `protobuf:"fixed64,14,opt,name=throughput_ms,json=throughputMs,proto3" json:"throughput_ms,omitempty"`                       // duration of the throughput download
+	RssiDbm            int32                  `protobuf:"varint,15,opt,name=rssi_dbm,json=rssiDbm,proto3" json:"rssi_dbm,omitempty"`                                       // signal to the AP during the test
+	TotalMs            float64                `protobuf:"fixed64,16,opt,name=total_ms,json=totalMs,proto3" json:"total_ms,omitempty"`                                      // scan through last step (excludes teardown/mode restore)
+	ScanMs             float64                `protobuf:"fixed64,17,opt,name=scan_ms,json=scanMs,proto3" json:"scan_ms,omitempty"`                                         // supplicant start → SSID found (scan phase)
+	DnsServers         []string               `protobuf:"bytes,18,rep,name=dns_servers,json=dnsServers,proto3" json:"dns_servers,omitempty"`                               // DNS servers from the DHCP lease (option 6)
+	NoiseDbm           int32                  `protobuf:"varint,19,opt,name=noise_dbm,json=noiseDbm,proto3" json:"noise_dbm,omitempty"`                                    // channel noise floor from the survey (0 = unavailable)
+	SnrDb              float64                `protobuf:"fixed64,20,opt,name=snr_db,json=snrDb,proto3" json:"snr_db,omitempty"`                                            // rssi_dbm − noise_dbm (0 = unavailable)
+	TxRetryPct         float64                `protobuf:"fixed64,21,opt,name=tx_retry_pct,json=txRetryPct,proto3" json:"tx_retry_pct,omitempty"`                           // tx_retries / (tx_packets + tx_retries) × 100
+	TxPackets          uint32                 `protobuf:"varint,22,opt,name=tx_packets,json=txPackets,proto3" json:"tx_packets,omitempty"`                                 // frames transmitted to the AP during the test
+	TxRetries          uint32                 `protobuf:"varint,23,opt,name=tx_retries,json=txRetries,proto3" json:"tx_retries,omitempty"`                                 // retransmitted frames
+	Mac                string                 `protobuf:"bytes,24,opt,name=mac,proto3" json:"mac,omitempty"`                                                               // the client MAC actually used for this test
+	GatewayPingLossPct float64                `protobuf:"fixed64,25,opt,name=gateway_ping_loss_pct,json=gatewayPingLossPct,proto3" json:"gateway_ping_loss_pct,omitempty"` // ICMP loss to the gateway (one hop, AP link only)
+	GatewayPingRttMs   float64                `protobuf:"fixed64,26,opt,name=gateway_ping_rtt_ms,json=gatewayPingRttMs,proto3" json:"gateway_ping_rtt_ms,omitempty"`       // average RTT to the gateway
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *WlanActiveResult) Reset() {
@@ -2412,6 +2414,20 @@ func (x *WlanActiveResult) GetMac() string {
 		return x.Mac
 	}
 	return ""
+}
+
+func (x *WlanActiveResult) GetGatewayPingLossPct() float64 {
+	if x != nil {
+		return x.GatewayPingLossPct
+	}
+	return 0
+}
+
+func (x *WlanActiveResult) GetGatewayPingRttMs() float64 {
+	if x != nil {
+		return x.GatewayPingRttMs
+	}
+	return 0
 }
 
 type WlanPassiveResult struct {
@@ -3486,7 +3502,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bstations\x18\x03 \x03(\v2\x17.netlama.v1.WlanStationR\bstations\x127\n" +
 	"\bchannels\x18\x04 \x03(\v2\x1b.netlama.v1.WlanChannelStatR\bchannels\x12\x19\n" +
 	"\bsweep_ms\x18\x05 \x01(\rR\asweepMs\x123\n" +
-	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xb6\x05\n" +
+	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\x98\x06\n" +
 	"\x10WlanActiveResult\x12\x1c\n" +
 	"\tinterface\x18\x01 \x01(\tR\tinterface\x12\x12\n" +
 	"\x04ssid\x18\x02 \x01(\tR\x04ssid\x12\x14\n" +
@@ -3517,7 +3533,9 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"tx_packets\x18\x16 \x01(\rR\ttxPackets\x12\x1d\n" +
 	"\n" +
 	"tx_retries\x18\x17 \x01(\rR\ttxRetries\x12\x10\n" +
-	"\x03mac\x18\x18 \x01(\tR\x03mac\"\x83\x02\n" +
+	"\x03mac\x18\x18 \x01(\tR\x03mac\x121\n" +
+	"\x15gateway_ping_loss_pct\x18\x19 \x01(\x01R\x12gatewayPingLossPct\x12-\n" +
+	"\x13gateway_ping_rtt_ms\x18\x1a \x01(\x01R\x10gatewayPingRttMs\"\x83\x02\n" +
 	"\x11WlanPassiveResult\x12\x1c\n" +
 	"\tinterface\x18\x01 \x01(\tR\tinterface\x12\x12\n" +
 	"\x04demo\x18\x02 \x01(\bR\x04demo\x123\n" +

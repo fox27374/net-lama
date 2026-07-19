@@ -934,6 +934,26 @@ What has been done so far, in chronological order. Planned work lives in
   several points; the active card now shows the attempt count and a note to
   set a throughput URL for a statistically stable reading.
 
+## 2026-07-19 — Gateway ping for a real traffic sample (v0.6.0)
+
+- **20-ping burst to the gateway after DHCP**, always (no config needed):
+  DHCP alone is only ~11-15 frames, too small for a stable TX-retransmit
+  reading (see the previous entry). The ping is sourced from the leased
+  address so it's guaranteed to traverse the WLAN interface; it targets the
+  gateway specifically (one hop = the AP↔client link) rather than an
+  internet destination, so it isolates 802.11 retry behavior from WAN
+  variance. Loss % and average RTT are reported as a free bonus — a direct
+  "is this AP's uplink actually usable" signal. Best-effort: a ping failure
+  doesn't fail the test (unlike an explicitly-configured throughput URL,
+  which still does).
+- `iw station dump` (RSSI/retransmit sampling) now runs after the ping (and
+  optional throughput), so the TX-retransmit sample reflects the ping
+  traffic too — typically ~31-35+ frames per run instead of ~11-15.
+- Proto fields 25-26 (`gateway_ping_loss_pct`, `gateway_ping_rtt_ms`); shown
+  as a "Gateway ping" summary row on the active card and in the Results
+  one-line summary. Small-sample threshold on the retransmit row lowered
+  from 50 to 25 attempts to match the new baseline.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

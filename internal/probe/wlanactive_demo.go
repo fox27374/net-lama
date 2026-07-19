@@ -32,9 +32,11 @@ func demoWlanActive(iface string, opts WlanActiveOpts) *WlanActiveOutcome {
 		DNSServers:     []string{"192.168.77.1", "1.1.1.1"},
 		RSSIdBm:        int32(-45 - rand.Intn(15)),
 		NoiseDBm:       -95,
-		MAC:            demoMAC(opts.MACMode),
-		TxPackets:      uint32(800 + rand.Intn(400)),
-		TxRetries:      uint32(20 + rand.Intn(60)),
+		MAC:                demoMAC(opts.MACMode),
+		TxPackets:          uint32(800 + rand.Intn(400)),
+		TxRetries:          uint32(20 + rand.Intn(60)),
+		GatewayPingLossPct: 0,
+		GatewayPingRttMs:   float64(2 + rand.Intn(8)),
 	}
 	out.SNRdB = float64(out.RSSIdBm - out.NoiseDBm)
 	out.TxRetryPct = txRetryPct(out.TxPackets, out.TxRetries)

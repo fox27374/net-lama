@@ -403,7 +403,11 @@ managed by NetworkManager, its MAC-randomization policy can override
 `permanent` mode — see README for the host-side fix.
 The result payload (`wlanActive`) carries per-step timings
 (`associateMs`, `authenticateMs`, `dhcpMs`, `throughputMs`), `ip`,
-`netmask`, `gateway`, `throughputMbps`, `rssiDbm`, `totalMs`, and
+`netmask`, `gateway`, `dnsServers`, `mac`, `throughputMbps`, `rssiDbm`,
+`noiseDbm`, `snrDb`, `txRetryPct`/`txPackets`/`txRetries`,
+`gatewayPingLossPct`/`gatewayPingRttMs` (a 20-ping burst to the gateway
+that always runs after DHCP, giving the TX-retransmit rate a real traffic
+sample independent of the optional throughput step), `totalMs`, and
 `success`/`failedStep`.
 
 ### `GET /api/v1/me`
