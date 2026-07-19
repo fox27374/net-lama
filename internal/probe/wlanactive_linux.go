@@ -227,9 +227,7 @@ func collectLinkQuality(ctx context.Context, iface string, out *WlanActiveOutcom
 	}
 	out.TxPackets = txPackets
 	out.TxRetries = txRetries
-	if txPackets > 0 {
-		out.TxRetryPct = float64(txRetries) / float64(txPackets) * 100
-	}
+	out.TxRetryPct = txRetryPct(txPackets, txRetries)
 	if noise := iwSurveyNoise(ctx, iface); noise != 0 {
 		out.NoiseDBm = noise
 		if out.RSSIdBm != 0 {

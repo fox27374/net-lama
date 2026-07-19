@@ -101,6 +101,19 @@ func wpaSupplicantConf(opts WlanActiveOpts, caCertPath string) string {
 	return b.String()
 }
 
+// txRetryPct computes the retry rate as a share of all transmission
+// attempts. iw's "tx packets" counts only frames that were eventually
+// ACKed; retries are additional attempts on top of those, not included in
+// it — so the denominator is packets+retries (all attempts), not packets
+// alone (successes only), which would inflate the result.
+func txRetryPct(packets, retries uint32) float64 {
+	attempts := packets + retries
+	if attempts == 0 {
+		return 0
+	}
+	return float64(retries) / float64(attempts) * 100
+}
+
 // wpaEscape neutralizes quote/backslash so values cannot break out of the
 // quoted wpa_supplicant string.
 func wpaEscape(s string) string {

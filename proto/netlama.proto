@@ -276,7 +276,7 @@ message WlanActiveResult {
   repeated string dns_servers = 18; // DNS servers from the DHCP lease (option 6)
   int32 noise_dbm = 19;       // channel noise floor from the survey (0 = unavailable)
   double snr_db = 20;         // rssi_dbm − noise_dbm (0 = unavailable)
-  double tx_retry_pct = 21;   // retransmitted frames / transmitted frames × 100
+  double tx_retry_pct = 21;   // tx_retries / (tx_packets + tx_retries) × 100
   uint32 tx_packets = 22;     // frames transmitted to the AP during the test
   uint32 tx_retries = 23;     // retransmitted frames
   string mac = 24;            // the client MAC actually used for this test

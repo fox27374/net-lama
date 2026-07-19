@@ -59,3 +59,23 @@ func TestParseWpaEvent(t *testing.T) {
 		}
 	}
 }
+
+func TestTxRetryPct(t *testing.T) {
+	tests := []struct {
+		name             string
+		packets, retries uint32
+		want             float64
+	}{
+		{"the reported case: 3 retries, 11 successes -> 21.4%, not 27.3%", 11, 3, 21.428571428571427},
+		{"no traffic", 0, 0, 0},
+		{"no retries", 100, 0, 0},
+		{"all retries, no successes", 0, 5, 100},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := txRetryPct(tc.packets, tc.retries); got != tc.want {
+				t.Errorf("txRetryPct(%d, %d) = %v, want %v", tc.packets, tc.retries, got, tc.want)
+			}
+		})
+	}
+}

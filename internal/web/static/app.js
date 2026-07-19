@@ -1680,8 +1680,13 @@ async function renderWirelessActive(agent) {
     ? `<span class="health ${signalClass(wa.rssiDbm)}">${wa.rssiDbm} dBm</span>` +
       (wa.snrDb ? ` <span class="muted">SNR ${fmt(wa.snrDb, 0)} dB</span>` : "")
     : "—";
+  // txRetryPct = retries / (packets + retries); with no throughputUrl the
+  // only traffic is the DHCP handshake (~10-15 frames), where a single
+  // retry swings the result by several points — flag that low a sample.
+  const txAttempts = (wa.txPackets || 0) + (wa.txRetries || 0);
   const retrans = wa.txPackets
-    ? `${fmt(wa.txRetryPct)}% <span class="muted">(${wa.txRetries}/${wa.txPackets})</span>`
+    ? `${fmt(wa.txRetryPct)}% <span class="muted">(${wa.txRetries}/${txAttempts} attempts)</span>` +
+      (txAttempts < 50 ? ' <span class="muted">— small sample, set a throughput URL for a stable reading</span>' : "")
     : "—";
   const rows = [
     ["SSID", esc(wa.ssid || "—") + (wa.bssid ? ` <span class="muted mono">${esc(wa.bssid)}</span>` : "")],

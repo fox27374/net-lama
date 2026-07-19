@@ -37,9 +37,7 @@ func demoWlanActive(iface string, opts WlanActiveOpts) *WlanActiveOutcome {
 		TxRetries:      uint32(20 + rand.Intn(60)),
 	}
 	out.SNRdB = float64(out.RSSIdBm - out.NoiseDBm)
-	if out.TxPackets > 0 {
-		out.TxRetryPct = float64(out.TxRetries) / float64(out.TxPackets) * 100
-	}
+	out.TxRetryPct = txRetryPct(out.TxPackets, out.TxRetries)
 	if opts.ThroughputURL != "" {
 		out.ThroughputMbps = float64(120 + rand.Intn(180))
 		out.ThroughputMs = float64(3000 + rand.Intn(2000))

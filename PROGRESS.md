@@ -918,6 +918,22 @@ What has been done so far, in chronological order. Planned work lives in
   actually used is captured (`/sys/class/net/<if>/address`) and shown on the
   active card. Proto param 8 / result 24.
 
+## 2026-07-19 — Fix TX retry-rate formula, flag small samples (v0.5.0)
+
+- **Bug**: TX retransmit rate was computed as `retries / packets`. iw's
+  "tx packets" counts only successfully-ACKed frames — retries are additional
+  attempts on top of those, not included in it — so dividing by packets alone
+  inflates the result (e.g. 3 retries on 11 successes reported 27.3%; the
+  correct rate, retries over ALL attempts, is 3/14 = 21.4%). Verified against
+  a live `iw station dump` capture on rp01 to confirm the field semantics
+  before fixing. New pure `txRetryPct(packets, retries)` helper (matching the
+  existing parse-function pattern), unit tested with the reported case.
+- **Small-sample caveat surfaced in the UI**: without a `throughputUrl`
+  configured, the only traffic during the test is the DHCP handshake — about
+  10-15 frames. On that few attempts a single retry swings the percentage by
+  several points; the active card now shows the attempt count and a note to
+  set a throughput URL for a statistically stable reading.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
