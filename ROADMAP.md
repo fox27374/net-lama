@@ -50,6 +50,8 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] WLAN active link quality: RSSI, SNR (via channel noise floor) and
       TX retransmission rate from `iw station dump`/`survey dump`, plus DNS
       servers from the DHCP lease and the client IP in CIDR notation
+- [x] WLAN active MAC policy: permanent (default, stable identity) vs random
+      per-run MAC, opt-in with a DHCP/AP-churn warning; the MAC used is shown
 - [ ] WLAN roaming observation: detect roaming events of the active test
       station (or tracked clients) and measure roam duration between APs
 - [x] SSID security + PHY standards: security (Open/WEP/WPA2/WPA3/WPA2-WPA3

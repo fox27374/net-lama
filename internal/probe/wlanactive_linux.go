@@ -149,6 +149,9 @@ connect:
 	}
 
 	out.RSSIdBm = iwLinkSignal(ctx, iface)
+	if mac, err := os.ReadFile("/sys/class/net/" + iface + "/address"); err == nil {
+		out.MAC = strings.TrimSpace(string(mac))
+	}
 
 	// Disable power save on the dedicated test interface — harmless hardening;
 	// note it does NOT fix the post-association DHCP delay (that's the AP/switch

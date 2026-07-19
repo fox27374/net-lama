@@ -15,6 +15,7 @@ type WlanActiveOpts struct {
 	CACertPEM          string // PEM CA certificate for EAP server validation
 	InsecureSkipVerify bool   // EAP: skip server certificate validation
 	ThroughputURL      string // optional download URL for the throughput step
+	MACMode            string // "permanent" (default) or "random"
 }
 
 // WlanActiveOutcome is the timed result of one active connection test.
@@ -40,6 +41,7 @@ type WlanActiveOutcome struct {
 	TxRetryPct     float64
 	TxPackets      uint32
 	TxRetries      uint32
+	MAC            string // client MAC actually used
 	TotalMs        float64
 }
 
@@ -60,14 +62,19 @@ func WlanActive(ctx context.Context, iface string, opts WlanActiveOpts) (*WlanAc
 func wpaSupplicantConf(opts WlanActiveOpts, caCertPath string) string {
 	var b strings.Builder
 	b.WriteString("ctrl_interface=/tmp/netlama-wpa\n")
-	// Use the adapter's permanent MAC for both scans and association instead
-	// of wpa_supplicant's default per-connection randomization. A fixed sensor
-	// wants ONE stable identity: reused DHCP lease, one entry in the AP's
-	// client table, and a consistent "device" across runs.
-	b.WriteString("mac_addr=0\n")
-	b.WriteString("preassoc_mac_addr=0\n")
+	// MAC policy. Default "permanent" (mac_addr=0): the adapter's real MAC for
+	// both scans and association — one stable identity, reused DHCP lease, one
+	// entry in the AP's client table. "random" (mac_addr=1) uses a fresh MAC
+	// per run: each test looks like a new device (consumes a DHCP lease and
+	// clutters the AP's client table), which wpa_supplicant does by default.
+	macAddr := "0"
+	if opts.MACMode == "random" {
+		macAddr = "1"
+	}
+	fmt.Fprintf(&b, "mac_addr=%s\n", macAddr)
+	fmt.Fprintf(&b, "preassoc_mac_addr=%s\n", macAddr)
 	b.WriteString("network={\n")
-	b.WriteString("  mac_addr=0\n")
+	fmt.Fprintf(&b, "  mac_addr=%s\n", macAddr)
 	fmt.Fprintf(&b, "  ssid=\"%s\"\n", wpaEscape(opts.SSID))
 	// Directed probe requests: finds the SSID faster and more reliably than
 	// passive listening (and is required for hidden SSIDs)

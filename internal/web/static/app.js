@@ -737,6 +737,9 @@ function updateWlanActiveSecurityFields() {
   $("#t-wa-eap-extra").classList.toggle("hidden", sec !== "eap-peap");
 }
 $("#t-wa-security").addEventListener("change", updateWlanActiveSecurityFields);
+$("#t-wa-macmode").addEventListener("change", () => {
+  $("#t-wa-mac-warn").classList.toggle("hidden", $("#t-wa-macmode").value !== "random");
+});
 
 $("#t-type").addEventListener("change", () => {
   updateTestParamFields();
@@ -919,6 +922,8 @@ function openTestDialog(test) {
   $("#t-wa-cacert").value = wa.caCertPem || "";
   $("#t-wa-insecure").checked = !!wa.insecureSkipVerify;
   $("#t-wa-tpurl").value = wa.throughputUrl || "";
+  $("#t-wa-macmode").value = wa.macMode || "permanent";
+  $("#t-wa-mac-warn").classList.toggle("hidden", ($("#t-wa-macmode").value) !== "random");
   updateTestParamFields();
 
   // State thresholds band editor
@@ -986,6 +991,7 @@ $("#form-test").addEventListener("submit", async (e) => {
       caCertPem: $("#t-wa-cacert").value.trim(),
       insecureSkipVerify: $("#t-wa-insecure").checked,
       throughputUrl: $("#t-wa-tpurl").value.trim(),
+      macMode: $("#t-wa-macmode").value,
     };
   }
   // Build thresholds from the band editor (undefined => validation error)
@@ -1681,6 +1687,7 @@ async function renderWirelessActive(agent) {
     ["SSID", esc(wa.ssid || "—") + (wa.bssid ? ` <span class="muted mono">${esc(wa.bssid)}</span>` : "")],
     ["Status", status],
     ["IP address", cidr ? `<span class="mono">${cidr}</span>` : "—"],
+    ["Client MAC", wa.mac ? `<span class="mono">${esc(wa.mac)}</span>` : "—"],
     ["Gateway", wa.gateway ? `<span class="mono">${esc(wa.gateway)}</span>` : "—"],
     ["DNS servers", dns],
     ["Signal", signal],

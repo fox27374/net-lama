@@ -572,6 +572,13 @@
         <label class="check"><input type="checkbox" id="t-wa-insecure"> Ignore server certificate (accept any EAP server)</label>
       </div>
       <label>Throughput URL (optional) <input type="text" id="t-wa-tpurl" placeholder="https://…/testfile — empty skips the throughput step"></label>
+      <label>MAC address
+        <select id="t-wa-macmode">
+          <option value="permanent">Permanent (adapter's real MAC)</option>
+          <option value="random">Randomized (new MAC each run)</option>
+        </select>
+      </label>
+      <p id="t-wa-mac-warn" class="warn-note hidden">⚠ Randomized MAC uses a fresh address every run — each test consumes a DHCP lease (can exhaust the pool) and shows up as a new device in the AP's client table. Use Permanent for a fixed sensor.</p>
     </div>
     <div id="t-params-speedtest" class="hidden">
       <label>Provider

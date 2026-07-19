@@ -391,10 +391,14 @@ E.g. for `testType: "speedtest"` the payload is
 `POST/PUT /api/v1/tests` with `type: "wlan_active"` takes params:
 `{"ssid": "...", "security": "psk"|"eap-peap"|"open", "password": "...",
 "identity": "...", "caCertPem": "-----BEGIN CERTIFICATE-----...",
-"insecureSkipVerify": false, "throughputUrl": "https://..."}`.
+"insecureSkipVerify": false, "throughputUrl": "https://...",
+"macMode": "permanent"|"random"}`.
 `ssid` is required; `psk` requires `password`; `eap-peap` requires
 `identity`, `password` and either `caCertPem` or `insecureSkipVerify`;
-`throughputUrl` empty skips the throughput step. Interval must be ≥ 300s.
+`throughputUrl` empty skips the throughput step. `macMode` defaults to
+`permanent` (the adapter's real MAC — stable identity, reused DHCP lease);
+`random` uses a new MAC each run (consumes a lease per run, clutters the AP
+client table). Interval must be ≥ 300s.
 The result payload (`wlanActive`) carries per-step timings
 (`associateMs`, `authenticateMs`, `dhcpMs`, `throughputMs`), `ip`,
 `netmask`, `gateway`, `throughputMbps`, `rssiDbm`, `totalMs`, and

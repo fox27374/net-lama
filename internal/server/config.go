@@ -50,6 +50,7 @@ type WlanActiveParams struct {
 	CACertPEM          string `json:"caCertPem"`
 	InsecureSkipVerify bool   `json:"insecureSkipVerify"`
 	ThroughputURL      string `json:"throughputUrl"`
+	MACMode            string `json:"macMode"` // "permanent" (default) or "random"
 }
 
 type TracerouteParams struct {
@@ -208,6 +209,13 @@ func ValidateTestDef(t *store.TestDef) error {
 				return fmt.Errorf("wlan_active with eap-peap requires a CA certificate or insecureSkipVerify")
 			}
 		}
+		switch p.MACMode {
+		case "":
+			p.MACMode = "permanent"
+		case "permanent", "random":
+		default:
+			return fmt.Errorf("wlan_active macMode must be permanent or random")
+		}
 		// The test takes the radio away from passive sweeps; keep it rare.
 		if t.IntervalSeconds < 300 {
 			return fmt.Errorf("wlan_active interval must be at least 300 seconds")
@@ -312,6 +320,7 @@ func TestSpec(t *store.TestDef) (*pb.TestSpec, error) {
 			Ssid: p.SSID, Security: p.Security, Password: p.Password,
 			Identity: p.Identity, CaCertPem: p.CACertPEM,
 			InsecureSkipVerify: p.InsecureSkipVerify, ThroughputUrl: p.ThroughputURL,
+			MacMode: p.MACMode,
 		}}
 	case "traceroute":
 		var p TracerouteParams

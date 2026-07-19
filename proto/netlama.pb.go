@@ -1032,8 +1032,11 @@ type WlanActiveParams struct {
 	CaCertPem          string `protobuf:"bytes,5,opt,name=ca_cert_pem,json=caCertPem,proto3" json:"ca_cert_pem,omitempty"`                             // PEM CA cert to validate the EAP server (optional)
 	InsecureSkipVerify bool   `protobuf:"varint,6,opt,name=insecure_skip_verify,json=insecureSkipVerify,proto3" json:"insecure_skip_verify,omitempty"` // EAP: accept any server cert (no ca_cert)
 	ThroughputUrl      string `protobuf:"bytes,7,opt,name=throughput_url,json=throughputUrl,proto3" json:"throughput_url,omitempty"`                   // optional: URL downloaded through the WLAN for throughput
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// mac_mode: "permanent" (default, use the adapter's real MAC — stable
+	// identity, reused DHCP lease) or "random" (new MAC per run).
+	MacMode       string `protobuf:"bytes,8,opt,name=mac_mode,json=macMode,proto3" json:"mac_mode,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WlanActiveParams) Reset() {
@@ -1111,6 +1114,13 @@ func (x *WlanActiveParams) GetInsecureSkipVerify() bool {
 func (x *WlanActiveParams) GetThroughputUrl() string {
 	if x != nil {
 		return x.ThroughputUrl
+	}
+	return ""
+}
+
+func (x *WlanActiveParams) GetMacMode() string {
+	if x != nil {
+		return x.MacMode
 	}
 	return ""
 }
@@ -2201,6 +2211,7 @@ type WlanActiveResult struct {
 	TxRetryPct     float64                `protobuf:"fixed64,21,opt,name=tx_retry_pct,json=txRetryPct,proto3" json:"tx_retry_pct,omitempty"`     // retransmitted frames / transmitted frames × 100
 	TxPackets      uint32                 `protobuf:"varint,22,opt,name=tx_packets,json=txPackets,proto3" json:"tx_packets,omitempty"`           // frames transmitted to the AP during the test
 	TxRetries      uint32                 `protobuf:"varint,23,opt,name=tx_retries,json=txRetries,proto3" json:"tx_retries,omitempty"`           // retransmitted frames
+	Mac            string                 `protobuf:"bytes,24,opt,name=mac,proto3" json:"mac,omitempty"`                                         // the client MAC actually used for this test
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2394,6 +2405,13 @@ func (x *WlanActiveResult) GetTxRetries() uint32 {
 		return x.TxRetries
 	}
 	return 0
+}
+
+func (x *WlanActiveResult) GetMac() string {
+	if x != nil {
+		return x.Mac
+	}
+	return ""
 }
 
 type WlanPassiveResult struct {
@@ -3361,7 +3379,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\x0eWlanScanParams\"H\n" +
 	"\x0fWlanSenseParams\x12\x1a\n" +
 	"\bchannels\x18\x01 \x03(\rR\bchannels\x12\x19\n" +
-	"\bdwell_ms\x18\x02 \x01(\rR\adwellMs\"\xf3\x01\n" +
+	"\bdwell_ms\x18\x02 \x01(\rR\adwellMs\"\x8e\x02\n" +
 	"\x10WlanActiveParams\x12\x12\n" +
 	"\x04ssid\x18\x01 \x01(\tR\x04ssid\x12\x1a\n" +
 	"\bsecurity\x18\x02 \x01(\tR\bsecurity\x12\x1a\n" +
@@ -3369,7 +3387,8 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bidentity\x18\x04 \x01(\tR\bidentity\x12\x1e\n" +
 	"\vca_cert_pem\x18\x05 \x01(\tR\tcaCertPem\x120\n" +
 	"\x14insecure_skip_verify\x18\x06 \x01(\bR\x12insecureSkipVerify\x12%\n" +
-	"\x0ethroughput_url\x18\a \x01(\tR\rthroughputUrl\"\x13\n" +
+	"\x0ethroughput_url\x18\a \x01(\tR\rthroughputUrl\x12\x19\n" +
+	"\bmac_mode\x18\b \x01(\tR\amacMode\"\x13\n" +
 	"\x11WlanPassiveParams\"\x9b\x01\n" +
 	"\x10TracerouteParams\x12\x16\n" +
 	"\x06target\x18\x01 \x01(\tR\x06target\x12\x1a\n" +
@@ -3467,7 +3486,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bstations\x18\x03 \x03(\v2\x17.netlama.v1.WlanStationR\bstations\x127\n" +
 	"\bchannels\x18\x04 \x03(\v2\x1b.netlama.v1.WlanChannelStatR\bchannels\x12\x19\n" +
 	"\bsweep_ms\x18\x05 \x01(\rR\asweepMs\x123\n" +
-	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xa4\x05\n" +
+	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xb6\x05\n" +
 	"\x10WlanActiveResult\x12\x1c\n" +
 	"\tinterface\x18\x01 \x01(\tR\tinterface\x12\x12\n" +
 	"\x04ssid\x18\x02 \x01(\tR\x04ssid\x12\x14\n" +
@@ -3497,7 +3516,8 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\n" +
 	"tx_packets\x18\x16 \x01(\rR\ttxPackets\x12\x1d\n" +
 	"\n" +
-	"tx_retries\x18\x17 \x01(\rR\ttxRetries\"\x83\x02\n" +
+	"tx_retries\x18\x17 \x01(\rR\ttxRetries\x12\x10\n" +
+	"\x03mac\x18\x18 \x01(\tR\x03mac\"\x83\x02\n" +
 	"\x11WlanPassiveResult\x12\x1c\n" +
 	"\tinterface\x18\x01 \x01(\tR\tinterface\x12\x12\n" +
 	"\x04demo\x18\x02 \x01(\bR\x04demo\x123\n" +

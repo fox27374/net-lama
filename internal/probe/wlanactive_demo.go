@@ -1,6 +1,18 @@
 package probe
 
-import "math/rand"
+import (
+	"fmt"
+	"math/rand"
+)
+
+// demoMAC returns the adapter's stable demo MAC, or a random one when the
+// test is configured for per-run randomization.
+func demoMAC(mode string) string {
+	if mode == "random" {
+		return fmt.Sprintf("9a:%02x:%02x:%02x:%02x:%02x", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
+	}
+	return "40:a5:ef:5c:61:b4"
+}
 
 // demoWlanActive synthesizes a plausible active-test outcome for
 // NETLAMA_WLAN_DEMO pipelines.
@@ -20,6 +32,7 @@ func demoWlanActive(iface string, opts WlanActiveOpts) *WlanActiveOutcome {
 		DNSServers:     []string{"192.168.77.1", "1.1.1.1"},
 		RSSIdBm:        int32(-45 - rand.Intn(15)),
 		NoiseDBm:       -95,
+		MAC:            demoMAC(opts.MACMode),
 		TxPackets:      uint32(800 + rand.Intn(400)),
 		TxRetries:      uint32(20 + rand.Intn(60)),
 	}

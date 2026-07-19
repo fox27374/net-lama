@@ -418,6 +418,7 @@ func (a *Agent) runWlanActive(ctx context.Context, spec *pb.TestSpec, params *pb
 		CACertPEM:          params.CaCertPem,
 		InsecureSkipVerify: params.InsecureSkipVerify,
 		ThroughputURL:      params.ThroughputUrl,
+		MACMode:            params.MacMode,
 	}
 	a.Logger.Info("WLAN active test starting",
 		slog.String("test", spec.Name), slog.String("interface", iface), slog.String("ssid", params.Ssid))
@@ -468,6 +469,7 @@ func (a *Agent) runWlanActive(ctx context.Context, spec *pb.TestSpec, params *pb
 		TxRetryPct:     out.TxRetryPct,
 		TxPackets:      out.TxPackets,
 		TxRetries:      out.TxRetries,
+		Mac:            out.MAC,
 		TotalMs:        out.TotalMs,
 	}}
 	sendResult(ctx, results, result)

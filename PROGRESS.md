@@ -905,6 +905,19 @@ What has been done so far, in chronological order. Planned work lives in
   an in-fleet iperf3-style reflector is the gold standard and is tracked as
   the agent-to-agent perfmon roadmap item.
 
+## 2026-07-19 — wlan_active MAC policy (permanent vs random)
+
+- Confirmed by capture that wpa_supplicant randomized the MAC every
+  association (`6a:…`, `9a:…`, never the adapter's real `40:a5:…`), so each
+  active test looked like a new device — a fresh DHCP lease per run and
+  AP client-table churn. Fixed the default to the permanent MAC
+  (`mac_addr=0` / `preassoc_mac_addr=0`).
+- Added a `macMode` param ("permanent" default, "random") so randomization
+  is opt-in; the test dialog shows a warning when "random" is picked
+  (consumes a DHCP lease per run, clutters the AP client table). The MAC
+  actually used is captured (`/sys/class/net/<if>/address`) and shown on the
+  active card. Proto param 8 / result 24.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

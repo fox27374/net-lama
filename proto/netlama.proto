@@ -127,6 +127,9 @@ message WlanActiveParams {
   string ca_cert_pem = 5;     // PEM CA cert to validate the EAP server (optional)
   bool insecure_skip_verify = 6; // EAP: accept any server cert (no ca_cert)
   string throughput_url = 7;  // optional: URL downloaded through the WLAN for throughput
+  // mac_mode: "permanent" (default, use the adapter's real MAC — stable
+  // identity, reused DHCP lease) or "random" (new MAC per run).
+  string mac_mode = 8;
 }
 
 // WlanPassiveParams configures a passive monitor-mode sweep.
@@ -276,6 +279,7 @@ message WlanActiveResult {
   double tx_retry_pct = 21;   // retransmitted frames / transmitted frames × 100
   uint32 tx_packets = 22;     // frames transmitted to the AP during the test
   uint32 tx_retries = 23;     // retransmitted frames
+  string mac = 24;            // the client MAC actually used for this test
 }
 
 message WlanPassiveResult {
