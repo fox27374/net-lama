@@ -257,7 +257,9 @@ func iwStationStats(ctx context.Context, iface string) (signal int32, txPackets,
 }
 
 // iwSurveyNoise returns the noise floor (dBm) of the in-use channel from
-// `iw dev <iface> survey dump`, or 0 if unavailable.
+// `iw dev <iface> survey dump`, or 0 if unavailable. Note: many drivers
+// (notably mt76 / MT7612U) never populate the survey noise field, so SNR
+// stays blank on that hardware — this works on ath9k/ath10k and similar.
 func iwSurveyNoise(ctx context.Context, iface string) int32 {
 	outBytes, err := exec.CommandContext(ctx, "iw", "dev", iface, "survey", "dump").Output()
 	if err != nil {
