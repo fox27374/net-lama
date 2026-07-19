@@ -183,29 +183,113 @@ connect:
 	if routers := lease.ACK.Router(); len(routers) > 0 {
 		out.Gateway = routers[0].String()
 	}
+	for _, dns := range lease.ACK.DNS() {
+		out.DNSServers = append(out.DNSServers, dns.String())
+	}
 
-	// Optional throughput download through the WLAN path
-	if opts.ThroughputURL == "" {
-		out.Success = true
-		out.FailedStep = ""
-		return done()
-	}
-	out.FailedStep = "throughput"
-	maskBits, _ := net.IPMask(net.ParseIP(out.Netmask).To4()).Size()
-	if err := setupTestRoute(ctx, iface, out.IP, maskBits, out.Gateway); err != nil {
-		return done()
-	}
-	defer teardownTestRoute(context.WithoutCancel(ctx), iface, out.IP, maskBits)
+	// Optional throughput download through the WLAN path. Link quality
+	// (RSSI/SNR/retransmits) is sampled at the end so the tx counters
+	// reflect any load the throughput step generated.
+	if opts.ThroughputURL != "" {
+		out.FailedStep = "throughput"
+		maskBits, _ := net.IPMask(net.ParseIP(out.Netmask).To4()).Size()
+		if err := setupTestRoute(ctx, iface, out.IP, maskBits, out.Gateway); err != nil {
+			collectLinkQuality(ctx, iface, out)
+			return done()
+		}
+		defer teardownTestRoute(context.WithoutCancel(ctx), iface, out.IP, maskBits)
 
-	mbps, ms, err := downloadVia(ctx, out.IP, opts.ThroughputURL)
-	if err != nil {
-		return done()
+		mbps, ms, err := downloadVia(ctx, out.IP, opts.ThroughputURL)
+		if err != nil {
+			collectLinkQuality(ctx, iface, out)
+			return done()
+		}
+		out.ThroughputMbps = mbps
+		out.ThroughputMs = ms
 	}
-	out.ThroughputMbps = mbps
-	out.ThroughputMs = ms
+
+	collectLinkQuality(ctx, iface, out)
 	out.Success = true
 	out.FailedStep = ""
 	return done()
+}
+
+// collectLinkQuality reads the associated-AP station stats (RSSI, tx frames
+// and retries) and the channel noise floor, filling RSSI/SNR/retransmit
+// fields on out. Best-effort: missing metrics stay zero.
+func collectLinkQuality(ctx context.Context, iface string, out *WlanActiveOutcome) {
+	signal, txPackets, txRetries := iwStationStats(ctx, iface)
+	if signal != 0 {
+		out.RSSIdBm = signal
+	}
+	out.TxPackets = txPackets
+	out.TxRetries = txRetries
+	if txPackets > 0 {
+		out.TxRetryPct = float64(txRetries) / float64(txPackets) * 100
+	}
+	if noise := iwSurveyNoise(ctx, iface); noise != 0 {
+		out.NoiseDBm = noise
+		if out.RSSIdBm != 0 {
+			out.SNRdB = float64(out.RSSIdBm - noise)
+		}
+	}
+}
+
+// iwStationStats parses `iw dev <iface> station dump` for the associated AP:
+// current signal (dBm), tx packets, and tx retries.
+func iwStationStats(ctx context.Context, iface string) (signal int32, txPackets, txRetries uint32) {
+	outBytes, err := exec.CommandContext(ctx, "iw", "dev", iface, "station", "dump").Output()
+	if err != nil {
+		return 0, 0, 0
+	}
+	for _, line := range strings.Split(string(outBytes), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "signal:"):
+			signal = parseFirstInt32(strings.TrimPrefix(line, "signal:"))
+		case strings.HasPrefix(line, "tx packets:"):
+			txPackets = uint32(parseFirstInt32(strings.TrimPrefix(line, "tx packets:")))
+		case strings.HasPrefix(line, "tx retries:"):
+			txRetries = uint32(parseFirstInt32(strings.TrimPrefix(line, "tx retries:")))
+		}
+	}
+	return signal, txPackets, txRetries
+}
+
+// iwSurveyNoise returns the noise floor (dBm) of the in-use channel from
+// `iw dev <iface> survey dump`, or 0 if unavailable.
+func iwSurveyNoise(ctx context.Context, iface string) int32 {
+	outBytes, err := exec.CommandContext(ctx, "iw", "dev", iface, "survey", "dump").Output()
+	if err != nil {
+		return 0
+	}
+	inUse := false
+	for _, line := range strings.Split(string(outBytes), "\n") {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "Survey data from") {
+			inUse = false
+		}
+		if strings.Contains(t, "[in use]") {
+			inUse = true
+		}
+		if inUse && strings.HasPrefix(t, "noise:") {
+			return parseFirstInt32(strings.TrimPrefix(t, "noise:"))
+		}
+	}
+	return 0
+}
+
+// parseFirstInt32 extracts the first (possibly signed) integer from s.
+func parseFirstInt32(s string) int32 {
+	f := strings.Fields(s)
+	if len(f) == 0 {
+		return 0
+	}
+	n, err := strconv.Atoi(f[0])
+	if err != nil {
+		return 0
+	}
+	return int32(n)
 }
 
 // setupTestRoute assigns the leased address and installs a source-routed

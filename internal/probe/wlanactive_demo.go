@@ -17,7 +17,15 @@ func demoWlanActive(iface string, opts WlanActiveOpts) *WlanActiveOutcome {
 		IP:             "192.168.77.42",
 		Netmask:        "255.255.255.0",
 		Gateway:        "192.168.77.1",
+		DNSServers:     []string{"192.168.77.1", "1.1.1.1"},
 		RSSIdBm:        int32(-45 - rand.Intn(15)),
+		NoiseDBm:       -95,
+		TxPackets:      uint32(800 + rand.Intn(400)),
+		TxRetries:      uint32(20 + rand.Intn(60)),
+	}
+	out.SNRdB = float64(out.RSSIdBm - out.NoiseDBm)
+	if out.TxPackets > 0 {
+		out.TxRetryPct = float64(out.TxRetries) / float64(out.TxPackets) * 100
 	}
 	if opts.ThroughputURL != "" {
 		out.ThroughputMbps = float64(120 + rand.Intn(180))

@@ -887,6 +887,24 @@ What has been done so far, in chronological order. Planned work lives in
   added to the supplicant config (directed probes: faster, more reliable SSID
   discovery, works for hidden SSIDs).
 
+## 2026-07-19 — WLAN active link quality + lease detail (v0.3.0)
+
+- **More `wlan_active` metrics**: RSSI, channel noise floor and SNR
+  (rssi − noise, from `iw dev <if> survey dump` in-use channel), and TX
+  retransmission rate (tx retries / tx packets from `iw dev <if> station
+  dump`), sampled at the end of the test so the counters reflect the
+  throughput load. DNS servers pulled from the DHCP lease (option 6).
+  Proto fields 18–23; agent, demo and UI updated.
+- **UI**: the client address now shows in CIDR (IP + prefix derived from the
+  lease netmask) and the separate Netmask row is gone; new DNS servers, SNR
+  (next to signal) and TX-retransmit rows on the active card; CIDR in the
+  Results summary too.
+- **Throughput note**: still an HTTP GET of a configured URL pinned to the
+  leased source address via the policy-routed table. For a pure wireless-link
+  number, point `throughputUrl` at a LAN host (avoids WAN/server confounds);
+  an in-fleet iperf3-style reflector is the gold standard and is tracked as
+  the agent-to-agent perfmon roadmap item.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

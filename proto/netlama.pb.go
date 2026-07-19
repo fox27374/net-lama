@@ -2195,6 +2195,12 @@ type WlanActiveResult struct {
 	RssiDbm        int32                  `protobuf:"varint,15,opt,name=rssi_dbm,json=rssiDbm,proto3" json:"rssi_dbm,omitempty"`                 // signal to the AP during the test
 	TotalMs        float64                `protobuf:"fixed64,16,opt,name=total_ms,json=totalMs,proto3" json:"total_ms,omitempty"`                // scan through last step (excludes teardown/mode restore)
 	ScanMs         float64                `protobuf:"fixed64,17,opt,name=scan_ms,json=scanMs,proto3" json:"scan_ms,omitempty"`                   // supplicant start → SSID found (scan phase)
+	DnsServers     []string               `protobuf:"bytes,18,rep,name=dns_servers,json=dnsServers,proto3" json:"dns_servers,omitempty"`         // DNS servers from the DHCP lease (option 6)
+	NoiseDbm       int32                  `protobuf:"varint,19,opt,name=noise_dbm,json=noiseDbm,proto3" json:"noise_dbm,omitempty"`              // channel noise floor from the survey (0 = unavailable)
+	SnrDb          float64                `protobuf:"fixed64,20,opt,name=snr_db,json=snrDb,proto3" json:"snr_db,omitempty"`                      // rssi_dbm − noise_dbm (0 = unavailable)
+	TxRetryPct     float64                `protobuf:"fixed64,21,opt,name=tx_retry_pct,json=txRetryPct,proto3" json:"tx_retry_pct,omitempty"`     // retransmitted frames / transmitted frames × 100
+	TxPackets      uint32                 `protobuf:"varint,22,opt,name=tx_packets,json=txPackets,proto3" json:"tx_packets,omitempty"`           // frames transmitted to the AP during the test
+	TxRetries      uint32                 `protobuf:"varint,23,opt,name=tx_retries,json=txRetries,proto3" json:"tx_retries,omitempty"`           // retransmitted frames
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2344,6 +2350,48 @@ func (x *WlanActiveResult) GetTotalMs() float64 {
 func (x *WlanActiveResult) GetScanMs() float64 {
 	if x != nil {
 		return x.ScanMs
+	}
+	return 0
+}
+
+func (x *WlanActiveResult) GetDnsServers() []string {
+	if x != nil {
+		return x.DnsServers
+	}
+	return nil
+}
+
+func (x *WlanActiveResult) GetNoiseDbm() int32 {
+	if x != nil {
+		return x.NoiseDbm
+	}
+	return 0
+}
+
+func (x *WlanActiveResult) GetSnrDb() float64 {
+	if x != nil {
+		return x.SnrDb
+	}
+	return 0
+}
+
+func (x *WlanActiveResult) GetTxRetryPct() float64 {
+	if x != nil {
+		return x.TxRetryPct
+	}
+	return 0
+}
+
+func (x *WlanActiveResult) GetTxPackets() uint32 {
+	if x != nil {
+		return x.TxPackets
+	}
+	return 0
+}
+
+func (x *WlanActiveResult) GetTxRetries() uint32 {
+	if x != nil {
+		return x.TxRetries
 	}
 	return 0
 }
@@ -3419,7 +3467,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\bstations\x18\x03 \x03(\v2\x17.netlama.v1.WlanStationR\bstations\x127\n" +
 	"\bchannels\x18\x04 \x03(\v2\x1b.netlama.v1.WlanChannelStatR\bchannels\x12\x19\n" +
 	"\bsweep_ms\x18\x05 \x01(\rR\asweepMs\x123\n" +
-	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xef\x03\n" +
+	"\bnetworks\x18\x06 \x03(\v2\x17.netlama.v1.WlanNetworkR\bnetworks\"\xa4\x05\n" +
 	"\x10WlanActiveResult\x12\x1c\n" +
 	"\tinterface\x18\x01 \x01(\tR\tinterface\x12\x12\n" +
 	"\x04ssid\x18\x02 \x01(\tR\x04ssid\x12\x14\n" +
@@ -3439,7 +3487,17 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\rthroughput_ms\x18\x0e \x01(\x01R\fthroughputMs\x12\x19\n" +
 	"\brssi_dbm\x18\x0f \x01(\x05R\arssiDbm\x12\x19\n" +
 	"\btotal_ms\x18\x10 \x01(\x01R\atotalMs\x12\x17\n" +
-	"\ascan_ms\x18\x11 \x01(\x01R\x06scanMs\"\x83\x02\n" +
+	"\ascan_ms\x18\x11 \x01(\x01R\x06scanMs\x12\x1f\n" +
+	"\vdns_servers\x18\x12 \x03(\tR\n" +
+	"dnsServers\x12\x1b\n" +
+	"\tnoise_dbm\x18\x13 \x01(\x05R\bnoiseDbm\x12\x15\n" +
+	"\x06snr_db\x18\x14 \x01(\x01R\x05snrDb\x12 \n" +
+	"\ftx_retry_pct\x18\x15 \x01(\x01R\n" +
+	"txRetryPct\x12\x1d\n" +
+	"\n" +
+	"tx_packets\x18\x16 \x01(\rR\ttxPackets\x12\x1d\n" +
+	"\n" +
+	"tx_retries\x18\x17 \x01(\rR\ttxRetries\"\x83\x02\n" +
 	"\x11WlanPassiveResult\x12\x1c\n" +
 	"\tinterface\x18\x01 \x01(\tR\tinterface\x12\x12\n" +
 	"\x04demo\x18\x02 \x01(\bR\x04demo\x123\n" +

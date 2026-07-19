@@ -459,9 +459,15 @@ func (a *Agent) runWlanActive(ctx context.Context, spec *pb.TestSpec, params *pb
 		Ip:             out.IP,
 		Netmask:        out.Netmask,
 		Gateway:        out.Gateway,
+		DnsServers:     out.DNSServers,
 		ThroughputMbps: out.ThroughputMbps,
 		ThroughputMs:   out.ThroughputMs,
 		RssiDbm:        out.RSSIdBm,
+		NoiseDbm:       out.NoiseDBm,
+		SnrDb:          out.SNRdB,
+		TxRetryPct:     out.TxRetryPct,
+		TxPackets:      out.TxPackets,
+		TxRetries:      out.TxRetries,
 		TotalMs:        out.TotalMs,
 	}}
 	sendResult(ctx, results, result)

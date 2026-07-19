@@ -1244,7 +1244,8 @@ function resultDetails(r) {
       return `${esc(w.ssid)} · <span class="error">${esc(w.failedStep || "failed")}</span>` +
         (w.associateMs ? ` · assoc ${fmt(w.associateMs)} ms` : "");
     }
-    let out = `${esc(w.ssid)} · assoc ${fmt(w.associateMs)} ms · auth ${fmt(w.authenticateMs)} ms · dhcp ${fmt(w.dhcpMs)} ms · ${esc(w.ip)}`;
+    const ip = w.ip ? esc(w.ip) + (w.netmask ? "/" + netmaskToPrefix(w.netmask) : "") : "?";
+    let out = `${esc(w.ssid)} · assoc ${fmt(w.associateMs)} ms · auth ${fmt(w.authenticateMs)} ms · dhcp ${fmt(w.dhcpMs)} ms · ${ip}`;
     if (w.gateway) out += ` gw ${esc(w.gateway)}`;
     if (w.throughputMbps) out += ` · ${fmt(w.throughputMbps)} Mbps`;
     return out;
@@ -1619,6 +1620,14 @@ async function renderWirelessAgent() {
   renderWirelessActive(agent);
 }
 
+// netmaskToPrefix converts a dotted netmask ("255.255.255.0") to a prefix
+// length (24). Falls back to the raw string if it doesn't parse.
+function netmaskToPrefix(mask) {
+  const octets = mask.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((o) => isNaN(o))) return mask;
+  return octets.reduce((bits, o) => bits + ((o >>> 0).toString(2).match(/1/g) || []).length, 0);
+}
+
 // --- Active connection test (wlan_active) on the Wireless page ---
 let wlActiveChart = null;
 let wlActiveLast = null; // latest wlan_active payload, for theme re-render
@@ -1657,13 +1666,25 @@ async function renderWirelessActive(agent) {
   const status = wa.success
     ? '<span class="health healthy">connected</span>'
     : `<span class="health failing">failed: ${esc(wa.failedStep || r.error || "unknown")}</span>`;
+  const cidr = wa.ip ? esc(wa.ip) + (wa.netmask ? "/" + netmaskToPrefix(wa.netmask) : "") : "";
+  const dns = (wa.dnsServers && wa.dnsServers.length)
+    ? wa.dnsServers.map((d) => `<span class="mono">${esc(d)}</span>`).join(", ")
+    : "—";
+  const signal = wa.rssiDbm
+    ? `<span class="health ${signalClass(wa.rssiDbm)}">${wa.rssiDbm} dBm</span>` +
+      (wa.snrDb ? ` <span class="muted">SNR ${fmt(wa.snrDb, 0)} dB</span>` : "")
+    : "—";
+  const retrans = wa.txPackets
+    ? `${fmt(wa.txRetryPct)}% <span class="muted">(${wa.txRetries}/${wa.txPackets})</span>`
+    : "—";
   const rows = [
     ["SSID", esc(wa.ssid || "—") + (wa.bssid ? ` <span class="muted mono">${esc(wa.bssid)}</span>` : "")],
     ["Status", status],
-    ["IP address", wa.ip ? `<span class="mono">${esc(wa.ip)}</span>` : "—"],
-    ["Netmask", wa.netmask ? `<span class="mono">${esc(wa.netmask)}</span>` : "—"],
+    ["IP address", cidr ? `<span class="mono">${cidr}</span>` : "—"],
     ["Gateway", wa.gateway ? `<span class="mono">${esc(wa.gateway)}</span>` : "—"],
-    ["Signal", wa.rssiDbm ? `<span class="health ${signalClass(wa.rssiDbm)}">${wa.rssiDbm} dBm</span>` : "—"],
+    ["DNS servers", dns],
+    ["Signal", signal],
+    ["TX retransmits", retrans],
     ["Throughput", wa.throughputMbps ? `${fmt(wa.throughputMbps)} Mbps` : "—"],
     ["Connect time", `${fmt((wa.associateMs || 0) + (wa.authenticateMs || 0) + (wa.dhcpMs || 0))} ms`],
   ];

@@ -31,9 +31,15 @@ type WlanActiveOutcome struct {
 	IP             string
 	Netmask        string
 	Gateway        string
+	DNSServers     []string
 	ThroughputMbps float64
 	ThroughputMs   float64
 	RSSIdBm        int32
+	NoiseDBm       int32
+	SNRdB          float64
+	TxRetryPct     float64
+	TxPackets      uint32
+	TxRetries      uint32
 	TotalMs        float64
 }
 
