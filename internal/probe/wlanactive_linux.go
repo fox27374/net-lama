@@ -150,9 +150,9 @@ connect:
 
 	out.RSSIdBm = iwLinkSignal(ctx, iface)
 
-	// Power save on an otherwise-idle test interface makes the driver drop
-	// the first frames after the handshake (observed: 3 lost DISCOVERs,
-	// ~4.5s constant DHCP). The interface is dedicated to the test here.
+	// Disable power save on the dedicated test interface — harmless hardening;
+	// note it does NOT fix the post-association DHCP delay (that's the AP/switch
+	// settling upstream, not our radio sleeping — see the retransmit note below).
 	exec.CommandContext(ctx, "iw", "dev", iface, "set", "power_save", "off").Run()
 
 	// DHCP: full DISCOVER→ACK exchange, no host state touched
@@ -160,10 +160,13 @@ connect:
 	dhcpStart := time.Now()
 	dhcpCtx, cancelDHCP := context.WithTimeout(ctx, wlanActiveDHCPTimeout)
 	defer cancelDHCP()
-	// Short retransmit: the first DISCOVER right after the key handshake is
-	// often lost while the link settles; the default 5s timeout dominated the
-	// measured DHCP time (observed as a constant ~5.1s). 1.5s x 6 retries.
-	client, err := nclient4.New(iface, nclient4.WithTimeout(1500*time.Millisecond), nclient4.WithRetry(6))
+	// Fast retransmit: on this class of AP the switch/controller ignores the
+	// first ~2-4.5s of DISCOVERs after association (client MAC not forwarding
+	// upstream yet), then answers in ~50ms once ready — confirmed by capture.
+	// A flat 1.5s interval quantized the result up to the next tick (ready at
+	// 2.3s → reported 3.0-4.5s); 400ms catches the ready-edge within a few
+	// hundred ms. 400ms x 25 covers the 10s DHCP context.
+	client, err := nclient4.New(iface, nclient4.WithTimeout(400*time.Millisecond), nclient4.WithRetry(25))
 	if err != nil {
 		return done()
 	}
