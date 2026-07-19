@@ -398,7 +398,9 @@ E.g. for `testType: "speedtest"` the payload is
 `throughputUrl` empty skips the throughput step. `macMode` defaults to
 `permanent` (the adapter's real MAC — stable identity, reused DHCP lease);
 `random` uses a new MAC each run (consumes a lease per run, clutters the AP
-client table). Interval must be ≥ 300s.
+client table). Interval must be ≥ 300s. If the sensor's wireless interface is
+managed by NetworkManager, its MAC-randomization policy can override
+`permanent` mode — see README for the host-side fix.
 The result payload (`wlanActive`) carries per-step timings
 (`associateMs`, `authenticateMs`, `dhcpMs`, `throughputMs`), `ip`,
 `netmask`, `gateway`, `throughputMbps`, `rssiDbm`, `totalMs`, and

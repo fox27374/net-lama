@@ -226,9 +226,26 @@ per agent, and warns when an assigned test won't run on some agents.
 
 `wlan_active` tests connect to an SSID for real (associate, authenticate — PSK
 or 802.1X EAP-PEAP with CA cert or skip-verify —, DHCP, optional throughput
-download) and time every step; the sensor's radio leaves monitor mode during
-the test and is restored afterwards. Requires `wpa_supplicant` in the agent
-image (included in agent-sensor).
+download) and time every step, plus RSSI/SNR/TX-retransmit rate and the DNS
+servers handed out by DHCP; the sensor's radio leaves monitor mode during the
+test and is restored afterwards. Requires `wpa_supplicant` in the agent image
+(included in agent-sensor). By default the test uses the wireless adapter's
+permanent MAC address (`macMode: "permanent"`) for a stable client identity —
+set `macMode: "random"` to get a fresh MAC every run instead (the UI warns
+that this burns a new DHCP lease and a new AP client-table entry each time).
+
+**Host requirement:** if the sensor's wireless interface is managed by
+NetworkManager, its default MAC-randomization policy overrides
+`wpa_supplicant`'s `mac_addr=0` and the "permanent" mode silently keeps
+randomizing. Mark the interface unmanaged on the host (only do this on a NIC
+that is **not** the host's own network uplink):
+
+```sh
+printf '[keyfile]\nunmanaged-devices=interface-name:wlan1\n' | \
+  sudo tee /etc/NetworkManager/conf.d/99-netlama-unmanage-wlan1.conf
+sudo nmcli device set wlan1 managed no
+sudo systemctl reload NetworkManager
+```
 
 The WLAN passive and traceroute probes shell out to external tools (`iw`, `mtr`) that
 are **not** in the default distroless agent image and need raw-socket access. Use
