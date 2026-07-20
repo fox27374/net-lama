@@ -481,6 +481,8 @@ func resultTestType(result *pb.TestResult) string {
 		return "wlan_passive"
 	case *pb.TestResult_WlanActive:
 		return "wlan_active"
+	case *pb.TestResult_Perfmon:
+		return "perfmon"
 	case *pb.TestResult_Traceroute:
 		return "traceroute"
 	}

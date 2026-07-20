@@ -24,6 +24,10 @@ type Metrics struct {
 	speedtestUpload   *prometheus.GaugeVec
 	speedtestLatency  *prometheus.GaugeVec
 
+	perfmonDownload *prometheus.GaugeVec
+	perfmonUpload   *prometheus.GaugeVec
+	perfmonLatency  *prometheus.GaugeVec
+
 	pingRttMin *prometheus.GaugeVec
 	pingRttAvg *prometheus.GaugeVec
 	pingRttMax *prometheus.GaugeVec
@@ -88,6 +92,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		speedtestDownload: newGauge("speedtest_download_mbps", "Last measured download speed in Mbps", base...),
 		speedtestUpload:   newGauge("speedtest_upload_mbps", "Last measured upload speed in Mbps", base...),
 		speedtestLatency:  newGauge("speedtest_latency_ms", "Last measured speedtest latency in ms", base...),
+
+		perfmonDownload: newGauge("perfmon_download_mbps", "Last measured agent-to-agent download speed in Mbps", append(base, "target")...),
+		perfmonUpload:   newGauge("perfmon_upload_mbps", "Last measured agent-to-agent upload speed in Mbps", append(base, "target")...),
+		perfmonLatency:  newGauge("perfmon_latency_ms", "Last measured agent-to-agent connection latency in ms", append(base, "target")...),
 
 		pingRttMin: newGauge("ping_rtt_min_ms", "Minimum ping round-trip time in ms", append(base, "target")...),
 		pingRttAvg: newGauge("ping_rtt_avg_ms", "Average ping round-trip time in ms", append(base, "target")...),
@@ -224,6 +232,17 @@ func (m *Metrics) Record(tenant, site, client string, result *pb.TestResult) {
 			m.errorsTotal.WithLabelValues(append(base, "wlan_active")...).Inc()
 			return
 		}
+
+	case *pb.TestResult_Perfmon:
+		m.resultsTotal.WithLabelValues(append(base, "perfmon")...).Inc()
+		if result.Error != "" {
+			m.errorsTotal.WithLabelValues(append(base, "perfmon")...).Inc()
+			return
+		}
+		labels := append(base, r.Perfmon.Target)
+		m.perfmonDownload.WithLabelValues(labels...).Set(r.Perfmon.DownloadMbps)
+		m.perfmonUpload.WithLabelValues(labels...).Set(r.Perfmon.UploadMbps)
+		m.perfmonLatency.WithLabelValues(labels...).Set(r.Perfmon.LatencyMs)
 
 	case *pb.TestResult_WlanPassive:
 		m.resultsTotal.WithLabelValues(append(base, "wlan_passive")...).Inc()

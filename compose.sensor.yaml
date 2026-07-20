@@ -80,6 +80,10 @@ services:
       # a specific adapter when multiple monitor-capable interfaces are present).
       # Leave unset to auto-pick the first monitor-capable interface.
       # NETLAMA_WLAN_IFACE: ${NETLAMA_WLAN_IFACE:-}
+      # Set to a port (e.g. 5252) to run an agent-to-agent throughput
+      # reflector for perfmon tests; opens a listening port, so opt-in.
+      # Leave unset to disable (no listener, no perfmon_reflector capability).
+      # NETLAMA_PERFMON_PORT: ${NETLAMA_PERFMON_PORT:-}
       NETLAMA_TRACEROUTE_DEMO: ${NETLAMA_TRACEROUTE_DEMO:-}
     depends_on:
       - server

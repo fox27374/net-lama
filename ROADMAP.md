@@ -25,8 +25,13 @@ Planned work, roughly grouped. Not ordered by priority yet.
 
 ## Tests & monitoring
 
-- [ ] Perfmon tests **between agents of the same tenant** (agent-to-agent
-      throughput/latency, e.g. iperf-style with one agent as reflector)
+- [x] Perfmon tests **between agents of the same tenant**: new `perfmon` test
+      type measures upload/download Mbps and connection latency against
+      another agent's throughput reflector (`-perfmon-port` /
+      `NETLAMA_PERFMON_PORT`, opt-in). Hand-rolled protocol over two
+      short-lived TCP connections (no iperf3 dependency). Target is a plain
+      host:port, same as ping/tcp/traceroute — no discovery, no NAT
+      traversal (agents dial out only; reachability is the operator's call)
 - [x] Agent resource monitoring: CPU, memory, storage — reported over the
       stream and visible in the UI/metrics (host-level readings; per-cgroup /
       container-scoped readings a possible later refinement)

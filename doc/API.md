@@ -410,6 +410,24 @@ that always runs after DHCP, giving the TX-retransmit rate a real traffic
 sample independent of the optional throughput step), `totalMs`, and
 `success`/`failedStep`.
 
+### perfmon test parameters
+
+`POST/PUT /api/v1/tests` with `type: "perfmon"` takes params:
+`{"target": "host:port", "durationSeconds": 5}`. `target` is required and
+must parse as host:port — another agent's throughput reflector (started
+there with `-perfmon-port` / `NETLAMA_PERFMON_PORT`), or any host running a
+compatible reflector; there is no discovery, the address is typed in exactly
+like a ping/tcp/traceroute target. `durationSeconds` is per-direction test
+length, 1-30, default 5. Interval must be ≥ 60s.
+The result payload (`perfmon`) carries `latencyMs` (connection handshake
+round-trip), `uploadMbps`, `downloadMbps`, `durationSeconds` (the value
+actually used), and `success`/`failedStep`
+(`connect`/`handshake`/`upload`/`download`).
+
+An agent's `capabilities` include `perfmon` (always, any agent can run the
+client side) and `perfmon_reflector` (only if that agent is listening) —
+shown as a badge on the Agents page.
+
 ### `GET /api/v1/me`
 
 Returns the authenticated user plus `serverVersion` (the server's build

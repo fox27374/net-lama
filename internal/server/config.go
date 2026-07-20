@@ -42,6 +42,11 @@ type SpeedtestParams struct {
 type WlanPassiveParams struct {
 }
 
+type PerfmonParams struct {
+	Target          string `json:"target"` // another agent's perfmon reflector, host:port
+	DurationSeconds uint32 `json:"durationSeconds"`
+}
+
 type WlanActiveParams struct {
 	SSID               string `json:"ssid"`
 	Security           string `json:"security"` // "psk", "eap-peap", "open"
@@ -223,6 +228,32 @@ func ValidateTestDef(t *store.TestDef) error {
 		normalized, _ := json.Marshal(p)
 		t.Params = normalized
 
+	case "perfmon":
+		var p PerfmonParams
+		if err := json.Unmarshal(t.Params, &p); err != nil {
+			return fmt.Errorf("invalid perfmon parameters: %w", err)
+		}
+		p.Target = strings.TrimSpace(p.Target)
+		if p.Target == "" {
+			return fmt.Errorf("perfmon requires a target (another agent's host:port)")
+		}
+		if _, _, err := net.SplitHostPort(p.Target); err != nil {
+			return fmt.Errorf("perfmon target %q must be host:port", p.Target)
+		}
+		if p.DurationSeconds == 0 {
+			p.DurationSeconds = 5
+		}
+		if p.DurationSeconds > 30 {
+			return fmt.Errorf("perfmon durationSeconds must be at most 30")
+		}
+		// Each direction takes durationSeconds; keep the test rare enough
+		// that it's a small fraction of the schedule, not a bandwidth hog.
+		if t.IntervalSeconds < 60 {
+			return fmt.Errorf("perfmon interval must be at least 60 seconds")
+		}
+		normalized, _ := json.Marshal(p)
+		t.Params = normalized
+
 	case "traceroute":
 		var p TracerouteParams
 		if err := json.Unmarshal(t.Params, &p); err != nil {
@@ -330,6 +361,14 @@ func TestSpec(t *store.TestDef) (*pb.TestSpec, error) {
 		spec.Params = &pb.TestSpec_Traceroute{Traceroute: &pb.TracerouteParams{
 			Target: p.Target, Protocol: p.Protocol, Port: p.Port,
 			MaxHops: p.MaxHops, ProbesPerHop: p.ProbesPerHop,
+		}}
+	case "perfmon":
+		var p PerfmonParams
+		if err := json.Unmarshal(t.Params, &p); err != nil {
+			return nil, err
+		}
+		spec.Params = &pb.TestSpec_Perfmon{Perfmon: &pb.PerfmonParams{
+			Target: p.Target, DurationSeconds: p.DurationSeconds,
 		}}
 	default:
 		return nil, fmt.Errorf("unknown test type %q", t.Type)

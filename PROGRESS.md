@@ -998,6 +998,43 @@ What has been done so far, in chronological order. Planned work lives in
   BSSIDs every 60s, so `NETLAMA_WLAN_DEMO=1` exercises roam/ping-pong
   detection without real hardware.
 
+## 2026-07-20 — Agent-to-agent perfmon (v0.8.0)
+
+- **New `perfmon` test type**: measures upload/download throughput and
+  connection latency to another agent. `internal/probe/perfmon.go` is a
+  hand-rolled protocol over plain TCP (no iperf3 binary, no new dependency)
+  — two short-lived connections, one per phase (upload then download), so
+  each phase ends on an unambiguous signal (TCP half-close / full close)
+  instead of a guessed timeout. An earlier single-connection design was
+  caught and discarded during testing: without an explicit end-of-phase
+  signal, a 1s test actually took 4s (2s wasted margin per phase, waiting
+  out a timeout) — the two-connection redesign brought a 1s+1s test back to
+  a real 2s.
+- **Opt-in reflector**: any agent can listen with `-perfmon-port` /
+  `NETLAMA_PERFMON_PORT` (default disabled) — started once for the agent's
+  lifetime in `Agent.Run()`, not tied to the interval-scheduled test model
+  (a persistent listener doesn't fit "sample every N seconds"). Reported as
+  the `perfmon_reflector` capability (badge on the Agents page); the
+  always-available client-side `perfmon` capability was added alongside
+  ping/dns/http/tcp/speedtest.
+- **No discovery, no NAT traversal — by design**: net-lama agents dial out
+  only (never dialed into, see CLAUDE.md), so true peer discovery isn't
+  architecturally possible without a relay. The test target is a plain
+  host:port typed by the operator, exactly like every other test type's
+  target already works; reachability is the operator's problem, same as
+  ping/tcp/traceroute.
+- Server: `PerfmonParams`/validation (target must parse as host:port,
+  durationSeconds 1-30 default 5, interval ≥60s), Prometheus gauges
+  (`perfmon_{download,upload}_mbps`, `perfmon_latency_ms`), overview
+  primary-metric/series extraction (Mbps, via the existing `extractNested`
+  helper). UI: new test type with target/duration fields, results summary,
+  reflector capability badge.
+- **Verification**: real loopback unit test (`TestPerfmonLoopback`, actual
+  TCP on 127.0.0.1) plus a two-agent e2e run (separate client + reflector
+  agent processes) — confirmed capability reporting, config validation
+  (rejects malformed target and <60s interval), a genuine result end to end,
+  and correct overview aggregation. No mocking of the protocol itself.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

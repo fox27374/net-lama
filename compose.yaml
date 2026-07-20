@@ -77,6 +77,10 @@ services:
       # a specific adapter when multiple monitor-capable interfaces are present).
       # Leave unset to auto-pick the first monitor-capable interface.
       # NETLAMA_WLAN_IFACE: ${NETLAMA_WLAN_IFACE:-}
+      # Set to a port (e.g. 5252) to run an agent-to-agent throughput
+      # reflector for perfmon tests; opens a listening port, so opt-in.
+      # Leave unset to disable (no listener, no perfmon_reflector capability).
+      # NETLAMA_PERFMON_PORT: ${NETLAMA_PERFMON_PORT:-}
       # Set NETLAMA_TRACEROUTE_DEMO=1 to emit synthetic path data (for the
       # Path UI) where raw-socket traceroute is not available. Leave unset
       # for real traceroute (needs mtr in the image + CAP_NET_RAW; see README).

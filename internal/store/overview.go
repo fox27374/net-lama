@@ -395,6 +395,12 @@ func extractMetricValue(testType, payload string) *float64 {
 				val = download
 			}
 		}
+	case "perfmon":
+		if pm, ok := data["perfmon"].(map[string]interface{}); ok {
+			if download, ok := pm["downloadMbps"].(float64); ok && download > 0 {
+				val = download
+			}
+		}
 	case "traceroute":
 		if tr, ok := data["traceroute"].(map[string]interface{}); ok {
 			if hops, ok := tr["hops"].([]interface{}); ok {
@@ -488,6 +494,9 @@ func (s *Store) extractSeries(testType, testID, tenantID, siteID string) (string
 	case "speedtest":
 		unit = "Mbps"
 		series, current = extractSpeedtestMetric(payloads)
+	case "perfmon":
+		unit = "Mbps"
+		series, current = extractNested(payloads, "perfmon", "downloadMbps")
 	case "traceroute":
 		unit = "hops"
 		series, current = extractTracerouteMetric(payloads)

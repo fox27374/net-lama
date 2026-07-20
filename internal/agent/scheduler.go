@@ -101,6 +101,8 @@ func (a *Agent) runTest(ctx context.Context, spec *pb.TestSpec, results chan<- *
 		a.runWlanPassive(ctx, spec, results)
 	case *pb.TestSpec_WlanActive:
 		a.runWlanActive(ctx, spec, params.WlanActive, results)
+	case *pb.TestSpec_Perfmon:
+		a.runPerfmon(ctx, spec, params.Perfmon, results)
 	case *pb.TestSpec_Traceroute:
 		a.runTraceroute(ctx, spec, params.Traceroute, results)
 	}
@@ -672,6 +674,45 @@ func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats 
 		Demo:       probe.DemoMode(),
 		RoamEvents: pbRoams,
 	}}
+}
+
+// runPerfmon runs the client side of an agent-to-agent throughput test
+// against params.Target (another agent's perfmon reflector, or any
+// compatible host:port — see internal/probe/perfmon.go). Unlike wlan_active,
+// this doesn't touch any shared hardware, so no locking is needed.
+func (a *Agent) runPerfmon(ctx context.Context, spec *pb.TestSpec, params *pb.PerfmonParams, results chan<- *pb.TestResult) {
+	result := newResult(spec)
+
+	a.Logger.Info("Perfmon test starting", slog.String("test", spec.Name), slog.String("target", params.Target))
+	out, err := probe.RunClient(ctx, params.Target, params.DurationSeconds)
+	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		a.Logger.Error("Perfmon test failed", slog.String("test", spec.Name), slog.String("target", params.Target), slog.Any("error", err))
+		result.Error = err.Error()
+		result.Result = &pb.TestResult_Perfmon{Perfmon: &pb.PerfmonResult{Target: params.Target}}
+		sendResult(ctx, results, result)
+		return
+	}
+
+	if !out.Success {
+		result.Error = fmt.Sprintf("%s step failed", out.FailedStep)
+	}
+	a.Logger.Info("Perfmon test done",
+		slog.String("test", spec.Name), slog.String("target", params.Target),
+		slog.Bool("success", out.Success), slog.String("failedStep", out.FailedStep),
+		slog.Float64("uploadMbps", out.UploadMbps), slog.Float64("downloadMbps", out.DownloadMbps))
+	result.Result = &pb.TestResult_Perfmon{Perfmon: &pb.PerfmonResult{
+		Target:          out.Target,
+		Success:         out.Success,
+		FailedStep:      out.FailedStep,
+		LatencyMs:       out.LatencyMs,
+		UploadMbps:      out.UploadMbps,
+		DownloadMbps:    out.DownloadMbps,
+		DurationSeconds: out.DurationSeconds,
+	}}
+	sendResult(ctx, results, result)
 }
 
 func (a *Agent) runTraceroute(ctx context.Context, spec *pb.TestSpec, params *pb.TracerouteParams, results chan<- *pb.TestResult) {

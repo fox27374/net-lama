@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -85,6 +86,11 @@ type Agent struct {
 	// empty = auto-pick the first monitor-capable interface.
 	WlanIface string
 
+	// PerfmonPort, if non-empty (":5252" or "5252"), starts a persistent
+	// agent-to-agent throughput reflector on that port for the agent's
+	// lifetime. Empty = disabled (no listener, capability not reported).
+	PerfmonPort string
+
 	// logBuf holds Info+ log lines (Logger tees into it) until the send
 	// loop can ship them to the server; it survives across reconnects so
 	// nothing logged while disconnected is lost (up to its capacity).
@@ -121,6 +127,18 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	if a.statsCollector == nil {
 		a.statsCollector = probe.NewStatsCollector()
+	}
+
+	if a.PerfmonPort != "" {
+		addr := a.PerfmonPort
+		if !strings.Contains(addr, ":") {
+			addr = ":" + addr
+		}
+		if ln, err := probe.Reflector(ctx, addr); err != nil {
+			a.Logger.Error("Perfmon reflector failed to start", slog.String("addr", addr), slog.Any("error", err))
+		} else {
+			a.Logger.Info("Perfmon reflector listening", slog.String("addr", ln.Addr().String()))
+		}
 	}
 
 	delay := reconnectMinDelay
@@ -187,6 +205,9 @@ func (a *Agent) runStream(ctx context.Context) error {
 	}
 
 	capabilities := probe.DetectCapabilities(len(wifaces) > 0, detectedIfaces)
+	if a.PerfmonPort != "" {
+		capabilities = append(capabilities, "perfmon_reflector")
+	}
 
 	register := &pb.AgentMessage{
 		Payload: &pb.AgentMessage_Register{

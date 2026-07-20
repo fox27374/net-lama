@@ -13,7 +13,10 @@ import (
 // is missing and non-empty in WLAN demo mode.
 // wifaces contains the full wireless interface details including monitor support info.
 func DetectCapabilities(hasWireless bool, wifaces []WirelessInterface) []string {
-	caps := []string{"ping", "dns", "http", "tcp", "speedtest"}
+	// perfmon (agent-to-agent throughput, client role) needs nothing beyond
+	// outbound TCP, always available. perfmon_reflector (listener role) is
+	// agent-specific opt-in config, added by the caller if enabled.
+	caps := []string{"ping", "dns", "http", "tcp", "speedtest", "perfmon"}
 
 	// traceroute: needs mtr in PATH or demo mode enabled
 	if _, err := exec.LookPath("mtr"); err == nil || tracerouteDemo() {

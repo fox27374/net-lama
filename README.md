@@ -78,7 +78,7 @@ The UI (login with username/password, dark/light theme) has a fixed left sidebar
 * **Dashboard** — the tenant landing page with a site filter; shows stat tiles (sites,
   agents, tests, active alerts), a sites table, active & recent alerts, tests with
   inline sparklines showing metric trends, and the latest wireless scans
-* **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_passive/wlan_active/speedtest) with interval and parameters
+* **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_passive/wlan_active/perfmon/speedtest) with interval and parameters
   * `speedtest` tests pick a **provider**: `ookla` (default, speedtest.net via the
     unofficial `showwin/speedtest-go` client against volunteer-run servers — the
     most widely available but occasionally untrustworthy, so results are
@@ -246,6 +246,18 @@ printf '[keyfile]\nunmanaged-devices=interface-name:wlan1\n' | \
 sudo nmcli device set wlan1 managed no
 sudo systemctl reload NetworkManager
 ```
+
+### Agent-to-agent perfmon
+
+`perfmon` tests measure upload/download throughput and connection latency
+against another agent's throughput reflector — a hand-rolled protocol over
+plain TCP, no `iperf3` binary required. Enable the reflector on the target
+agent with `-perfmon-port` / `NETLAMA_PERFMON_PORT` (default disabled; it
+opens a listening port, so it's opt-in), then create a `perfmon` test on
+another agent's site with `target` set to that agent's `host:port`.
+Reachability is up to your network — net-lama agents dial out to the server
+only and are never dialed into, so there's no discovery or NAT traversal;
+the target is a plain address you type in, exactly like a ping or tcp test.
 
 The WLAN passive and traceroute probes shell out to external tools (`iw`, `mtr`) that
 are **not** in the default distroless agent image and need raw-socket access. Use

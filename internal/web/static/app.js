@@ -583,7 +583,7 @@ async function loadAgents() {
   for (const a of agents) {
     // Capability badges; an empty/missing list (old agent that never
     // reported capabilities) renders nothing.
-    const capabilityLabel = (c) => c === "wlan" ? "WLAN" : c;
+    const capabilityLabel = (c) => ({ wlan: "WLAN", wlan_active: "WLAN active", perfmon_reflector: "Perfmon reflector" })[c] || c;
     const caps = (a.capabilities || [])
       .map((c) => `<span class="chip type-${esc(c)}">${capabilityLabel(c)}</span>`).join(" ");
     const tr = document.createElement("tr");
@@ -692,6 +692,7 @@ function paramsSummary(t) {
     const port = (p.protocol === "icmp") ? "" : `:${p.port || 443}`;
     return `${p.target || ""} · ${proto}${port}`;
   }
+  if (t.type === "perfmon") return `${p.target || "?"} · ${p.durationSeconds || 5}s/direction`;
   if (t.type === "speedtest") return speedtestProviderLabel(p.provider);
   return "nearest server";
 }
@@ -745,6 +746,7 @@ function updateTestParamFields() {
   $("#t-params-wlan_active").classList.toggle("hidden", type !== "wlan_active");
   updateWlanActiveSecurityFields();
   $("#t-params-traceroute").classList.toggle("hidden", type !== "traceroute");
+  $("#t-params-perfmon").classList.toggle("hidden", type !== "perfmon");
   $("#t-params-speedtest").classList.toggle("hidden", type !== "speedtest");
   // Re-filter alert rules when test type changes
   populateAlertRuleSelect(type);
@@ -791,7 +793,7 @@ function populateAlertRuleSelect(testType) {
 // Backed by the same {warn, crit} model: warn is the green|orange boundary,
 // crit the orange|red one. For speedtest lower is worse, so the band order
 // flips (green on top) and warn > crit.
-const BAND_UNIT = { ping: "ms", dns: "ms", http: "ms", tcp: "ms", speedtest: "Mbps", traceroute: "hops", wlan_passive: "%", wlan_active: "ms" };
+const BAND_UNIT = { ping: "ms", dns: "ms", http: "ms", tcp: "ms", speedtest: "Mbps", traceroute: "hops", wlan_passive: "%", wlan_active: "ms", perfmon: "Mbps" };
 // null = band absent, "" = band added but value not typed yet, "40" = value
 let bandTh = { warn: null, crit: null };
 let bandType = "ping";
@@ -944,6 +946,9 @@ function openTestDialog(test) {
   $("#t-wa-tpurl").value = wa.throughputUrl || "";
   $("#t-wa-macmode").value = wa.macMode || "permanent";
   $("#t-wa-mac-warn").classList.toggle("hidden", ($("#t-wa-macmode").value) !== "random");
+  const pm = (test && test.type === "perfmon") ? p : {};
+  $("#t-pm-target").value = pm.target || "";
+  $("#t-pm-duration").value = pm.durationSeconds || 5;
   updateTestParamFields();
 
   // State thresholds band editor
@@ -1012,6 +1017,11 @@ $("#form-test").addEventListener("submit", async (e) => {
       insecureSkipVerify: $("#t-wa-insecure").checked,
       throughputUrl: $("#t-wa-tpurl").value.trim(),
       macMode: $("#t-wa-macmode").value,
+    };
+  } else if (type === "perfmon") {
+    params = {
+      target: $("#t-pm-target").value.trim(),
+      durationSeconds: +$("#t-pm-duration").value,
     };
   }
   // Build thresholds from the band editor (undefined => validation error)
@@ -1283,6 +1293,13 @@ function resultDetails(r) {
     return t.reached
       ? `${esc(t.target)} · reached in ${hops} hops · ${fmt(t.rttMs)} ms`
       : `${esc(t.target)} · <span class="error">stalled at hop ${t.failureHop || "?"}</span> of ${hops}`;
+  }
+  if (p.perfmon) {
+    const pm = p.perfmon;
+    if (!pm.success) {
+      return `${esc(pm.target)} · <span class="error">${esc(pm.failedStep || "failed")}</span>`;
+    }
+    return `${esc(pm.target)} · ${fmt(pm.downloadMbps)} Mbps down / ${fmt(pm.uploadMbps)} Mbps up · ${fmt(pm.latencyMs)} ms`;
   }
   return "";
 }

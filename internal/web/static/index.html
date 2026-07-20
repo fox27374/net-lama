@@ -558,6 +558,7 @@
           <option value="traceroute">Traceroute (path)</option>
           <option value="wlan_passive">WLAN passive (monitor mode)</option>
           <option value="wlan_active">WLAN active (connect test)</option>
+          <option value="perfmon">Agent-to-agent perfmon</option>
           <option value="speedtest">Speedtest</option>
         </select>
       </label>
@@ -623,6 +624,16 @@
         </select>
       </label>
       <p id="t-wa-mac-warn" class="warn-note hidden">⚠ Randomized MAC uses a fresh address every run — each test consumes a DHCP lease (can exhaust the pool) and shows up as a new device in the AP's client table. Use Permanent for a fixed sensor.</p>
+    </div>
+    <div id="t-params-perfmon" class="hidden">
+      <p class="muted">Measures throughput and latency to another agent's perfmon
+      reflector (started there with <code>-perfmon-port</code> / <code>NETLAMA_PERFMON_PORT</code> —
+      look for the "Perfmon reflector" capability badge on the Agents page). Reachability
+      is up to your network, same as any ping/tcp target — no discovery, no NAT traversal.</p>
+      <div class="grid2">
+        <label>Target (host:port) <input type="text" id="t-pm-target" placeholder="10.0.1.5:5252"></label>
+        <label>Duration per direction (s) <input type="number" id="t-pm-duration" min="1" max="30" value="5"></label>
+      </div>
     </div>
     <div id="t-params-speedtest" class="hidden">
       <label>Provider

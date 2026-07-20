@@ -73,6 +73,7 @@ message TestSpec {
     // wlan_sense (11) is reserved
     WlanPassiveParams wlan_passive = 12;
     WlanActiveParams wlan_active = 13;
+    PerfmonParams perfmon = 14;
   }
 }
 
@@ -174,6 +175,7 @@ message TestResult {
     // wlan_sense (12) is reserved
     WlanPassiveResult wlan_passive = 13;
     WlanActiveResult wlan_active = 14;
+    PerfmonResult perfmon = 15;
   }
 }
 
@@ -251,6 +253,28 @@ message WlanSenseResult {
   repeated WlanChannelStat channels = 4;
   uint32 sweep_ms = 5;              // total sweep duration
   repeated WlanNetwork networks = 6; // APs/SSIDs heard from beacons
+}
+
+// PerfmonParams configures an agent-to-agent throughput test. target is a
+// plain host:port pointing at another agent's perfmon reflector (started
+// with -perfmon-port / NETLAMA_PERFMON_PORT there) — reachability is the
+// operator's responsibility, same as any ping/tcp/traceroute target; there
+// is no discovery or NAT traversal.
+message PerfmonParams {
+  string target = 1;
+  uint32 duration_seconds = 2; // per-direction test length (default 5, max 30)
+}
+
+// PerfmonResult reports one throughput test: an upload phase then a
+// download phase over the same TCP connection, plus a handshake RTT.
+message PerfmonResult {
+  string target = 1;
+  bool success = 2;
+  string failed_step = 3; // "connect" | "handshake" | "upload" | "download"
+  double latency_ms = 4;  // handshake round-trip time
+  double upload_mbps = 5;
+  double download_mbps = 6;
+  uint32 duration_seconds = 7; // the configured per-direction duration used
 }
 
 // WlanActiveResult reports one active connection test with per-step timing.
