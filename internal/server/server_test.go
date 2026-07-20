@@ -384,3 +384,73 @@ func TestConfigForAgent_WlanPassiveCapability(t *testing.T) {
 		t.Errorf("Expected skipped=[test-wlan-passive], got %v", skipped)
 	}
 }
+
+// TestConfigForAgent_PerfmonPinnedToSourceAgent verifies a perfmon test is
+// pushed only to its pinned source agent, even though (unlike every other
+// test type) it's assigned to a whole site that may have other agents.
+func TestConfigForAgent_PerfmonPinnedToSourceAgent(t *testing.T) {
+	tmpfile, err := os.CreateTemp("", "netlama-test-*.db")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	tmpfile.Close()
+	defer os.Remove(tmpfile.Name())
+
+	s, err := store.Open(tmpfile.Name())
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer s.Close()
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	srv := &Server{Store: s, Logger: logger}
+
+	tenant, err := s.CreateTenant("perfmon-tenant")
+	if err != nil {
+		t.Fatalf("CreateTenant: %v", err)
+	}
+	site, err := s.CreateSite(tenant.ID, "perfmon-site")
+	if err != nil {
+		t.Fatalf("CreateSite: %v", err)
+	}
+
+	perfmonTest := &store.TestDef{
+		ID:              "pm-test-1",
+		TenantID:        tenant.ID,
+		Name:            "pm-a-to-b",
+		Type:            "perfmon",
+		IntervalSeconds: 60,
+		Params:          json.RawMessage(`{"sourceAgentId":"agent-source","target":"10.0.0.5:5252","durationSeconds":5}`),
+	}
+	if _, err := s.CreateTest(perfmonTest); err != nil {
+		t.Fatalf("CreateTest: %v", err)
+	}
+	if err := s.SetSiteTests(site.ID, []string{perfmonTest.ID}); err != nil {
+		t.Fatalf("SetSiteTests: %v", err)
+	}
+
+	source := &store.Agent{
+		ID: "agent-source", Name: "source", SiteID: site.ID,
+		Capabilities: json.RawMessage(`["ping","perfmon"]`), CreatedAt: time.Now(),
+	}
+	other := &store.Agent{
+		ID: "agent-other", Name: "other", SiteID: site.ID,
+		Capabilities: json.RawMessage(`["ping","perfmon"]`), CreatedAt: time.Now(),
+	}
+
+	cfg, _, err := srv.ConfigForAgent(source)
+	if err != nil {
+		t.Fatalf("ConfigForAgent(source): %v", err)
+	}
+	if len(cfg.Tests) != 1 {
+		t.Fatalf("expected the pinned source agent to get 1 test, got %d", len(cfg.Tests))
+	}
+
+	cfg, _, err = srv.ConfigForAgent(other)
+	if err != nil {
+		t.Fatalf("ConfigForAgent(other): %v", err)
+	}
+	if len(cfg.Tests) != 0 {
+		t.Fatalf("expected the non-source agent of the same site to get 0 tests, got %d", len(cfg.Tests))
+	}
+}

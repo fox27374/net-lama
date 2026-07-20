@@ -1,12 +1,35 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/fox27374/net-lama/internal/server"
 	"github.com/fox27374/net-lama/internal/store"
 )
+
+// validatePerfmonSource checks a perfmon test's sourceAgentId refers to a
+// real agent belonging to this tenant. ValidateTestDef can't do this
+// itself — it has no store access — so it's a separate check here, run
+// after ValidateTestDef has normalized params.
+func validatePerfmonSource(st *store.Store, tenantID, testType string, params json.RawMessage) error {
+	if testType != "perfmon" {
+		return nil
+	}
+	var p struct {
+		SourceAgentID string `json:"sourceAgentId"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return err
+	}
+	agent, err := st.GetAgent(p.SourceAgentID)
+	if err != nil || agent.TenantID != tenantID {
+		return fmt.Errorf("perfmon source agent not found in this tenant")
+	}
+	return nil
+}
 
 // tenantScope resolves the tenant a request operates on: admins may pick
 // any tenant via ?tenantId= (or body field), users are fixed to their own.
@@ -207,6 +230,10 @@ func (a *API) handleCreateTest(w http.ResponseWriter, r *http.Request, user *sto
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := validatePerfmonSource(a.Store, tenantID, req.Type, req.Params); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	test, err := a.Store.CreateTest(&req)
 	if err != nil {
@@ -245,6 +272,10 @@ func (a *API) handleUpdateTest(w http.ResponseWriter, r *http.Request, user *sto
 	test.Params = req.Params
 	test.Thresholds = req.Thresholds
 	if err := server.ValidateTestDef(test); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validatePerfmonSource(a.Store, test.TenantID, test.Type, test.Params); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

@@ -250,14 +250,28 @@ sudo systemctl reload NetworkManager
 ### Agent-to-agent perfmon
 
 `perfmon` tests measure upload/download throughput and connection latency
-against another agent's throughput reflector — a hand-rolled protocol over
-plain TCP, no `iperf3` binary required. Enable the reflector on the target
-agent with `-perfmon-port` / `NETLAMA_PERFMON_PORT` (default disabled; it
-opens a listening port, so it's opt-in), then create a `perfmon` test on
-another agent's site with `target` set to that agent's `host:port`.
-Reachability is up to your network — net-lama agents dial out to the server
-only and are never dialed into, so there's no discovery or NAT traversal;
-the target is a plain address you type in, exactly like a ping or tcp test.
+between two agents — a hand-rolled protocol over plain TCP, no `iperf3`
+binary required. Unlike every other test type (which runs on every agent of
+an assigned site), a `perfmon` test is pinned to exactly one **source**
+agent via `sourceAgentId` in its params; it's auto-assigned to that agent's
+site so the normal scheduling machinery still applies, and other agents of
+that site silently skip it.
+
+Enable the reflector on the **destination** agent with `-perfmon-port` /
+`NETLAMA_PERFMON_PORT` (default disabled; it opens a listening port, so
+it's opt-in). Reachability is up to your network — net-lama agents dial out
+to the server only and are never dialed into, so there's no discovery or
+NAT traversal — but the server still needs to know a reachable address to
+offer the agent as a destination. Declare it explicitly with
+`-perfmon-advertise-host` / `NETLAMA_PERFMON_ADVERTISE_HOST` (e.g. its LAN
+IP); there is no auto-detection, since guessing would silently fail across
+NAT. An agent with the reflector enabled but no advertise host set won't
+show up as a destination.
+
+In the UI, creating a `perfmon` test shows source and destination as
+dropdowns of capable agents (destination is filtered to agents with a
+running, reachable reflector), spanning sites — source and destination can
+be in the same site or different sites.
 
 The WLAN passive and traceroute probes shell out to external tools (`iw`, `mtr`) that
 are **not** in the default distroless agent image and need raw-socket access. Use

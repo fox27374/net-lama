@@ -276,8 +276,14 @@ type Register struct {
 	Token string `protobuf:"bytes,5,opt,name=token,proto3" json:"token,omitempty"`
 	// wireless_interfaces the agent detected, for WLAN sensing.
 	WirelessInterfaces []*WirelessInterface `protobuf:"bytes,6,rep,name=wireless_interfaces,json=wirelessInterfaces,proto3" json:"wireless_interfaces,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// perfmon_addr is this agent's reachable host:port for its throughput
+	// reflector, explicitly declared via -perfmon-advertise-host (there is
+	// no auto-detection — the agent has no reliable way to know which of
+	// its addresses another agent could actually reach across NAT). Empty
+	// if the reflector isn't running or no advertise host was configured.
+	PerfmonAddr   string `protobuf:"bytes,7,opt,name=perfmon_addr,json=perfmonAddr,proto3" json:"perfmon_addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Register) Reset() {
@@ -350,6 +356,13 @@ func (x *Register) GetWirelessInterfaces() []*WirelessInterface {
 		return x.WirelessInterfaces
 	}
 	return nil
+}
+
+func (x *Register) GetPerfmonAddr() string {
+	if x != nil {
+		return x.PerfmonAddr
+	}
+	return ""
 }
 
 type WirelessInterface struct {
@@ -3656,7 +3669,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\rServerMessage\x12,\n" +
 	"\x06config\x18\x01 \x01(\v2\x12.netlama.v1.ConfigH\x00R\x06config\x12/\n" +
 	"\acommand\x18\x02 \x01(\v2\x13.netlama.v1.CommandH\x00R\acommandB\t\n" +
-	"\apayload\"\xec\x01\n" +
+	"\apayload\"\x8f\x02\n" +
 	"\bRegister\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12\x1f\n" +
 	"\vclient_type\x18\x02 \x01(\tR\n" +
@@ -3664,7 +3677,8 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\aversion\x18\x03 \x01(\tR\aversion\x12\"\n" +
 	"\fcapabilities\x18\x04 \x03(\tR\fcapabilities\x12\x14\n" +
 	"\x05token\x18\x05 \x01(\tR\x05token\x12N\n" +
-	"\x13wireless_interfaces\x18\x06 \x03(\v2\x1d.netlama.v1.WirelessInterfaceR\x12wirelessInterfaces\"d\n" +
+	"\x13wireless_interfaces\x18\x06 \x03(\v2\x1d.netlama.v1.WirelessInterfaceR\x12wirelessInterfaces\x12!\n" +
+	"\fperfmon_addr\x18\a \x01(\tR\vperfmonAddr\"d\n" +
 	"\x11WirelessInterface\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03phy\x18\x02 \x01(\tR\x03phy\x12)\n" +

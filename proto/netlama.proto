@@ -40,6 +40,12 @@ message Register {
   string token = 5;
   // wireless_interfaces the agent detected, for WLAN sensing.
   repeated WirelessInterface wireless_interfaces = 6;
+  // perfmon_addr is this agent's reachable host:port for its throughput
+  // reflector, explicitly declared via -perfmon-advertise-host (there is
+  // no auto-detection — the agent has no reliable way to know which of
+  // its addresses another agent could actually reach across NAT). Empty
+  // if the reflector isn't running or no advertise host was configured.
+  string perfmon_addr = 7;
 }
 
 message WirelessInterface {

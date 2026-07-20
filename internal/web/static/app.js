@@ -585,7 +585,10 @@ async function loadAgents() {
     // reported capabilities) renders nothing.
     const capabilityLabel = (c) => ({ wlan: "WLAN", wlan_active: "WLAN active", perfmon_reflector: "Perfmon reflector" })[c] || c;
     const caps = (a.capabilities || [])
-      .map((c) => `<span class="chip type-${esc(c)}">${capabilityLabel(c)}</span>`).join(" ");
+      .map((c) => {
+        const addr = c === "perfmon_reflector" && a.perfmonAddr ? ` (${esc(a.perfmonAddr)})` : "";
+        return `<span class="chip type-${esc(c)}">${capabilityLabel(c)}${addr}</span>`;
+      }).join(" ");
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><span class="badge ${a.connected ? "on" : "off"}">${a.connected ? "connected" : "offline"}</span></td>
@@ -692,7 +695,10 @@ function paramsSummary(t) {
     const port = (p.protocol === "icmp") ? "" : `:${p.port || 443}`;
     return `${p.target || ""} · ${proto}${port}`;
   }
-  if (t.type === "perfmon") return `${p.target || "?"} · ${p.durationSeconds || 5}s/direction`;
+  if (t.type === "perfmon") {
+    const src = agents.find((a) => a.id === p.sourceAgentId);
+    return `${src ? src.name : p.sourceAgentId || "?"} → ${p.target || "?"} · ${p.durationSeconds || 5}s/direction`;
+  }
   if (t.type === "speedtest") return speedtestProviderLabel(p.provider);
   return "nearest server";
 }
@@ -706,7 +712,7 @@ function speedtestProviderLabel(provider) {
 }
 
 async function loadTests() {
-  await Promise.all([fetchTests(), fetchAlertRules()]);
+  await Promise.all([fetchTests(), fetchAlertRules(), fetchAgents()]);
   const tbody = $("#tests-table tbody");
   tbody.innerHTML = "";
   $("#tests-empty").classList.toggle("hidden", tests.length > 0);
@@ -909,6 +915,20 @@ function readThresholdBands() {
   return th;
 }
 
+// populatePerfmonAgentSelects fills the source/destination dropdowns from
+// the already-loaded agents list: every agent can be a source (perfmon's
+// client role needs only outbound TCP), only agents with a running,
+// reachable reflector can be a destination.
+function populatePerfmonAgentSelects(selectedSourceID, selectedDestID) {
+  const label = (a) => `${a.name} (${a.siteName || "no site"})`;
+  const sourceAgents = agents.filter((a) => (a.capabilities || []).includes("perfmon"));
+  const destAgents = agents.filter((a) => (a.capabilities || []).includes("perfmon_reflector") && a.perfmonAddr);
+  $("#t-pm-source").innerHTML = sourceAgents
+    .map((a) => `<option value="${a.id}" ${a.id === selectedSourceID ? "selected" : ""}>${esc(label(a))}</option>`).join("");
+  $("#t-pm-dest").innerHTML = destAgents
+    .map((a) => `<option value="${a.id}" ${a.id === selectedDestID ? "selected" : ""}>${esc(label(a))}</option>`).join("");
+}
+
 function openTestDialog(test) {
   editingTest = test || null;
   $("#test-dlg-title").textContent = test ? `Edit "${test.name}"` : "New test";
@@ -947,7 +967,8 @@ function openTestDialog(test) {
   $("#t-wa-macmode").value = wa.macMode || "permanent";
   $("#t-wa-mac-warn").classList.toggle("hidden", ($("#t-wa-macmode").value) !== "random");
   const pm = (test && test.type === "perfmon") ? p : {};
-  $("#t-pm-target").value = pm.target || "";
+  const pmDest = agents.find((a) => a.perfmonAddr && a.perfmonAddr === pm.target);
+  populatePerfmonAgentSelects(pm.sourceAgentId, pmDest ? pmDest.id : "");
   $("#t-pm-duration").value = pm.durationSeconds || 5;
   updateTestParamFields();
 
@@ -1019,8 +1040,20 @@ $("#form-test").addEventListener("submit", async (e) => {
       macMode: $("#t-wa-macmode").value,
     };
   } else if (type === "perfmon") {
+    const sourceAgentId = $("#t-pm-source").value;
+    const destAgentId = $("#t-pm-dest").value;
+    if (!sourceAgentId || !destAgentId) {
+      dialogError("#t-error", "Pick a source and destination agent");
+      return;
+    }
+    if (sourceAgentId === destAgentId) {
+      dialogError("#t-error", "Source and destination must be different agents");
+      return;
+    }
+    const dest = agents.find((a) => a.id === destAgentId);
     params = {
-      target: $("#t-pm-target").value.trim(),
+      sourceAgentId,
+      target: dest.perfmonAddr,
       durationSeconds: +$("#t-pm-duration").value,
     };
   }
@@ -1068,12 +1101,32 @@ $("#form-test").addEventListener("submit", async (e) => {
       }
     }
 
+    // perfmon is pinned to one agent, not a whole site — auto-assign it to
+    // the source agent's site (and drop it from any other site that had it,
+    // in case the source agent or its site changed on an edit).
+    if (type === "perfmon") {
+      const srcAgent = agents.find((a) => a.id === params.sourceAgentId);
+      if (srcAgent) await assignPerfmonTestToSite(testId, srcAgent.siteId);
+    }
+
     $("#dlg-test").close();
     loadTests();
   } catch (err) {
     dialogError("#t-error", err.message);
   }
 });
+
+async function assignPerfmonTestToSite(testId, targetSiteId) {
+  const freshSites = await fetchSites();
+  for (const s of freshSites) {
+    const has = (s.testIds || []).includes(testId);
+    if (s.id === targetSiteId) {
+      if (!has) await api("PUT", `/api/v1/sites/${s.id}/tests`, { testIds: [...(s.testIds || []), testId] });
+    } else if (has) {
+      await api("PUT", `/api/v1/sites/${s.id}/tests`, { testIds: (s.testIds || []).filter((id) => id !== testId) });
+    }
+  }
+}
 
 // --- Sites ---
 async function loadSites() {

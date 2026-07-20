@@ -72,6 +72,18 @@ func requiredCapability(testType string) string {
 	}
 }
 
+// isPerfmonSource reports whether agentID is the pinned source agent for a
+// perfmon test. A parse failure is treated as "not the source" — the same
+// test will also fail ordinary validation, so it's a normal degraded case,
+// not a special one to distinguish here.
+func isPerfmonSource(t *store.TestDef, agentID string) bool {
+	var p PerfmonParams
+	if err := json.Unmarshal(t.Params, &p); err != nil {
+		return false
+	}
+	return p.SourceAgentID == agentID
+}
+
 // ConfigForAgent builds the protobuf config from the tests assigned to
 // the agent's site, filtering out tests whose type is not in the agent's
 // capabilities (if non-empty, for backward compatibility with old agents).
@@ -105,6 +117,14 @@ func (s *Server) ConfigForAgent(agent *store.Agent) (*pb.Config, []string, error
 		reqCap := requiredCapability(t.Type)
 		if len(capabilities) > 0 && !capSet[reqCap] {
 			skipped = append(skipped, t.Name)
+			continue
+		}
+
+		// perfmon runs on exactly one pinned agent, unlike every other test
+		// type (which runs on every agent of an assigned site) — silently
+		// skip it on every other agent of the site, that's the intended,
+		// normal case, not a capability gap worth a warning.
+		if t.Type == "perfmon" && !isPerfmonSource(t, agent.ID) {
 			continue
 		}
 
@@ -213,6 +233,15 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 			s.Logger.Warn("Storing agent version failed", slog.Any("error", err))
 		}
 		agent.Version = v
+	}
+
+	// Record the agent's declared perfmon reflector address (empty is a
+	// valid, common value — reflector disabled, or no advertise host set).
+	if addr := register.PerfmonAddr; addr != agent.PerfmonAddr {
+		if err := s.Store.SetAgentPerfmonAddr(agent.ID, addr); err != nil {
+			s.Logger.Warn("Storing agent perfmon address failed", slog.Any("error", err))
+		}
+		agent.PerfmonAddr = addr
 	}
 
 	tenantName := agent.TenantID

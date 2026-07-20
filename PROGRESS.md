@@ -1035,6 +1035,48 @@ What has been done so far, in chronological order. Planned work lives in
   (rejects malformed target and <60s interval), a genuine result end to end,
   and correct overview aggregation. No mocking of the protocol itself.
 
+## 2026-07-20 — Perfmon: pinned source agent, cross-site dropdowns (v0.9.0)
+
+- **v0.8.0's perfmon was tenant-wide site-scheduled like every other test
+  type — wrong shape**: measuring throughput FROM one agent TO another only
+  makes sense pinned to a single source agent, and the user wanted source
+  and destination picked from a dropdown of capable agents, not typed as a
+  raw target string, spanning sites.
+- **Single-source pinning without a schema redesign**: `PerfmonParams`
+  gained `sourceAgentId`; existing site-based scheduling is left as-is, and
+  `ConfigForAgent` silently skips a `perfmon` test on every agent of the
+  site except the pinned source (`isPerfmonSource` in
+  `internal/server/server.go`) — a normal, expected skip, not a capability
+  gap worth a warning. `internal/api/sites.go` validates the source agent
+  exists and belongs to the tenant on both create and update.
+- **Agent advertised address**: the server has never needed to know how to
+  reach an agent (agents dial out only, see CLAUDE.md) — perfmon's
+  destination dropdown needs exactly that. Added `-perfmon-advertise-host` /
+  `NETLAMA_PERFMON_ADVERTISE_HOST`, explicitly declared, never
+  auto-detected (guessing would silently fail across NAT); reported in the
+  `Register` message (`perfmon_addr` field 7) and stored on `store.Agent`.
+  An agent with the reflector on but no advertise host set doesn't appear
+  as a destination.
+- **UI**: `perfmon` test form now has source/destination `<select>`
+  dropdowns (`internal/web/static/index.html`, `app.js`) instead of a
+  free-text target field — source lists every `perfmon`-capable agent,
+  destination is filtered to `perfmon_reflector` agents with a non-empty
+  advertised address, both labeled with site name. On save, the test is
+  auto-assigned to the source agent's site (`assignPerfmonTestToSite`,
+  merges into `PUT /api/v1/sites/{id}/tests`, and un-assigns from any other
+  site that had it — covers editing a test to change its source agent). The
+  Agents page's "Perfmon reflector" capability badge now shows the
+  advertised address next to it.
+- **Verification**: unit test
+  (`TestConfigForAgent_PerfmonPinnedToSourceAgent`) confirms only the
+  pinned source agent of a site receives the test config, not other agents
+  of the same site. Full two-agent, cross-site e2e run (local server +
+  two real agent processes, source in site A, reflector+advertise-host in
+  site B) confirmed: `perfmonAddr` registered and resolved correctly, the
+  test ran only on the source agent, the destination agent never received
+  a test config, and a genuine throughput/latency result landed via the
+  results API.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

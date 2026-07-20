@@ -175,6 +175,9 @@ func (s *Store) migrate() error {
 	if err := s.addColumnIfMissing("agents", "wlan_discovered_at", "TIMESTAMP"); err != nil {
 		return err
 	}
+	if err := s.addColumnIfMissing("agents", "perfmon_addr", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	if err := s.addColumnIfMissing("logs", "scope", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}

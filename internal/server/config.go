@@ -43,6 +43,13 @@ type WlanPassiveParams struct {
 }
 
 type PerfmonParams struct {
+	// SourceAgentID pins this test to run on exactly one agent (unlike
+	// every other test type, which runs on all agents of an assigned
+	// site) — measuring throughput FROM a specific agent TO Target only
+	// makes sense as a single-agent test. Existence/tenant-ownership is
+	// checked at the API layer (internal/api/sites.go), which has store
+	// access; this package only checks the field is non-empty.
+	SourceAgentID   string `json:"sourceAgentId"`
 	Target          string `json:"target"` // another agent's perfmon reflector, host:port
 	DurationSeconds uint32 `json:"durationSeconds"`
 }
@@ -232,6 +239,10 @@ func ValidateTestDef(t *store.TestDef) error {
 		var p PerfmonParams
 		if err := json.Unmarshal(t.Params, &p); err != nil {
 			return fmt.Errorf("invalid perfmon parameters: %w", err)
+		}
+		p.SourceAgentID = strings.TrimSpace(p.SourceAgentID)
+		if p.SourceAgentID == "" {
+			return fmt.Errorf("perfmon requires a source agent")
 		}
 		p.Target = strings.TrimSpace(p.Target)
 		if p.Target == "" {

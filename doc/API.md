@@ -413,12 +413,28 @@ sample independent of the optional throughput step), `totalMs`, and
 ### perfmon test parameters
 
 `POST/PUT /api/v1/tests` with `type: "perfmon"` takes params:
-`{"target": "host:port", "durationSeconds": 5}`. `target` is required and
-must parse as host:port — another agent's throughput reflector (started
-there with `-perfmon-port` / `NETLAMA_PERFMON_PORT`), or any host running a
-compatible reflector; there is no discovery, the address is typed in exactly
-like a ping/tcp/traceroute target. `durationSeconds` is per-direction test
-length, 1-30, default 5. Interval must be ≥ 60s.
+`{"sourceAgentId": "...", "target": "host:port", "durationSeconds": 5}`.
+
+Unlike every other test type — which is assigned to a site and runs on all
+of that site's agents — `perfmon` is pinned to exactly one agent via the
+required `sourceAgentId`: measuring throughput FROM an agent TO `target`
+only makes sense as a single-agent test. `sourceAgentId` must reference a
+real agent belonging to the same tenant (checked in
+`internal/api/sites.go`, since `ValidateTestDef` has no store access);
+other agents assigned the same site silently skip a `perfmon` test that
+isn't pinned to them (`internal/server/server.go`'s `isPerfmonSource`).
+Creating/editing a `perfmon` test through the UI auto-assigns it to the
+source agent's site.
+
+`target` is required and must parse as host:port — another agent's
+throughput reflector (started there with `-perfmon-port` /
+`NETLAMA_PERFMON_PORT`, and advertised via `-perfmon-advertise-host` /
+`NETLAMA_PERFMON_ADVERTISE_HOST` so the server knows a reachable address
+for it), or any host running a compatible reflector; there is no discovery,
+the address is typed in exactly like a ping/tcp/traceroute target.
+`durationSeconds` is per-direction test length, 1-30, default 5. Interval
+must be ≥ 60s.
+
 The result payload (`perfmon`) carries `latencyMs` (connection handshake
 round-trip), `uploadMbps`, `downloadMbps`, `durationSeconds` (the value
 actually used), and `success`/`failedStep`
@@ -426,7 +442,10 @@ actually used), and `success`/`failedStep`
 
 An agent's `capabilities` include `perfmon` (always, any agent can run the
 client side) and `perfmon_reflector` (only if that agent is listening) —
-shown as a badge on the Agents page.
+shown as a badge on the Agents page. Agent objects from `GET /api/v1/agents`
+carry `perfmonAddr`, the reflector's advertised address (empty if the
+reflector is disabled or no advertise host was configured) — this is what
+the UI uses to filter the destination dropdown to reachable agents.
 
 ### `GET /api/v1/me`
 

@@ -626,12 +626,15 @@
       <p id="t-wa-mac-warn" class="warn-note hidden">⚠ Randomized MAC uses a fresh address every run — each test consumes a DHCP lease (can exhaust the pool) and shows up as a new device in the AP's client table. Use Permanent for a fixed sensor.</p>
     </div>
     <div id="t-params-perfmon" class="hidden">
-      <p class="muted">Measures throughput and latency to another agent's perfmon
-      reflector (started there with <code>-perfmon-port</code> / <code>NETLAMA_PERFMON_PORT</code> —
-      look for the "Perfmon reflector" capability badge on the Agents page). Reachability
-      is up to your network, same as any ping/tcp target — no discovery, no NAT traversal.</p>
+      <p class="muted">Measures throughput and latency between two agents. The test runs on the
+      source agent only, and is auto-assigned to the source agent's site. The destination must be
+      running a perfmon reflector (<code>-perfmon-port</code> / <code>NETLAMA_PERFMON_PORT</code>)
+      with a reachable advertised address — agents without one aren't listed below.</p>
       <div class="grid2">
-        <label>Target (host:port) <input type="text" id="t-pm-target" placeholder="10.0.1.5:5252"></label>
+        <label>Source agent <select id="t-pm-source"></select></label>
+        <label>Destination agent <select id="t-pm-dest"></select></label>
+      </div>
+      <div class="grid2">
         <label>Duration per direction (s) <input type="number" id="t-pm-duration" min="1" max="30" value="5"></label>
       </div>
     </div>

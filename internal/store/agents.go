@@ -18,6 +18,7 @@ type Agent struct {
 	Capabilities       json.RawMessage `json:"capabilities"`
 	Stats              json.RawMessage `json:"stats,omitempty"`
 	Version            string          `json:"version,omitempty"`
+	PerfmonAddr        string          `json:"perfmonAddr,omitempty"` // reachable host:port for the perfmon reflector, if enabled
 	CreatedAt          time.Time       `json:"createdAt"`
 }
 
@@ -74,7 +75,7 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	a := &Agent{}
 	var wireless, capabilities, stats string
 	err := row.Scan(&a.ID, &a.TenantID, &a.SiteID, &a.SiteName, &a.Name, &a.Token,
-		&wireless, &capabilities, &stats, &a.Version, &a.CreatedAt)
+		&wireless, &capabilities, &stats, &a.Version, &a.PerfmonAddr, &a.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -96,7 +97,7 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 }
 
 const agentCols = `a.id, a.tenant_id, a.site_id, s.name, a.name, a.token,
-	COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.version, a.created_at`
+	COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.version, a.perfmon_addr, a.created_at`
 const agentFrom = ` FROM agents a JOIN sites s ON s.id = a.site_id `
 
 func (s *Store) GetAgent(id string) (*Agent, error) {
@@ -156,6 +157,13 @@ func (s *Store) UpdateAgent(id, name, siteID string) error {
 // SetAgentVersion records the build version an agent reported on register.
 func (s *Store) SetAgentVersion(id, version string) error {
 	_, err := s.db.Exec(`UPDATE agents SET version = ? WHERE id = ?`, version, id)
+	return err
+}
+
+// SetAgentPerfmonAddr records the agent's reachable perfmon reflector
+// address, as explicitly declared via -perfmon-advertise-host.
+func (s *Store) SetAgentPerfmonAddr(id, addr string) error {
+	_, err := s.db.Exec(`UPDATE agents SET perfmon_addr = ? WHERE id = ?`, addr, id)
 	return err
 }
 

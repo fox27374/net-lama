@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"strings"
 	"sync"
@@ -91,6 +92,14 @@ type Agent struct {
 	// lifetime. Empty = disabled (no listener, capability not reported).
 	PerfmonPort string
 
+	// PerfmonAdvertiseHost is how other agents can reach this one's
+	// reflector — explicitly declared, never auto-detected (this agent has
+	// no reliable way to know which of its addresses a peer, possibly
+	// across NAT, could actually use). Combined with PerfmonPort and
+	// reported to the server so it can offer this agent as a perfmon
+	// destination. Empty = not advertised, even if the reflector is running.
+	PerfmonAdvertiseHost string
+
 	// logBuf holds Info+ log lines (Logger tees into it) until the send
 	// loop can ship them to the server; it survives across reconnects so
 	// nothing logged while disconnected is lost (up to its capacity).
@@ -113,6 +122,31 @@ type wlanPassiveState struct {
 	Stations map[string]probe.WlanStation // by MAC
 }
 
+// perfmonListenAddr normalizes PerfmonPort ("5252" or ":5252") into a bind
+// address for net.Listen.
+func (a *Agent) perfmonListenAddr() string {
+	addr := a.PerfmonPort
+	if addr != "" && !strings.Contains(addr, ":") {
+		addr = ":" + addr
+	}
+	return addr
+}
+
+// perfmonAdvertiseAddr is what this agent reports as its reachable perfmon
+// address — only set if both the reflector is enabled and an advertise
+// host was explicitly configured; there's no way to guess a reachable
+// address, so an unset host means "not advertised," not "guess one."
+func (a *Agent) perfmonAdvertiseAddr() string {
+	if a.PerfmonPort == "" || a.PerfmonAdvertiseHost == "" {
+		return ""
+	}
+	_, port, err := net.SplitHostPort(a.perfmonListenAddr())
+	if err != nil {
+		return ""
+	}
+	return net.JoinHostPort(a.PerfmonAdvertiseHost, port)
+}
+
 // Run connects to the server and keeps the control stream alive,
 // reconnecting with exponential backoff until ctx is cancelled.
 func (a *Agent) Run(ctx context.Context) error {
@@ -130,10 +164,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 
 	if a.PerfmonPort != "" {
-		addr := a.PerfmonPort
-		if !strings.Contains(addr, ":") {
-			addr = ":" + addr
-		}
+		addr := a.perfmonListenAddr()
 		if ln, err := probe.Reflector(ctx, addr); err != nil {
 			a.Logger.Error("Perfmon reflector failed to start", slog.String("addr", addr), slog.Any("error", err))
 		} else {
@@ -218,6 +249,7 @@ func (a *Agent) runStream(ctx context.Context) error {
 				Capabilities:       capabilities,
 				Token:              a.Token,
 				WirelessInterfaces: wifaces,
+				PerfmonAddr:        a.perfmonAdvertiseAddr(),
 			},
 		},
 	}
