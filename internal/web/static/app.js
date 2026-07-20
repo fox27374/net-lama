@@ -581,10 +581,15 @@ async function loadAgents() {
   tbody.innerHTML = "";
   $("#agents-empty").classList.toggle("hidden", agents.length > 0);
   for (const a of agents) {
-    // Capability badges; an empty/missing list (old agent that never
-    // reported capabilities) renders nothing.
+    // Capability badges: ping/dns/http/tcp/speedtest/traceroute/perfmon are
+    // baseline — every agent has them, so listing them per-agent is just
+    // noise. Only the situational ones (WLAN sensing/active) get a badge;
+    // perfmon reflector is handled separately below since it's not even a
+    // self-reported capability.
+    const baselineCaps = new Set(["ping", "dns", "http", "tcp", "speedtest", "traceroute", "perfmon"]);
     const capabilityLabel = (c) => ({ wlan: "WLAN", wlan_active: "WLAN active" })[c] || c;
     let caps = (a.capabilities || [])
+      .filter((c) => !baselineCaps.has(c))
       .map((c) => `<span class="chip type-${esc(c)}">${capabilityLabel(c)}</span>`).join(" ");
     // Perfmon reflector state is operator-configured (Agents page), not a
     // self-reported capability — shown from the stored setting directly.
@@ -680,11 +685,11 @@ async function openEditAgentDialog(agent) {
   $("#ea-site").innerHTML = sites.map((s) =>
     `<option value="${s.id}" ${s.id === agent.siteId ? "selected" : ""}>${esc(s.name)}</option>`).join("");
   const ifaces = agent.networkInterfaces || [];
-  populateInterfaceSelect($("#ea-mgmt-iface"), ifaces, agent.managementInterface, "— none —", false);
+  $("#ea-mgmt-addr").textContent = agent.managementAddr || "—";
   populateInterfaceSelect($("#ea-wlan-iface"), ifaces, agent.wlanSensorInterface, "Auto-pick first monitor-capable", true);
   populateInterfaceSelect($("#ea-pm-iface"), ifaces, agent.perfmonReflectorInterface, "— none —", false);
   $("#ea-pm-enabled").checked = !!agent.perfmonReflectorEnabled;
-  $("#ea-pm-port").value = agent.perfmonReflectorPort || "";
+  $("#ea-pm-port").value = agent.perfmonReflectorPort || 5252;
   $("#ea-pm-cidrs").value = (agent.perfmonAllowedCidrs || []).join("\n");
   dialogError("#ea-error", "");
   $("#dlg-edit-agent").showModal();
@@ -696,7 +701,6 @@ $("#form-edit-agent").addEventListener("submit", async (e) => {
     await api("PUT", `/api/v1/agents/${editingAgent.id}`, {
       name: $("#ea-name").value.trim(),
       siteId: $("#ea-site").value,
-      managementInterface: $("#ea-mgmt-iface").value,
       wlanSensorInterface: $("#ea-wlan-iface").value,
       perfmonReflectorEnabled: $("#ea-pm-enabled").checked,
       perfmonReflectorPort: +$("#ea-pm-port").value || 0,

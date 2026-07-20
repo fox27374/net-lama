@@ -315,7 +315,9 @@ last reported at Register — `{"name", "wireless", "supportsMonitor",
 "speedMbps", "ipAddress"}` each — used to populate the interface pickers
 below. `perfmonAddr` and `managementAddr` are resolved fresh on every
 response from the agent's current `networkInterfaces` (see "Perfmon
-reflector settings" below), not stored:
+reflector settings" below), not stored. `managementAddr` is fully
+automatic (first wired interface with an IP, falling back to wireless) —
+there is no `managementInterface` to pick:
 
 ```json
 [{
@@ -325,7 +327,7 @@ reflector settings" below), not stored:
     {"name": "eth0", "wireless": false, "speedMbps": 1000, "ipAddress": "10.0.1.5"},
     {"name": "wlan1", "wireless": true, "supportsMonitor": true, "ipAddress": ""}
   ],
-  "managementInterface": "eth0", "managementAddr": "10.0.1.5",
+  "managementAddr": "10.0.1.5",
   "wlanSensorInterface": "", "perfmonReflectorEnabled": false,
   "capabilities": ["ping", "dns", "http", "tcp", "speedtest", "traceroute"],
   "createdAt": "...", "connected": false,
@@ -353,7 +355,7 @@ connects); interface pickers are edited afterwards via `PUT`.
 
 ### `PUT /api/v1/agents/{id}`
 
-Body: `{"name": "...", "siteId": "...", "managementInterface": "...",
+Body: `{"name": "...", "siteId": "...",
 "wlanSensorInterface": "...", "perfmonReflectorEnabled": bool,
 "perfmonReflectorPort": uint32, "perfmonReflectorInterface": "...",
 "perfmonAllowedCidrs": ["..."]}` (`name`/`siteId` required; the new site
@@ -459,19 +461,19 @@ below), not something the agent self-reports.
 ### Interface settings (per agent)
 
 `PUT /api/v1/agents/{id}` additionally takes:
-`{"managementInterface": "...", "wlanSensorInterface": "...",
+`{"wlanSensorInterface": "...",
 "perfmonReflectorEnabled": bool, "perfmonReflectorPort": uint32,
 "perfmonReflectorInterface": "...", "perfmonAllowedCidrs": ["..."]}`.
 
-All four interface fields are a *name* from the agent's own
+The interface fields are a *name* from the agent's own
 `networkInterfaces` (see `GET /api/v1/agents` above) — the operator picks
 an interface, not an IP or a raw text value. Nothing is validated against
 the current interface list at write time (it can be stale between page
 load and submit); an unresolvable name just means the derived address is
-empty until the agent reports that interface again.
+empty until the agent reports that interface again. There is no
+management-interface pick — `managementAddr` (see `GET` above) is derived
+automatically, not operator-configured.
 
-- `managementInterface` is purely informational — resolved to
-  `managementAddr` for display, changes no behavior.
 - `wlanSensorInterface` pins `wlan_passive`/`wlan_active` to that
   interface (empty = auto-pick the first monitor-capable one). Pushed
   live via `Config.wlan_sensor_interface` — no restart needed, replacing

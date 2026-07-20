@@ -125,9 +125,9 @@ func (a *API) getScopedAgent(w http.ResponseWriter, r *http.Request, user *store
 }
 
 // handleUpdateAgent renames an agent, moves it to another site of the same
-// tenant, and sets its management/WLAN-sensor/perfmon-reflector interface
-// picks; the resulting config (reflector state, WLAN sensor override) is
-// pushed live — no restart needed to pick up any of these changes.
+// tenant, and sets its WLAN-sensor/perfmon-reflector interface picks; the
+// resulting config (reflector state, WLAN sensor override) is pushed live —
+// no restart needed to pick up any of these changes.
 func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *store.User) {
 	agent := a.getScopedAgent(w, r, user)
 	if agent == nil {
@@ -137,7 +137,6 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 	var req struct {
 		Name                      string   `json:"name"`
 		SiteID                    string   `json:"siteId"`
-		ManagementInterface       string   `json:"managementInterface"`
 		WlanSensorInterface       string   `json:"wlanSensorInterface"`
 		PerfmonReflectorEnabled   bool     `json:"perfmonReflectorEnabled"`
 		PerfmonReflectorPort      uint32   `json:"perfmonReflectorPort"`
@@ -169,10 +168,6 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 
 	if err := a.Store.UpdateAgent(agent.ID, req.Name, site.ID); err != nil {
 		writeError(w, http.StatusConflict, err.Error())
-		return
-	}
-	if err := a.Store.SetAgentManagementInterface(agent.ID, req.ManagementInterface); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if err := a.Store.SetAgentWlanSensorInterface(agent.ID, req.WlanSensorInterface); err != nil {

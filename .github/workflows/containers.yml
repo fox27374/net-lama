@@ -23,6 +23,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
@@ -49,9 +51,16 @@ jobs:
           type=semver,pattern={{version}}
           type=sha
 
-    - name: Short SHA
-      id: sha
-      run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+    - name: Determine version
+      id: version
+      # Same computation as the local Makefile (git describe --tags), not
+      # branched on which trigger fired. A main push and a v* tag push
+      # for the same commit used to disagree (branch push always said
+      # git-<sha>) and race for the `latest` tag, so whichever run
+      # finished last decided the version string baked into `latest` —
+      # cosmetically wrong even though the code was identical. Describing
+      # the actual commit makes both runs agree.
+      run: echo "value=$(git describe --tags --always --dirty)" >> "$GITHUB_OUTPUT"
 
     - name: Build and push
       uses: docker/build-push-action@v6
@@ -62,7 +71,7 @@ jobs:
         platforms: linux/amd64,linux/arm64
         push: true
         build-args: |
-          VERSION=${{ github.ref_type == 'tag' && github.ref_name || format('git-{0}', steps.sha.outputs.short) }}
+          VERSION=${{ steps.version.outputs.value }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha,scope=${{ matrix.component }}

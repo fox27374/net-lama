@@ -1184,6 +1184,44 @@ What has been done so far, in chronological order. Planned work lives in
   confirmed both `managementAddr` and `perfmonAddr` resolved to the
   correct IP with no restart, and the reflector started listening live.
 
+## 2026-07-20 — Drop management-interface picker, declutter capability badges, fix version-string race (v0.11.1)
+
+- **Management interface picker removed, same day it shipped**: user tried
+  it and decided picking one was pointless busywork for a value that's
+  purely informational anyway. `Agent.ResolvedManagementAddr` now
+  auto-derives it — first wired interface with a current IP, falling back
+  to wireless — instead of reading an operator-picked field. Deleted the
+  now-dead `ManagementInterface` field/column read, `SetAgentManagementInterface`,
+  the `managementInterface` API field, and the `<select>` in the Agents
+  edit dialog (replaced with plain read-only text). `management_interface`
+  DB column left in place unused, same no-destructive-migration pattern as
+  `perfmon_addr`/`perfmon_advertise_host`.
+- **Perfmon reflector port field now pre-fills 5252** (the existing
+  placeholder value) instead of opening blank, so enabling the reflector
+  doesn't require typing a port from memory.
+- **Agents table capability badges decluttered**: `ping`/`dns`/`http`/`tcp`/
+  `speedtest`/`traceroute`/`perfmon` are baseline — every agent has them,
+  so they're filtered out of the per-agent badge list now (display-only
+  change in `loadAgents()`; `capabilityWarnings()`, which drives the
+  site/test capability-mismatch warnings, reads the raw `a.capabilities`
+  array directly and is unaffected). Only `WLAN`/`WLAN active` show as
+  badges now; perfmon reflector state already had its own badge driven by
+  the operator setting, not the capabilities array.
+- **Fixed the `latest` GHCR tag version-string race**: a `main` push and a
+  `vX.Y.Z` tag push for the same commit both trigger the container build
+  workflow and both write `:latest` — whichever run finished last decided
+  the image's baked-in `VERSION` build-arg, and the branch-push run always
+  computed `git-<sha>` regardless of what tag pointed at that commit. So a
+  tagged release could end up on `:latest` self-reporting `git-<sha>`
+  instead of its semver tag — cosmetic (the image's revision label, and
+  the code, were always correct) but confusing. Fixed at the root: the
+  workflow now computes `VERSION` via `git describe --tags --always --dirty`
+  (same as the local Makefile) instead of branching on which trigger
+  fired, so every run for a given commit agrees on the version string
+  regardless of which one wins the `:latest` race. Needed `fetch-depth: 0`
+  on checkout since `git describe` needs tag history a shallow clone
+  doesn't have.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

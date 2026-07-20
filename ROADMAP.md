@@ -43,13 +43,15 @@ Planned work, roughly grouped. Not ordered by priority yet.
       interface inventory (wired + wireless — name, link speed or
       monitor-sensor capability, current IP) at Register. Agents page lets
       the operator pick, per role, from a dropdown of that inventory
-      instead of typing a name or IP: **management** (informational
-      display only, no behavior change), **WLAN sensor** (pins
+      instead of typing a name or IP: **WLAN sensor** (pins
       `wlan_passive`/`wlan_active`, replaces the old `-wlan-iface` startup
       flag, pushed live via `Config.wlan_sensor_interface`), and **perfmon
       reflector** (its advertised `host:port` is resolved from the picked
       interface's current IP — no more typing an advertise-host address by
-      hand)
+      hand). **Management address** is shown info-only (first wired
+      interface with an IP, falling back to wireless) — auto-derived, not
+      operator-picked, after an earlier dropdown for it proved pointless
+      since it never changed behavior
 - [x] Agent resource monitoring: CPU, memory, storage — reported over the
       stream and visible in the UI/metrics (host-level readings; per-cgroup /
       container-scoped readings a possible later refinement)

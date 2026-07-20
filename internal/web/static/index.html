@@ -526,9 +526,9 @@
     <label>Site <select id="ea-site"></select></label>
     <p class="muted">Moving the agent to another site pushes the new site's tests immediately.</p>
 
-    <label>Management interface <select id="ea-mgmt-iface"></select></label>
-    <p class="muted">Informational only — shown as this agent's primary IP in the UI, nothing
-    routes differently because of this pick.</p>
+    <p>Management address: <strong id="ea-mgmt-addr" class="mono">—</strong></p>
+    <p class="muted">Automatically the agent's first wired interface with an IP (falling back to
+    wireless) — informational only, nothing routes differently because of it.</p>
 
     <label>WLAN sensor interface <select id="ea-wlan-iface"></select></label>
     <p class="muted">Which interface wlan_passive/wlan_active use. Pushed to the agent live —

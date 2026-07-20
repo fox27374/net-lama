@@ -25,10 +25,6 @@ type Agent struct {
 	Capabilities      json.RawMessage `json:"capabilities"`
 	Stats             json.RawMessage `json:"stats,omitempty"`
 	Version           string          `json:"version,omitempty"`
-	// ManagementInterface is purely informational — which interface's IP
-	// to show as this agent's primary address in the UI. Nothing
-	// server-side or agent-side behaves differently based on it.
-	ManagementInterface string `json:"managementInterface,omitempty"`
 	// WlanSensorInterface pins wlan_passive/wlan_active to a specific
 	// interface (by name, from NetworkInterfaces); empty = auto-pick the
 	// first monitor-capable one. Pushed live via Config.wlan_sensor_interface.
@@ -87,10 +83,34 @@ func (a *Agent) ResolvedPerfmonAddr() string {
 	return net.JoinHostPort(ip, strconv.Itoa(int(a.PerfmonReflectorPort)))
 }
 
-// ResolvedManagementAddr is this agent's informational primary IP, from
-// its picked management interface's current address.
+// ResolvedManagementAddr is this agent's informational primary IP: the
+// first wired interface with a current address, falling back to the first
+// wireless one. Fully automatic (no operator pick) — display only, nothing
+// server-side or agent-side behaves differently based on it.
 func (a *Agent) ResolvedManagementAddr() string {
-	return a.InterfaceIP(a.ManagementInterface)
+	if len(a.NetworkInterfaces) == 0 {
+		return ""
+	}
+	var ifaces []struct {
+		Wireless  bool   `json:"wireless"`
+		IPAddress string `json:"ipAddress"`
+	}
+	if err := json.Unmarshal(a.NetworkInterfaces, &ifaces); err != nil {
+		return ""
+	}
+	var wirelessFallback string
+	for _, ni := range ifaces {
+		if ni.IPAddress == "" {
+			continue
+		}
+		if !ni.Wireless {
+			return ni.IPAddress
+		}
+		if wirelessFallback == "" {
+			wirelessFallback = ni.IPAddress
+		}
+	}
+	return wirelessFallback
 }
 
 type Result struct {
@@ -148,7 +168,7 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	var enabled int
 	err := row.Scan(&a.ID, &a.TenantID, &a.SiteID, &a.SiteName, &a.Name, &a.Token,
 		&netIfaces, &capabilities, &stats, &a.Version,
-		&a.ManagementInterface, &a.WlanSensorInterface,
+		&a.WlanSensorInterface,
 		&enabled, &a.PerfmonReflectorPort, &a.PerfmonReflectorInterface, &allowedCIDRs,
 		&a.CreatedAt)
 	if err == sql.ErrNoRows {
@@ -181,11 +201,13 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 // migration was needed: wireless_interfaces now holds the full wired+
 // wireless NetworkInterfaces inventory (was wireless-only), and
 // wlan_interface (added, never read/written by any code) now holds the
-// operator-picked WLAN sensor interface. perfmon_advertise_host and
-// perfmon_addr from the previous design are left in the schema unused.
+// operator-picked WLAN sensor interface. perfmon_advertise_host,
+// perfmon_addr and management_interface from earlier designs are left in
+// the schema unused — the management address is now auto-derived (see
+// Agent.ResolvedManagementAddr), not operator-picked.
 const agentCols = `a.id, a.tenant_id, a.site_id, s.name, a.name, a.token,
 	COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.version,
-	a.management_interface, a.wlan_interface,
+	a.wlan_interface,
 	a.perfmon_reflector_enabled, a.perfmon_reflector_port, a.perfmon_reflector_interface,
 	COALESCE(a.perfmon_allowed_cidrs, ''), a.created_at`
 const agentFrom = ` FROM agents a JOIN sites s ON s.id = a.site_id `
@@ -265,13 +287,6 @@ func (s *Store) SetAgentPerfmonReflector(id string, enabled bool, port uint32, i
 		 perfmon_reflector_interface = ?, perfmon_allowed_cidrs = ? WHERE id = ?`,
 		enabledInt, port, iface, string(allowedCIDRs), id,
 	)
-	return err
-}
-
-// SetAgentManagementInterface records which interface's IP to show as this
-// agent's primary address in the UI — informational only.
-func (s *Store) SetAgentManagementInterface(id, iface string) error {
-	_, err := s.db.Exec(`UPDATE agents SET management_interface = ? WHERE id = ?`, iface, id)
 	return err
 }
 
