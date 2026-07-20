@@ -24,8 +24,6 @@ func main() {
 	tlsCert := flag.String("tls-cert", envOr("NETLAMA_TLS_CERT", ""), "Client certificate for mTLS (issued per agent by the server)")
 	tlsKey := flag.String("tls-key", envOr("NETLAMA_TLS_KEY", ""), "Key for the mTLS client certificate")
 	wlanIface := flag.String("wlan-iface", envOr("NETLAMA_WLAN_IFACE", ""), "Override wireless interface for wlan_passive tests (empty = auto-pick first monitor-capable)")
-	perfmonPort := flag.String("perfmon-port", envOr("NETLAMA_PERFMON_PORT", ""), "Start an agent-to-agent throughput reflector on this port (empty = disabled)")
-	perfmonAdvertiseHost := flag.String("perfmon-advertise-host", envOr("NETLAMA_PERFMON_ADVERTISE_HOST", ""), "Host/IP other agents can reach this one's perfmon reflector on (empty = not advertised, even if the reflector is running)")
 	flag.Parse()
 
 	logger := newLogger()
@@ -48,19 +46,17 @@ func main() {
 	defer stop()
 
 	a := &agent.Agent{
-		ServerAddr:           *serverAddr,
-		ClientID:             *clientID,
-		Token:                *token,
-		Version:              version,
-		Logger:               logger,
-		TLS:                  *useTLS,
-		TLSCAFile:            *tlsCA,
-		TLSInsecure:          *tlsInsecure,
-		TLSCertFile:          *tlsCert,
-		TLSKeyFile:           *tlsKey,
-		WlanIface:            *wlanIface,
-		PerfmonPort:          *perfmonPort,
-		PerfmonAdvertiseHost: *perfmonAdvertiseHost,
+		ServerAddr:  *serverAddr,
+		ClientID:    *clientID,
+		Token:       *token,
+		Version:     version,
+		Logger:      logger,
+		TLS:         *useTLS,
+		TLSCAFile:   *tlsCA,
+		TLSInsecure: *tlsInsecure,
+		TLSCertFile: *tlsCert,
+		TLSKeyFile:  *tlsKey,
+		WlanIface:   *wlanIface,
 	}
 
 	logger.Info("Agent starting",

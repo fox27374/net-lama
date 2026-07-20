@@ -10,7 +10,11 @@ func TestPerfmonLoopback(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ln, err := Reflector(ctx, "127.0.0.1:0")
+	allowed, err := ParseCIDRs([]string{"127.0.0.1"})
+	if err != nil {
+		t.Fatalf("ParseCIDRs: %v", err)
+	}
+	ln, err := Reflector(ctx, "127.0.0.1:0", allowed)
 	if err != nil {
 		t.Fatalf("starting reflector: %v", err)
 	}
@@ -51,6 +55,43 @@ func TestPerfmonConnectFailure(t *testing.T) {
 	}
 	if res.FailedStep != "connect" {
 		t.Errorf("FailedStep = %q, want connect", res.FailedStep)
+	}
+}
+
+func TestPerfmonReflectorACL(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Empty allowlist: reject everyone, even loopback.
+	ln, err := Reflector(ctx, "127.0.0.1:0", nil)
+	if err != nil {
+		t.Fatalf("starting reflector: %v", err)
+	}
+	defer ln.Close()
+	res, err := RunClient(ctx, ln.Addr().String(), 1)
+	if err != nil {
+		t.Fatalf("RunClient returned an error (should report failures via the result): %v", err)
+	}
+	if res.Success {
+		t.Fatal("expected the reflector to reject a connection with an empty allowlist")
+	}
+
+	// Bare IP entries get an implicit /32 and admit the matching peer.
+	allowed, err := ParseCIDRs([]string{"127.0.0.1"})
+	if err != nil {
+		t.Fatalf("ParseCIDRs: %v", err)
+	}
+	ln2, err := Reflector(ctx, "127.0.0.1:0", allowed)
+	if err != nil {
+		t.Fatalf("starting reflector: %v", err)
+	}
+	defer ln2.Close()
+	res, err = RunClient(ctx, ln2.Addr().String(), 1)
+	if err != nil {
+		t.Fatalf("RunClient returned an error (should report failures via the result): %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected success with a matching allowlist entry, got failedStep=%q", res.FailedStep)
 	}
 }
 

@@ -14,8 +14,11 @@ import (
 )
 
 // schedule reacts to config updates and commands. Every config update
-// replaces the running test schedule completely.
-func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-chan *pb.Command, results chan<- *pb.TestResult) {
+// replaces the running test schedule completely. rootCtx is the agent
+// process's own context, passed through to reconcilePerfmonReflector: the
+// reflector must outlive a single connection (ctx), since a reconnect has
+// nothing to do with whether other agents should still reach it.
+func (a *Agent) schedule(rootCtx, ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-chan *pb.Command, results chan<- *pb.TestResult) {
 	specs := map[string]*pb.TestSpec{}
 	var cancelTests context.CancelFunc
 
@@ -42,6 +45,7 @@ func (a *Agent) schedule(ctx context.Context, cfgCh <-chan *pb.Config, cmdCh <-c
 			if len(cfg.Tests) == 0 {
 				a.Logger.Info("No tests assigned, idling")
 			}
+			a.reconcilePerfmonReflector(rootCtx, cfg.PerfmonReflector)
 
 		case cmd := <-cmdCh:
 			if cmd.Type == pb.Command_RUN_TEST {

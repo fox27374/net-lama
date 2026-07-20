@@ -525,6 +525,17 @@
     <label>Name <input type="text" id="ea-name" required></label>
     <label>Site <select id="ea-site"></select></label>
     <p class="muted">Moving the agent to another site pushes the new site's tests immediately.</p>
+    <h4>Perfmon reflector</h4>
+    <p class="muted">Lets other agents run a perfmon test against this one. Pushed to the agent
+    live over its existing connection — no redeploy or restart needed.</p>
+    <label class="check"><input type="checkbox" id="ea-pm-enabled"> Enable</label>
+    <div class="grid2">
+      <label>Port <input type="number" id="ea-pm-port" min="1" max="65535" placeholder="5252"></label>
+      <label>Advertise host <input type="text" id="ea-pm-host" placeholder="10.0.1.5"></label>
+    </div>
+    <label>Allowed source CIDRs (one per line — reject-all if empty, even when enabled)
+      <textarea id="ea-pm-cidrs" rows="3" placeholder="10.0.1.0/24&#10;192.168.1.5"></textarea>
+    </label>
     <p class="error hidden" id="ea-error"></p>
     <div class="row end">
       <button type="button" class="ghost" data-close>Cancel</button>
@@ -627,13 +638,14 @@
     </div>
     <div id="t-params-perfmon" class="hidden">
       <p class="muted">Measures throughput and latency between two agents. The test runs on the
-      source agent only, and is auto-assigned to the source agent's site. The destination must be
-      running a perfmon reflector (<code>-perfmon-port</code> / <code>NETLAMA_PERFMON_PORT</code>)
-      with a reachable advertised address — agents without one aren't listed below.</p>
+      source agent only, and is auto-assigned to the source agent's site. The destination must have
+      its perfmon reflector enabled with a reachable advertise host (Agents page → Edit) —
+      agents without one aren't listed below.</p>
       <div class="grid2">
         <label>Source agent <select id="t-pm-source"></select></label>
         <label>Destination agent <select id="t-pm-dest"></select></label>
       </div>
+      <p id="t-pm-dest-port" class="muted"></p>
       <div class="grid2">
         <label>Duration per direction (s) <input type="number" id="t-pm-duration" min="1" max="30" value="5"></label>
       </div>

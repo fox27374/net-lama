@@ -583,12 +583,15 @@ async function loadAgents() {
   for (const a of agents) {
     // Capability badges; an empty/missing list (old agent that never
     // reported capabilities) renders nothing.
-    const capabilityLabel = (c) => ({ wlan: "WLAN", wlan_active: "WLAN active", perfmon_reflector: "Perfmon reflector" })[c] || c;
-    const caps = (a.capabilities || [])
-      .map((c) => {
-        const addr = c === "perfmon_reflector" && a.perfmonAddr ? ` (${esc(a.perfmonAddr)})` : "";
-        return `<span class="chip type-${esc(c)}">${capabilityLabel(c)}${addr}</span>`;
-      }).join(" ");
+    const capabilityLabel = (c) => ({ wlan: "WLAN", wlan_active: "WLAN active" })[c] || c;
+    let caps = (a.capabilities || [])
+      .map((c) => `<span class="chip type-${esc(c)}">${capabilityLabel(c)}</span>`).join(" ");
+    // Perfmon reflector state is operator-configured (Agents page), not a
+    // self-reported capability — shown from the stored setting directly.
+    if (a.perfmonReflectorEnabled) {
+      const addr = a.perfmonAddr ? ` (${esc(a.perfmonAddr)})` : " (no advertise host set)";
+      caps += ` <span class="chip type-perfmon_reflector">Perfmon reflector${addr}</span>`;
+    }
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><span class="badge ${a.connected ? "on" : "off"}">${a.connected ? "connected" : "offline"}</span></td>
@@ -654,6 +657,10 @@ async function openEditAgentDialog(agent) {
   $("#ea-name").value = agent.name;
   $("#ea-site").innerHTML = sites.map((s) =>
     `<option value="${s.id}" ${s.id === agent.siteId ? "selected" : ""}>${esc(s.name)}</option>`).join("");
+  $("#ea-pm-enabled").checked = !!agent.perfmonReflectorEnabled;
+  $("#ea-pm-port").value = agent.perfmonReflectorPort || "";
+  $("#ea-pm-host").value = agent.perfmonAdvertiseHost || "";
+  $("#ea-pm-cidrs").value = (agent.perfmonAllowedCidrs || []).join("\n");
   dialogError("#ea-error", "");
   $("#dlg-edit-agent").showModal();
 }
@@ -664,6 +671,10 @@ $("#form-edit-agent").addEventListener("submit", async (e) => {
     await api("PUT", `/api/v1/agents/${editingAgent.id}`, {
       name: $("#ea-name").value.trim(),
       siteId: $("#ea-site").value,
+      perfmonReflectorEnabled: $("#ea-pm-enabled").checked,
+      perfmonReflectorPort: +$("#ea-pm-port").value || 0,
+      perfmonAdvertiseHost: $("#ea-pm-host").value.trim(),
+      perfmonAllowedCidrs: lines($("#ea-pm-cidrs").value),
     });
     $("#dlg-edit-agent").close();
     loadAgents();
@@ -922,12 +933,25 @@ function readThresholdBands() {
 function populatePerfmonAgentSelects(selectedSourceID, selectedDestID) {
   const label = (a) => `${a.name} (${a.siteName || "no site"})`;
   const sourceAgents = agents.filter((a) => (a.capabilities || []).includes("perfmon"));
-  const destAgents = agents.filter((a) => (a.capabilities || []).includes("perfmon_reflector") && a.perfmonAddr);
+  const destAgents = agents.filter((a) => a.perfmonReflectorEnabled && a.perfmonAddr);
   $("#t-pm-source").innerHTML = sourceAgents
     .map((a) => `<option value="${a.id}" ${a.id === selectedSourceID ? "selected" : ""}>${esc(label(a))}</option>`).join("");
   $("#t-pm-dest").innerHTML = destAgents
     .map((a) => `<option value="${a.id}" ${a.id === selectedDestID ? "selected" : ""}>${esc(label(a))}</option>`).join("");
+  updatePerfmonDestPortHint();
 }
+
+// updatePerfmonDestPortHint shows the destination's reflector port so a
+// firewall admin can open it between the two agents without having to look
+// up the agent's perfmonAddr elsewhere.
+function updatePerfmonDestPortHint() {
+  const dest = agents.find((a) => a.id === $("#t-pm-dest").value);
+  const port = dest && dest.perfmonAddr ? dest.perfmonAddr.split(":").pop() : "";
+  $("#t-pm-dest-port").textContent = port
+    ? `Uses TCP port ${port} on ${dest.name} — open this between the source and destination if there's a firewall in between.`
+    : "";
+}
+$("#t-pm-dest").addEventListener("change", updatePerfmonDestPortHint);
 
 function openTestDialog(test) {
   editingTest = test || null;

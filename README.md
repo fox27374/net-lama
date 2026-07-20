@@ -257,21 +257,30 @@ agent via `sourceAgentId` in its params; it's auto-assigned to that agent's
 site so the normal scheduling machinery still applies, and other agents of
 that site silently skip it.
 
-Enable the reflector on the **destination** agent with `-perfmon-port` /
-`NETLAMA_PERFMON_PORT` (default disabled; it opens a listening port, so
-it's opt-in). Reachability is up to your network — net-lama agents dial out
-to the server only and are never dialed into, so there's no discovery or
-NAT traversal — but the server still needs to know a reachable address to
-offer the agent as a destination. Declare it explicitly with
-`-perfmon-advertise-host` / `NETLAMA_PERFMON_ADVERTISE_HOST` (e.g. its LAN
-IP); there is no auto-detection, since guessing would silently fail across
-NAT. An agent with the reflector enabled but no advertise host set won't
-show up as a destination.
+Enable the reflector on the **destination** agent from the Agents page
+(Edit → Perfmon reflector: enable, port, advertise host, allowed source
+CIDRs) — no flag, no restart. It's pushed to the agent live over its
+existing connection and takes effect immediately, including turning it off
+again. Reachability is up to your network — net-lama agents dial out to the
+server only and are never dialed into, so there's no discovery or NAT
+traversal — but the server still needs to know a reachable address to offer
+the agent as a destination. Declare the **advertise host** explicitly (e.g.
+its LAN IP); there is no auto-detection, since guessing would silently fail
+across NAT. An agent with the reflector enabled but no advertise host set
+won't show up as a destination.
+
+The reflector protocol has no authentication beyond a fixed handshake, so
+**allowed source CIDRs** is a required allowlist the agent enforces on every
+connection before serving it — a bare IP is treated as a /32 (or /128 for
+IPv6). An empty allowlist rejects every connection, even with the reflector
+enabled: turning the reflector on with no allowlist configured listens but
+serves no one, the safe default.
 
 In the UI, creating a `perfmon` test shows source and destination as
-dropdowns of capable agents (destination is filtered to agents with a
-running, reachable reflector), spanning sites — source and destination can
-be in the same site or different sites.
+dropdowns of capable agents (destination is filtered to agents with the
+reflector enabled and a reachable advertise host), spanning sites — source
+and destination can be in the same site or different sites. The dialog also
+shows the destination's port so a firewall admin can open it if needed.
 
 The WLAN passive and traceroute probes shell out to external tools (`iw`, `mtr`) that
 are **not** in the default distroless agent image and need raw-socket access. Use

@@ -427,13 +427,11 @@ Creating/editing a `perfmon` test through the UI auto-assigns it to the
 source agent's site.
 
 `target` is required and must parse as host:port — another agent's
-throughput reflector (started there with `-perfmon-port` /
-`NETLAMA_PERFMON_PORT`, and advertised via `-perfmon-advertise-host` /
-`NETLAMA_PERFMON_ADVERTISE_HOST` so the server knows a reachable address
-for it), or any host running a compatible reflector; there is no discovery,
-the address is typed in exactly like a ping/tcp/traceroute target.
-`durationSeconds` is per-direction test length, 1-30, default 5. Interval
-must be ≥ 60s.
+throughput reflector, enabled on that agent via its perfmon reflector
+settings (see below), or any host running a compatible reflector; there is
+no discovery, the address is typed in exactly like a ping/tcp/traceroute
+target. `durationSeconds` is per-direction test length, 1-30, default 5.
+Interval must be ≥ 60s.
 
 The result payload (`perfmon`) carries `latencyMs` (connection handshake
 round-trip), `uploadMbps`, `downloadMbps`, `durationSeconds` (the value
@@ -441,11 +439,34 @@ actually used), and `success`/`failedStep`
 (`connect`/`handshake`/`upload`/`download`).
 
 An agent's `capabilities` include `perfmon` (always, any agent can run the
-client side) and `perfmon_reflector` (only if that agent is listening) —
-shown as a badge on the Agents page. Agent objects from `GET /api/v1/agents`
-carry `perfmonAddr`, the reflector's advertised address (empty if the
-reflector is disabled or no advertise host was configured) — this is what
-the UI uses to filter the destination dropdown to reachable agents.
+client side); there is no `perfmon_reflector` capability — whether an
+agent can serve as a destination is entirely the operator's setting (see
+below), not something the agent self-reports.
+
+### Perfmon reflector settings (per agent)
+
+`PUT /api/v1/agents/{id}` additionally takes:
+`{"perfmonReflectorEnabled": bool, "perfmonReflectorPort": uint32,
+"perfmonAdvertiseHost": "...", "perfmonAllowedCidrs": ["..."]}`.
+
+Unlike the old design, the reflector is not a static agent startup flag —
+these settings are stored server-side and pushed to the agent live via its
+`Config` (over the same control stream it's already connected on), so
+enabling, disabling, or reconfiguring it never needs a redeploy or restart.
+`perfmonReflectorPort` is required when `perfmonReflectorEnabled` is true.
+`perfmonAllowedCidrs` is a source-IP allowlist the *agent* enforces on every
+connection before serving it — the reflector protocol has no other
+authentication, so **an empty list rejects every connection even when
+enabled** (the safe default: enabling with no allowlist listens but serves
+no one). A bare IP is treated as a /32 (or /128 for IPv6); both the API
+(validation) and the agent (enforcement) parse entries with the same
+`probe.ParseCIDRs`, so they can't disagree on what an entry means.
+
+Agent objects from `GET /api/v1/agents` carry all four settings back, plus
+`perfmonAddr` — the derived, reachable `host:port` (empty unless enabled,
+advertised, and ported are all set) that the UI uses to filter the
+destination dropdown and that `target` should be set to when creating a
+test against this agent.
 
 ### `GET /api/v1/me`
 

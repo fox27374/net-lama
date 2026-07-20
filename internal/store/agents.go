@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net"
+	"strconv"
 	"time"
 )
 
@@ -18,8 +20,20 @@ type Agent struct {
 	Capabilities       json.RawMessage `json:"capabilities"`
 	Stats              json.RawMessage `json:"stats,omitempty"`
 	Version            string          `json:"version,omitempty"`
-	PerfmonAddr        string          `json:"perfmonAddr,omitempty"` // reachable host:port for the perfmon reflector, if enabled
-	CreatedAt          time.Time       `json:"createdAt"`
+	// Perfmon reflector settings: operator-configured on the Agents page
+	// and pushed live to the agent (see internal/server's
+	// perfmonReflectorConfigFor) — the agent no longer self-reports any of
+	// this, since the server has no other way to learn it (agents dial out
+	// only, never dialed into).
+	PerfmonReflectorEnabled bool            `json:"perfmonReflectorEnabled"`
+	PerfmonReflectorPort    uint32          `json:"perfmonReflectorPort,omitempty"`
+	PerfmonAdvertiseHost    string          `json:"perfmonAdvertiseHost,omitempty"`
+	PerfmonAllowedCIDRs     json.RawMessage `json:"perfmonAllowedCidrs,omitempty"`
+	// PerfmonAddr is the reachable host:port for the reflector, derived
+	// from the fields above (enabled + advertise host + port) and kept in
+	// sync by SetAgentPerfmonReflector; "" if any of them is unset.
+	PerfmonAddr string    `json:"perfmonAddr,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type Result struct {
@@ -73,9 +87,12 @@ func (s *Store) CreateAgent(tenantID, siteID, name string) (*Agent, error) {
 
 func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	a := &Agent{}
-	var wireless, capabilities, stats string
+	var wireless, capabilities, stats, allowedCIDRs string
+	var enabled int
 	err := row.Scan(&a.ID, &a.TenantID, &a.SiteID, &a.SiteName, &a.Name, &a.Token,
-		&wireless, &capabilities, &stats, &a.Version, &a.PerfmonAddr, &a.CreatedAt)
+		&wireless, &capabilities, &stats, &a.Version,
+		&enabled, &a.PerfmonReflectorPort, &a.PerfmonAdvertiseHost, &allowedCIDRs, &a.PerfmonAddr,
+		&a.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -93,11 +110,18 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	if stats != "" {
 		a.Stats = json.RawMessage(stats)
 	}
+	if allowedCIDRs == "" {
+		allowedCIDRs = "[]"
+	}
+	a.PerfmonAllowedCIDRs = json.RawMessage(allowedCIDRs)
+	a.PerfmonReflectorEnabled = enabled != 0
 	return a, nil
 }
 
 const agentCols = `a.id, a.tenant_id, a.site_id, s.name, a.name, a.token,
-	COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.version, a.perfmon_addr, a.created_at`
+	COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.version,
+	a.perfmon_reflector_enabled, a.perfmon_reflector_port, a.perfmon_advertise_host,
+	COALESCE(a.perfmon_allowed_cidrs, ''), a.perfmon_addr, a.created_at`
 const agentFrom = ` FROM agents a JOIN sites s ON s.id = a.site_id `
 
 func (s *Store) GetAgent(id string) (*Agent, error) {
@@ -160,10 +184,24 @@ func (s *Store) SetAgentVersion(id, version string) error {
 	return err
 }
 
-// SetAgentPerfmonAddr records the agent's reachable perfmon reflector
-// address, as explicitly declared via -perfmon-advertise-host.
-func (s *Store) SetAgentPerfmonAddr(id, addr string) error {
-	_, err := s.db.Exec(`UPDATE agents SET perfmon_addr = ? WHERE id = ?`, addr, id)
+// SetAgentPerfmonReflector records an agent's perfmon reflector settings
+// (operator-configured on the Agents page) and derives+persists PerfmonAddr
+// alongside them in the same row, so every other read path can keep using
+// that one field without recomputing it.
+func (s *Store) SetAgentPerfmonReflector(id string, enabled bool, port uint32, advertiseHost string, allowedCIDRs json.RawMessage) error {
+	addr := ""
+	if enabled && advertiseHost != "" && port != 0 {
+		addr = net.JoinHostPort(advertiseHost, strconv.Itoa(int(port)))
+	}
+	enabledInt := 0
+	if enabled {
+		enabledInt = 1
+	}
+	_, err := s.db.Exec(
+		`UPDATE agents SET perfmon_reflector_enabled = ?, perfmon_reflector_port = ?,
+		 perfmon_advertise_host = ?, perfmon_allowed_cidrs = ?, perfmon_addr = ? WHERE id = ?`,
+		enabledInt, port, advertiseHost, string(allowedCIDRs), addr, id,
+	)
 	return err
 }
 

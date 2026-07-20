@@ -178,6 +178,18 @@ func (s *Store) migrate() error {
 	if err := s.addColumnIfMissing("agents", "perfmon_addr", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := s.addColumnIfMissing("agents", "perfmon_reflector_enabled", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("agents", "perfmon_reflector_port", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("agents", "perfmon_advertise_host", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("agents", "perfmon_allowed_cidrs", "TEXT"); err != nil {
+		return err
+	}
 	if err := s.addColumnIfMissing("logs", "scope", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}

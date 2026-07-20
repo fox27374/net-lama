@@ -1,12 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/fox27374/net-lama/internal/oui"
+	"github.com/fox27374/net-lama/internal/probe"
 	"github.com/fox27374/net-lama/internal/store"
 )
 
@@ -110,8 +112,10 @@ func (a *API) getScopedAgent(w http.ResponseWriter, r *http.Request, user *store
 	return agent
 }
 
-// handleUpdateAgent renames an agent and/or moves it to another site of
-// the same tenant; the resulting config is pushed live.
+// handleUpdateAgent renames an agent, moves it to another site of the same
+// tenant, and sets its perfmon reflector settings; the resulting config
+// (including the reflector's new desired state) is pushed live — no
+// restart needed for the reflector to pick up the change.
 func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *store.User) {
 	agent := a.getScopedAgent(w, r, user)
 	if agent == nil {
@@ -119,8 +123,12 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 	}
 
 	var req struct {
-		Name   string `json:"name"`
-		SiteID string `json:"siteId"`
+		Name                    string   `json:"name"`
+		SiteID                  string   `json:"siteId"`
+		PerfmonReflectorEnabled bool     `json:"perfmonReflectorEnabled"`
+		PerfmonReflectorPort    uint32   `json:"perfmonReflectorPort"`
+		PerfmonAdvertiseHost    string   `json:"perfmonAdvertiseHost"`
+		PerfmonAllowedCIDRs     []string `json:"perfmonAllowedCidrs"`
 	}
 	if !decodeBody(w, r, &req) {
 		return
@@ -128,6 +136,14 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" || req.SiteID == "" {
 		writeError(w, http.StatusBadRequest, "agent name and siteId are required")
+		return
+	}
+	if req.PerfmonReflectorEnabled && req.PerfmonReflectorPort == 0 {
+		writeError(w, http.StatusBadRequest, "perfmon reflector port is required when enabled")
+		return
+	}
+	if _, err := probe.ParseCIDRs(req.PerfmonAllowedCIDRs); err != nil {
+		writeError(w, http.StatusBadRequest, "perfmon allowed CIDRs: "+err.Error())
 		return
 	}
 
@@ -141,9 +157,14 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
+	cidrsJSON, _ := json.Marshal(req.PerfmonAllowedCIDRs)
+	if err := a.Store.SetAgentPerfmonReflector(agent.ID, req.PerfmonReflectorEnabled, req.PerfmonReflectorPort, req.PerfmonAdvertiseHost, cidrsJSON); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	// The connected-agent registry holds the agent's old site; refresh it
-	// by pushing the new site's config.
+	// The connected-agent registry holds the agent's old field values;
+	// refresh it by pushing the fresh config (site, tests, reflector state).
 	pushed := a.Server.RefreshAgent(agent.ID)
 	writeJSON(w, http.StatusOK, map[string]any{"pushed": pushed})
 }

@@ -1077,6 +1077,55 @@ What has been done so far, in chronological order. Planned work lives in
   a test config, and a genuine throughput/latency result landed via the
   results API.
 
+## 2026-07-20 — Perfmon reflector: server-pushed config + ACL (v0.10.0)
+
+- **v0.9.0's reflector still needed a redeploy**: `-perfmon-port` /
+  `-perfmon-advertise-host` were static agent startup flags — turning the
+  reflector on for a test meant editing compose/env and restarting the
+  agent process. User: "I don't want to redeploy an agent just because I
+  want to do iperf."
+- **Found a real vulnerability while answering "does enabling this
+  everywhere hurt?"**: the reflector protocol has no authentication beyond
+  a fixed 4-byte handshake, and the wire-level phase duration
+  (`readPhaseHeader`) was never clamped server-side — only the *client*
+  test config enforced 1-30s (`ValidateTestDef`). A raw TCP peer that skips
+  the API entirely could request a `download` phase with a `uint32` max
+  duration (~136 years) and tie up the reflector indefinitely. Fixed
+  independently of the redesign: `handleReflectorConn` now rejects any
+  phase duration outside 1-30s before honoring it
+  (`internal/probe/perfmon.go`).
+- **Reflector moved from a static flag to server-pushed config**: new
+  `Config.perfmon_reflector` proto field (`PerfmonReflectorConfig`:
+  enabled/port/allowed_cidrs), always included in every config push so a
+  push can enable, disable, or reconfigure the reflector — the agent
+  reconciles it in `reconcilePerfmonReflector`, tied to the *process*
+  context (not the current connection's), so a reconnect blip doesn't tear
+  down and restart it. Verified live: enabling/disabling via
+  `PUT /api/v1/agents/{id}` on an already-connected local agent took effect
+  with no restart, both directions.
+- **ACL replaces "no auth at all"**: `allowed_cidrs` is a source-IP
+  allowlist the *agent* enforces on every accepted connection
+  (`probe.Reflector`'s `connAllowed`), before the handshake even starts.
+  Empty list = reject everyone, even with the reflector enabled — turning
+  it on with no allowlist configured listens but serves no one, the safe
+  default. Bare IPs get an implicit /32 or /128
+  (`probe.ParseCIDRs`), shared verbatim between the API's validation and
+  the agent's enforcement so the two can't disagree on what an entry means.
+- **Register.perfmon_addr removed**: the agent no longer self-reports
+  anything about its reflector. The operator configures it centrally
+  (Agents page → Edit → Perfmon reflector) and the server computes+stores
+  the derived `perfmonAddr` itself (`Store.SetAgentPerfmonReflector`) —
+  consistent with the project's "agents dial out only, server never guesses
+  reachability" stance, just relocating who declares it from the agent
+  flag to the operator's UI input.
+- **Verification**: unit test for the ACL (`TestPerfmonReflectorACL` —
+  empty allowlist rejects a loopback connection, a bare-IP entry admits it)
+  plus a full local e2e run: created two agents with **no perfmon flags at
+  all**, enabled the destination's reflector via the API while already
+  connected (confirmed listening, no restart), ran a real perfmon test
+  between them (genuine throughput measured), then disabled the reflector
+  live and confirmed the port actually closed (`nc -z` failed as expected).
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -87,19 +86,6 @@ type Agent struct {
 	// empty = auto-pick the first monitor-capable interface.
 	WlanIface string
 
-	// PerfmonPort, if non-empty (":5252" or "5252"), starts a persistent
-	// agent-to-agent throughput reflector on that port for the agent's
-	// lifetime. Empty = disabled (no listener, capability not reported).
-	PerfmonPort string
-
-	// PerfmonAdvertiseHost is how other agents can reach this one's
-	// reflector — explicitly declared, never auto-detected (this agent has
-	// no reliable way to know which of its addresses a peer, possibly
-	// across NAT, could actually use). Combined with PerfmonPort and
-	// reported to the server so it can offer this agent as a perfmon
-	// destination. Empty = not advertised, even if the reflector is running.
-	PerfmonAdvertiseHost string
-
 	// logBuf holds Info+ log lines (Logger tees into it) until the send
 	// loop can ship them to the server; it survives across reconnects so
 	// nothing logged while disconnected is lost (up to its capacity).
@@ -111,6 +97,14 @@ type Agent struct {
 	// wlanMu serializes access to the monitor interface and wlan state
 	wlanMu    sync.Mutex
 	wlanState map[string]*wlanPassiveState // per test ID
+
+	// perfmonMu guards the currently-running reflector (if any), reconciled
+	// against the PerfmonReflectorConfig on every Config push — enable,
+	// disable, and reconfigure all happen live, no process restart.
+	perfmonMu      sync.Mutex
+	perfmonCancel  context.CancelFunc
+	perfmonPort    uint32
+	perfmonAllowed []*net.IPNet
 }
 
 type wlanPassiveState struct {
@@ -122,29 +116,70 @@ type wlanPassiveState struct {
 	Stations map[string]probe.WlanStation // by MAC
 }
 
-// perfmonListenAddr normalizes PerfmonPort ("5252" or ":5252") into a bind
-// address for net.Listen.
-func (a *Agent) perfmonListenAddr() string {
-	addr := a.PerfmonPort
-	if addr != "" && !strings.Contains(addr, ":") {
-		addr = ":" + addr
+// reconcilePerfmonReflector starts, stops, or restarts the perfmon
+// reflector to match cfg, the server's current desired state for this
+// agent. rootCtx is the agent process's own context (not the current
+// connection's) — the reflector must outlive a reconnect, since a
+// disconnect/reconnect blip has nothing to do with whether other agents
+// should still be able to reach it. A no-op if the desired state already
+// matches what's running.
+func (a *Agent) reconcilePerfmonReflector(rootCtx context.Context, cfg *pb.PerfmonReflectorConfig) {
+	a.perfmonMu.Lock()
+	defer a.perfmonMu.Unlock()
+
+	enabled := cfg != nil && cfg.Enabled && cfg.Port != 0
+	if !enabled {
+		if a.perfmonCancel != nil {
+			a.perfmonCancel()
+			a.perfmonCancel = nil
+			a.perfmonPort = 0
+			a.perfmonAllowed = nil
+			a.Logger.Info("Perfmon reflector stopped")
+		}
+		return
 	}
-	return addr
+
+	allowed, err := probe.ParseCIDRs(cfg.AllowedCidrs)
+	if err != nil {
+		a.Logger.Warn("Invalid perfmon allowed CIDRs pushed by server, reflector left unchanged", slog.Any("error", err))
+		return
+	}
+	if a.perfmonCancel != nil && a.perfmonPort == cfg.Port && sameCIDRs(a.perfmonAllowed, allowed) {
+		return
+	}
+	if a.perfmonCancel != nil {
+		a.perfmonCancel()
+	}
+
+	reflCtx, cancel := context.WithCancel(rootCtx)
+	ln, err := probe.Reflector(reflCtx, fmt.Sprintf(":%d", cfg.Port), allowed)
+	if err != nil {
+		a.Logger.Error("Perfmon reflector failed to start", slog.Uint64("port", uint64(cfg.Port)), slog.Any("error", err))
+		cancel()
+		a.perfmonCancel = nil
+		a.perfmonPort = 0
+		a.perfmonAllowed = nil
+		return
+	}
+	a.Logger.Info("Perfmon reflector listening",
+		slog.String("addr", ln.Addr().String()),
+		slog.Int("allowedCidrs", len(cfg.AllowedCidrs)),
+	)
+	a.perfmonCancel = cancel
+	a.perfmonPort = cfg.Port
+	a.perfmonAllowed = allowed
 }
 
-// perfmonAdvertiseAddr is what this agent reports as its reachable perfmon
-// address — only set if both the reflector is enabled and an advertise
-// host was explicitly configured; there's no way to guess a reachable
-// address, so an unset host means "not advertised," not "guess one."
-func (a *Agent) perfmonAdvertiseAddr() string {
-	if a.PerfmonPort == "" || a.PerfmonAdvertiseHost == "" {
-		return ""
+func sameCIDRs(a, b []*net.IPNet) bool {
+	if len(a) != len(b) {
+		return false
 	}
-	_, port, err := net.SplitHostPort(a.perfmonListenAddr())
-	if err != nil {
-		return ""
+	for i, n := range a {
+		if n.String() != b[i].String() {
+			return false
+		}
 	}
-	return net.JoinHostPort(a.PerfmonAdvertiseHost, port)
+	return true
 }
 
 // Run connects to the server and keeps the control stream alive,
@@ -161,15 +196,6 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	if a.statsCollector == nil {
 		a.statsCollector = probe.NewStatsCollector()
-	}
-
-	if a.PerfmonPort != "" {
-		addr := a.perfmonListenAddr()
-		if ln, err := probe.Reflector(ctx, addr); err != nil {
-			a.Logger.Error("Perfmon reflector failed to start", slog.String("addr", addr), slog.Any("error", err))
-		} else {
-			a.Logger.Info("Perfmon reflector listening", slog.String("addr", ln.Addr().String()))
-		}
 	}
 
 	delay := reconnectMinDelay
@@ -236,9 +262,6 @@ func (a *Agent) runStream(ctx context.Context) error {
 	}
 
 	capabilities := probe.DetectCapabilities(len(wifaces) > 0, detectedIfaces)
-	if a.PerfmonPort != "" {
-		capabilities = append(capabilities, "perfmon_reflector")
-	}
 
 	register := &pb.AgentMessage{
 		Payload: &pb.AgentMessage_Register{
@@ -249,7 +272,6 @@ func (a *Agent) runStream(ctx context.Context) error {
 				Capabilities:       capabilities,
 				Token:              a.Token,
 				WirelessInterfaces: wifaces,
-				PerfmonAddr:        a.perfmonAdvertiseAddr(),
 			},
 		},
 	}
@@ -288,7 +310,7 @@ func (a *Agent) runStream(ctx context.Context) error {
 	}()
 
 	// Scheduler: runs the tests according to the active config
-	go a.schedule(streamCtx, cfgCh, cmdCh, results)
+	go a.schedule(ctx, streamCtx, cfgCh, cmdCh, results)
 
 	// Ship any log lines buffered while disconnected right away, then
 	// keep draining periodically.

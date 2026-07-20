@@ -40,12 +40,11 @@ message Register {
   string token = 5;
   // wireless_interfaces the agent detected, for WLAN sensing.
   repeated WirelessInterface wireless_interfaces = 6;
-  // perfmon_addr is this agent's reachable host:port for its throughput
-  // reflector, explicitly declared via -perfmon-advertise-host (there is
-  // no auto-detection — the agent has no reliable way to know which of
-  // its addresses another agent could actually reach across NAT). Empty
-  // if the reflector isn't running or no advertise host was configured.
-  string perfmon_addr = 7;
+  // field 7 (perfmon_addr) is reserved: the agent no longer self-declares
+  // its perfmon reflector address. The operator configures it centrally
+  // (Agents page) and the server pushes it down via Config.perfmon_reflector
+  // instead — the agent doesn't need to report anything back.
+  reserved 7;
 }
 
 message WirelessInterface {
@@ -61,6 +60,25 @@ message Config {
   repeated TestSpec tests = 1;
   // wlan_interface is reserved (previously used for per-agent interface selection)
   reserved 2;
+  // perfmon_reflector is this agent's desired reflector state, always
+  // included (possibly with enabled=false) so every push can turn the
+  // reflector on, off, or reconfigure it live — no restart needed.
+  PerfmonReflectorConfig perfmon_reflector = 3;
+}
+
+// PerfmonReflectorConfig is pushed to an agent as part of its Config to
+// start, stop, or reconfigure its agent-to-agent throughput reflector
+// live. The reflector protocol itself has no authentication beyond a
+// fixed magic handshake, so allowed_cidrs is a source-IP allowlist the
+// agent enforces on every accepted connection before it serves anything;
+// an empty list means reject every connection — enabling the reflector
+// with no allowlist configured listens but serves no one, the safe
+// default (matches the project's "explicit, never guessed" stance
+// already used for the old advertise-host setting).
+message PerfmonReflectorConfig {
+  bool enabled = 1;
+  uint32 port = 2;
+  repeated string allowed_cidrs = 3;
 }
 
 // TestSpec is one named test definition to be executed periodically.
@@ -262,8 +280,8 @@ message WlanSenseResult {
 }
 
 // PerfmonParams configures an agent-to-agent throughput test. target is a
-// plain host:port pointing at another agent's perfmon reflector (started
-// with -perfmon-port / NETLAMA_PERFMON_PORT there) — reachability is the
+// plain host:port pointing at another agent's perfmon reflector (enabled
+// for that agent via PerfmonReflectorConfig) — reachability is the
 // operator's responsibility, same as any ping/tcp/traceroute target; there
 // is no discovery or NAT traversal.
 message PerfmonParams {

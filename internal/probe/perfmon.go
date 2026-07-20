@@ -45,6 +45,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -59,6 +60,15 @@ const (
 	// its configured phase duration — hang protection, not used to detect
 	// the end of a phase (that's CloseWrite/EOF, see the protocol above).
 	perfmonConnMargin = 10 * time.Second
+
+	// perfmonMaxDuration bounds the phase duration the *reflector* will
+	// honor, independent of the 1-30s range ValidateTestDef enforces on a
+	// configured test. That check only constrains net-lama's own client;
+	// the reflector is a bare, unauthenticated TCP listener, so any peer
+	// that speaks the handshake can request an arbitrary duration — without
+	// this clamp, a raw uint32 from the wire could pin a connection (and the
+	// goroutine + bandwidth serving it) open for years.
+	perfmonMaxDuration = 30
 )
 
 // PerfmonClientResult is the outcome of one client-side throughput test.
@@ -175,9 +185,14 @@ func runDownloadConn(ctx context.Context, target string, durationSeconds uint32)
 }
 
 // Reflector accepts connections on addr until ctx is cancelled, serving the
-// perfmon protocol on each. Intended to run for the lifetime of the agent
-// process, started once when NETLAMA_PERFMON_PORT / -perfmon-port is set.
-func Reflector(ctx context.Context, addr string) (net.Listener, error) {
+// perfmon protocol on each — but only for peers whose source IP matches one
+// of allowed; every other connection is dropped immediately, before the
+// handshake, since the protocol itself has no other authentication. An
+// empty allowed list rejects everyone, the safe default (enabling the
+// reflector with no allowlist configured listens but serves no one). The
+// caller may replace a running reflector (cancel its context, call again)
+// whenever the desired port or allowlist changes — no process restart.
+func Reflector(ctx context.Context, addr string, allowed []*net.IPNet) (net.Listener, error) {
 	lc := net.ListenConfig{}
 	ln, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
@@ -193,6 +208,10 @@ func Reflector(ctx context.Context, addr string) (net.Listener, error) {
 			if err != nil {
 				return // listener closed (ctx cancelled) or fatal accept error
 			}
+			if !connAllowed(conn, allowed) {
+				conn.Close()
+				continue
+			}
 			go func() {
 				defer conn.Close()
 				handleReflectorConn(conn)
@@ -200,6 +219,59 @@ func Reflector(ctx context.Context, addr string) (net.Listener, error) {
 		}
 	}()
 	return ln, nil
+}
+
+// connAllowed reports whether conn's remote IP matches one of allowed.
+func connAllowed(conn net.Conn, allowed []*net.IPNet) bool {
+	if len(allowed) == 0 {
+		return false
+	}
+	host, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	for _, n := range allowed {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// ParseCIDRs parses each entry as a CIDR (a bare IP is treated as a /32 or
+// /128 — the common case of allowing one specific peer shouldn't require
+// typing a mask). Used both to validate an operator's input (API layer) and
+// to build the reflector's live allowlist (agent side), so both sides agree
+// on exactly what an entry means.
+func ParseCIDRs(entries []string) ([]*net.IPNet, error) {
+	nets := make([]*net.IPNet, 0, len(entries))
+	for _, e := range entries {
+		e = strings.TrimSpace(e)
+		if e == "" {
+			continue
+		}
+		if !strings.Contains(e, "/") {
+			ip := net.ParseIP(e)
+			if ip == nil {
+				return nil, fmt.Errorf("invalid address %q", e)
+			}
+			bits := 32
+			if ip.To4() == nil {
+				bits = 128
+			}
+			e = fmt.Sprintf("%s/%d", e, bits)
+		}
+		_, n, err := net.ParseCIDR(e)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CIDR %q: %w", e, err)
+		}
+		nets = append(nets, n)
+	}
+	return nets, nil
 }
 
 // handleReflectorConn serves exactly one phase on one connection: a
@@ -219,6 +291,9 @@ func handleReflectorConn(conn net.Conn) {
 
 	phase, duration, err := readPhaseHeader(conn)
 	if err != nil {
+		return
+	}
+	if duration == 0 || duration > perfmonMaxDuration {
 		return
 	}
 	conn.SetDeadline(time.Now().Add(time.Duration(duration)*time.Second + perfmonConnMargin))

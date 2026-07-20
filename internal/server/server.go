@@ -137,7 +137,27 @@ func (s *Server) ConfigForAgent(agent *store.Agent) (*pb.Config, []string, error
 		cfg.Tests = append(cfg.Tests, spec)
 	}
 
+	cfg.PerfmonReflector = perfmonReflectorConfigFor(agent)
 	return cfg, skipped, nil
+}
+
+// perfmonReflectorConfigFor builds the reflector state to push to this
+// agent from its stored settings (edited on the Agents page, not
+// self-reported by the agent — see CLAUDE.md: agents dial out only, so the
+// operator declares this centrally instead of the agent guessing). Always
+// returned, even when disabled, so a push can turn the reflector off too.
+func perfmonReflectorConfigFor(agent *store.Agent) *pb.PerfmonReflectorConfig {
+	var cidrs []string
+	if len(agent.PerfmonAllowedCIDRs) > 0 {
+		if err := json.Unmarshal(agent.PerfmonAllowedCIDRs, &cidrs); err != nil {
+			cidrs = nil
+		}
+	}
+	return &pb.PerfmonReflectorConfig{
+		Enabled:      agent.PerfmonReflectorEnabled,
+		Port:         agent.PerfmonReflectorPort,
+		AllowedCidrs: cidrs,
+	}
 }
 
 // legacyCapabilities is the capability list hardcoded by pre-detection
@@ -233,15 +253,6 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 			s.Logger.Warn("Storing agent version failed", slog.Any("error", err))
 		}
 		agent.Version = v
-	}
-
-	// Record the agent's declared perfmon reflector address (empty is a
-	// valid, common value — reflector disabled, or no advertise host set).
-	if addr := register.PerfmonAddr; addr != agent.PerfmonAddr {
-		if err := s.Store.SetAgentPerfmonAddr(agent.ID, addr); err != nil {
-			s.Logger.Warn("Storing agent perfmon address failed", slog.Any("error", err))
-		}
-		agent.PerfmonAddr = addr
 	}
 
 	tenantName := agent.TenantID

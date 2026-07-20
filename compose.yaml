@@ -77,16 +77,6 @@ services:
       # a specific adapter when multiple monitor-capable interfaces are present).
       # Leave unset to auto-pick the first monitor-capable interface.
       # NETLAMA_WLAN_IFACE: ${NETLAMA_WLAN_IFACE:-}
-      # Set to a port (e.g. 5252) to run an agent-to-agent throughput
-      # reflector for perfmon tests; opens a listening port, so opt-in.
-      # Leave unset to disable (no listener, no perfmon_reflector capability).
-      # NETLAMA_PERFMON_PORT: ${NETLAMA_PERFMON_PORT:-}
-      # Host/IP other agents can reach this one's perfmon reflector on, e.g.
-      # its LAN IP. Required for this agent to show up as a perfmon
-      # destination — there is no auto-detection, since guessing would
-      # silently fail across NAT. Leave unset to not advertise (even if the
-      # reflector above is running).
-      # NETLAMA_PERFMON_ADVERTISE_HOST: ${NETLAMA_PERFMON_ADVERTISE_HOST:-}
       # Set NETLAMA_TRACEROUTE_DEMO=1 to emit synthetic path data (for the
       # Path UI) where raw-socket traceroute is not available. Leave unset
       # for real traceroute (needs mtr in the image + CAP_NET_RAW; see README).

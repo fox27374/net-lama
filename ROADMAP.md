@@ -27,15 +27,18 @@ Planned work, roughly grouped. Not ordered by priority yet.
 
 - [x] Perfmon tests **between two agents, same site or across sites**: new
       `perfmon` test type measures upload/download Mbps and connection
-      latency against another agent's throughput reflector (`-perfmon-port` /
-      `NETLAMA_PERFMON_PORT`, opt-in). Hand-rolled protocol over two
-      short-lived TCP connections (no iperf3 dependency). Pinned to one
-      source agent (`sourceAgentId`, auto-assigned to that agent's site,
-      unlike every other test type which runs site-wide); destination agent
-      advertises its reachable address explicitly (`-perfmon-advertise-host`
-      / `NETLAMA_PERFMON_ADVERTISE_HOST` — no auto-detection, no NAT
-      traversal, agents dial out only). UI offers source/destination as
-      dropdowns of capable agents, labeled with site for cross-site clarity
+      latency against another agent's throughput reflector. Hand-rolled
+      protocol over two short-lived TCP connections (no iperf3 dependency).
+      Pinned to one source agent (`sourceAgentId`, auto-assigned to that
+      agent's site, unlike every other test type which runs site-wide);
+      destination agent's reflector (enable/port/advertise host/allowed
+      source CIDRs) is configured on the Agents page and pushed to the
+      agent live — no flag, no redeploy or restart to turn it on, off, or
+      reconfigure it. The reflector protocol has no other authentication,
+      so the allowed-CIDRs allowlist is mandatory (empty = reject
+      everyone, even when enabled). UI offers source/destination as
+      dropdowns of capable agents, labeled with site for cross-site clarity,
+      and shows the destination port for firewall admins
 - [x] Agent resource monitoring: CPU, memory, storage — reported over the
       stream and visible in the UI/metrics (host-level readings; per-cgroup /
       container-scoped readings a possible later refinement)
