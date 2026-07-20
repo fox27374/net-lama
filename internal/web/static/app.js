@@ -348,11 +348,15 @@ function renderSparkline(series, unit) {
   const current = series[series.length - 1];
   const currentText = current.toFixed(0) + (unit ? " " + unit : "");
 
-  // SVG
-  return `<svg width="160" height="36" viewBox="0 0 ${width} ${height}" style="vertical-align: middle; margin: 0 8px 0 0;">
-    <polyline points="${points}" fill="none" stroke="var(--cat-1)" stroke-width="2" vector-effect="non-scaling-stroke"/>
-    <circle cx="${padding + innerWidth}" cy="${padding + innerHeight - ((series[series.length - 1] - min) / range) * innerHeight}" r="2.5" fill="var(--cat-1)" opacity="0.6" vector-effect="non-scaling-stroke"/>
-  </svg><span style="font-variant-numeric: tabular-nums; font-size: 0.85em; color: var(--muted-solid);">${esc(currentText)}</span>`;
+  // SVG stretches to fill the table cell (preserveAspectRatio="none" lets
+  // the 160x36 viewBox scale independently on each axis); the value label
+  // stays fixed-width at the end via the flex wrapper.
+  return `<div class="sparkline-wrap">
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+      <polyline points="${points}" fill="none" stroke="var(--cat-1)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <circle cx="${padding + innerWidth}" cy="${padding + innerHeight - ((series[series.length - 1] - min) / range) * innerHeight}" r="2.5" fill="var(--cat-1)" opacity="0.6" vector-effect="non-scaling-stroke"/>
+    </svg><span class="sparkline-value">${esc(currentText)}</span>
+  </div>`;
 }
 
 async function renderDashboardWireless(siteId) {
