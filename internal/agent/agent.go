@@ -82,10 +82,6 @@ type Agent struct {
 	TLSCertFile string // client certificate for mTLS (issued per agent)
 	TLSKeyFile  string // key for TLSCertFile
 
-	// WlanIface overrides the monitor-capable interface for wlan_passive tests;
-	// empty = auto-pick the first monitor-capable interface.
-	WlanIface string
-
 	// logBuf holds Info+ log lines (Logger tees into it) until the send
 	// loop can ship them to the server; it survives across reconnects so
 	// nothing logged while disconnected is lost (up to its capacity).
@@ -94,9 +90,17 @@ type Agent struct {
 	// statsCollector gathers CPU, memory, and disk statistics.
 	statsCollector *probe.StatsCollector
 
-	// wlanMu serializes access to the monitor interface and wlan state
+	// wlanMu serializes access to the monitor interface and wlan state,
+	// including wlanIfaceOverride below.
 	wlanMu    sync.Mutex
 	wlanState map[string]*wlanPassiveState // per test ID
+
+	// wlanIfaceOverride pins wlan_passive/wlan_active to a specific
+	// interface (empty = auto-pick the first monitor-capable one).
+	// Operator-picked on the Agents page and pushed live via
+	// Config.wlan_sensor_interface — no restart needed, unlike the old
+	// -wlan-iface startup flag this replaced.
+	wlanIfaceOverride string
 
 	// perfmonMu guards the currently-running reflector (if any), reconciled
 	// against the PerfmonReflectorConfig on every Config push — enable,
@@ -123,6 +127,21 @@ type wlanPassiveState struct {
 // disconnect/reconnect blip has nothing to do with whether other agents
 // should still be able to reach it. A no-op if the desired state already
 // matches what's running.
+// wlanIface returns the current interface override for wlan_passive/
+// wlan_active, as last pushed by the server.
+func (a *Agent) wlanIface() string {
+	a.wlanMu.Lock()
+	defer a.wlanMu.Unlock()
+	return a.wlanIfaceOverride
+}
+
+// setWlanIface updates the interface override, called on every Config push.
+func (a *Agent) setWlanIface(iface string) {
+	a.wlanMu.Lock()
+	defer a.wlanMu.Unlock()
+	a.wlanIfaceOverride = iface
+}
+
 func (a *Agent) reconcilePerfmonReflector(rootCtx context.Context, cfg *pb.PerfmonReflectorConfig) {
 	a.perfmonMu.Lock()
 	defer a.perfmonMu.Unlock()
@@ -251,27 +270,33 @@ func (a *Agent) runStream(ctx context.Context) error {
 		return fmt.Errorf("opening stream: %w", err)
 	}
 
-	detectedIfaces := probe.WirelessInterfaces(streamCtx)
-	var wifaces []*pb.WirelessInterface
-	for _, iface := range detectedIfaces {
-		wifaces = append(wifaces, &pb.WirelessInterface{
-			Name:            iface.Name,
-			Phy:             iface.PHY,
-			SupportsMonitor: iface.SupportsMonitor,
+	netIfaces := probe.NetworkInterfaces(streamCtx)
+	var pbIfaces []*pb.NetworkInterface
+	var wifaces []probe.WirelessInterface
+	for _, ni := range netIfaces {
+		pbIfaces = append(pbIfaces, &pb.NetworkInterface{
+			Name:            ni.Name,
+			Wireless:        ni.Wireless,
+			SupportsMonitor: ni.SupportsMonitor,
+			SpeedMbps:       ni.SpeedMbps,
+			IpAddress:       ni.IPAddress,
 		})
+		if ni.Wireless {
+			wifaces = append(wifaces, probe.WirelessInterface{Name: ni.Name, SupportsMonitor: ni.SupportsMonitor})
+		}
 	}
 
-	capabilities := probe.DetectCapabilities(len(wifaces) > 0, detectedIfaces)
+	capabilities := probe.DetectCapabilities(len(wifaces) > 0, wifaces)
 
 	register := &pb.AgentMessage{
 		Payload: &pb.AgentMessage_Register{
 			Register: &pb.Register{
-				ClientId:           a.ClientID,
-				ClientType:         "networktest",
-				Version:            a.Version,
-				Capabilities:       capabilities,
-				Token:              a.Token,
-				WirelessInterfaces: wifaces,
+				ClientId:          a.ClientID,
+				ClientType:        "networktest",
+				Version:           a.Version,
+				Capabilities:      capabilities,
+				Token:             a.Token,
+				NetworkInterfaces: pbIfaces,
 			},
 		},
 	}

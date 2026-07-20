@@ -31,14 +31,25 @@ Planned work, roughly grouped. Not ordered by priority yet.
       protocol over two short-lived TCP connections (no iperf3 dependency).
       Pinned to one source agent (`sourceAgentId`, auto-assigned to that
       agent's site, unlike every other test type which runs site-wide);
-      destination agent's reflector (enable/port/advertise host/allowed
-      source CIDRs) is configured on the Agents page and pushed to the
-      agent live — no flag, no redeploy or restart to turn it on, off, or
-      reconfigure it. The reflector protocol has no other authentication,
-      so the allowed-CIDRs allowlist is mandatory (empty = reject
-      everyone, even when enabled). UI offers source/destination as
-      dropdowns of capable agents, labeled with site for cross-site clarity,
-      and shows the destination port for firewall admins
+      destination agent's reflector (enable/port/allowed source CIDRs) is
+      configured on the Agents page and pushed to the agent live — no
+      flag, no redeploy or restart to turn it on, off, or reconfigure it.
+      The reflector protocol has no other authentication, so the
+      allowed-CIDRs allowlist is mandatory (empty = reject everyone, even
+      when enabled). UI offers source/destination as dropdowns of capable
+      agents, labeled with site for cross-site clarity, and shows the
+      destination port for firewall admins
+- [x] Per-agent interface pickers: agent reports its full network
+      interface inventory (wired + wireless — name, link speed or
+      monitor-sensor capability, current IP) at Register. Agents page lets
+      the operator pick, per role, from a dropdown of that inventory
+      instead of typing a name or IP: **management** (informational
+      display only, no behavior change), **WLAN sensor** (pins
+      `wlan_passive`/`wlan_active`, replaces the old `-wlan-iface` startup
+      flag, pushed live via `Config.wlan_sensor_interface`), and **perfmon
+      reflector** (its advertised `host:port` is resolved from the picked
+      interface's current IP — no more typing an advertise-host address by
+      hand)
 - [x] Agent resource monitoring: CPU, memory, storage — reported over the
       stream and visible in the UI/metrics (host-level readings; per-cgroup /
       container-scoped readings a possible later refinement)

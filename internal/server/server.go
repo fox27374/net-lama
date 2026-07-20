@@ -138,6 +138,7 @@ func (s *Server) ConfigForAgent(agent *store.Agent) (*pb.Config, []string, error
 	}
 
 	cfg.PerfmonReflector = perfmonReflectorConfigFor(agent)
+	cfg.WlanSensorInterface = agent.WlanSensorInterface
 	return cfg, skipped, nil
 }
 
@@ -214,23 +215,28 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 		}
 	}
 
-	// Record the wireless interfaces the agent reported, so the UI can
-	// offer them for selection.
-	if ifaces := register.WirelessInterfaces; ifaces != nil {
-		type wi struct {
+	// Record the network interfaces the agent reported, so the UI can
+	// offer them for selection (management/WLAN sensor/perfmon reflector).
+	if ifaces := register.NetworkInterfaces; ifaces != nil {
+		type ni struct {
 			Name            string `json:"name"`
-			PHY             string `json:"phy"`
+			Wireless        bool   `json:"wireless"`
 			SupportsMonitor bool   `json:"supportsMonitor"`
+			SpeedMbps       uint32 `json:"speedMbps"`
+			IPAddress       string `json:"ipAddress"`
 		}
-		list := make([]wi, 0, len(ifaces))
+		list := make([]ni, 0, len(ifaces))
 		for _, w := range ifaces {
-			list = append(list, wi{Name: w.Name, PHY: w.Phy, SupportsMonitor: w.SupportsMonitor})
+			list = append(list, ni{
+				Name: w.Name, Wireless: w.Wireless, SupportsMonitor: w.SupportsMonitor,
+				SpeedMbps: w.SpeedMbps, IPAddress: w.IpAddress,
+			})
 		}
 		if data, err := json.Marshal(list); err == nil {
-			if err := s.Store.SetAgentInterfaces(agent.ID, data); err != nil {
+			if err := s.Store.SetAgentNetworkInterfaces(agent.ID, data); err != nil {
 				s.Logger.Warn("Storing agent interfaces failed", slog.Any("error", err))
 			}
-			agent.WirelessInterfaces = data
+			agent.NetworkInterfaces = data
 		}
 	}
 

@@ -10,30 +10,87 @@ import (
 )
 
 type Agent struct {
-	ID                 string          `json:"id"`
-	TenantID           string          `json:"tenantId"`
-	SiteID             string          `json:"siteId"`
-	SiteName           string          `json:"siteName,omitempty"`
-	Name               string          `json:"name"`
-	Token              string          `json:"token,omitempty"`
-	WirelessInterfaces json.RawMessage `json:"wirelessInterfaces"`
-	Capabilities       json.RawMessage `json:"capabilities"`
-	Stats              json.RawMessage `json:"stats,omitempty"`
-	Version            string          `json:"version,omitempty"`
+	ID       string `json:"id"`
+	TenantID string `json:"tenantId"`
+	SiteID   string `json:"siteId"`
+	SiteName string `json:"siteName,omitempty"`
+	Name     string `json:"name"`
+	Token    string `json:"token,omitempty"`
+	// NetworkInterfaces is every non-loopback interface (wired or
+	// wireless) the agent last reported at Register — name, wireless,
+	// monitor-mode support, wired link speed, current IP. Lets the
+	// operator pick per-role interfaces below from a dropdown instead of
+	// typing a name or IP blind.
+	NetworkInterfaces json.RawMessage `json:"networkInterfaces"`
+	Capabilities      json.RawMessage `json:"capabilities"`
+	Stats             json.RawMessage `json:"stats,omitempty"`
+	Version           string          `json:"version,omitempty"`
+	// ManagementInterface is purely informational — which interface's IP
+	// to show as this agent's primary address in the UI. Nothing
+	// server-side or agent-side behaves differently based on it.
+	ManagementInterface string `json:"managementInterface,omitempty"`
+	// WlanSensorInterface pins wlan_passive/wlan_active to a specific
+	// interface (by name, from NetworkInterfaces); empty = auto-pick the
+	// first monitor-capable one. Pushed live via Config.wlan_sensor_interface.
+	WlanSensorInterface string `json:"wlanSensorInterface,omitempty"`
 	// Perfmon reflector settings: operator-configured on the Agents page
 	// and pushed live to the agent (see internal/server's
 	// perfmonReflectorConfigFor) — the agent no longer self-reports any of
 	// this, since the server has no other way to learn it (agents dial out
-	// only, never dialed into).
-	PerfmonReflectorEnabled bool            `json:"perfmonReflectorEnabled"`
-	PerfmonReflectorPort    uint32          `json:"perfmonReflectorPort,omitempty"`
-	PerfmonAdvertiseHost    string          `json:"perfmonAdvertiseHost,omitempty"`
-	PerfmonAllowedCIDRs     json.RawMessage `json:"perfmonAllowedCidrs,omitempty"`
-	// PerfmonAddr is the reachable host:port for the reflector, derived
-	// from the fields above (enabled + advertise host + port) and kept in
-	// sync by SetAgentPerfmonReflector; "" if any of them is unset.
-	PerfmonAddr string    `json:"perfmonAddr,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
+	// only, never dialed into). PerfmonReflectorInterface names an entry in
+	// NetworkInterfaces; its current IP (see ResolvedPerfmonAddr) is what
+	// gets offered as this agent's reachable address, so the operator never
+	// types an IP by hand.
+	PerfmonReflectorEnabled   bool            `json:"perfmonReflectorEnabled"`
+	PerfmonReflectorPort      uint32          `json:"perfmonReflectorPort,omitempty"`
+	PerfmonReflectorInterface string          `json:"perfmonReflectorInterface,omitempty"`
+	PerfmonAllowedCIDRs       json.RawMessage `json:"perfmonAllowedCidrs,omitempty"`
+	CreatedAt                 time.Time       `json:"createdAt"`
+}
+
+// InterfaceIP returns the current IP address of the named interface from
+// this agent's last-reported NetworkInterfaces, or "" if unknown (name
+// empty, interface not found, or it has no address right now).
+func (a *Agent) InterfaceIP(name string) string {
+	if name == "" || len(a.NetworkInterfaces) == 0 {
+		return ""
+	}
+	var ifaces []struct {
+		Name      string `json:"name"`
+		IPAddress string `json:"ipAddress"`
+	}
+	if err := json.Unmarshal(a.NetworkInterfaces, &ifaces); err != nil {
+		return ""
+	}
+	for _, ni := range ifaces {
+		if ni.Name == name {
+			return ni.IPAddress
+		}
+	}
+	return ""
+}
+
+// ResolvedPerfmonAddr is the reachable host:port for this agent's perfmon
+// reflector, derived from the current IP of PerfmonReflectorInterface —
+// empty unless the reflector is enabled, an interface is picked, that
+// interface currently has an IP, and a port is set. Display/API only;
+// nothing here is persisted, it's always recomputed from the latest
+// reported interface state.
+func (a *Agent) ResolvedPerfmonAddr() string {
+	if !a.PerfmonReflectorEnabled || a.PerfmonReflectorPort == 0 {
+		return ""
+	}
+	ip := a.InterfaceIP(a.PerfmonReflectorInterface)
+	if ip == "" {
+		return ""
+	}
+	return net.JoinHostPort(ip, strconv.Itoa(int(a.PerfmonReflectorPort)))
+}
+
+// ResolvedManagementAddr is this agent's informational primary IP, from
+// its picked management interface's current address.
+func (a *Agent) ResolvedManagementAddr() string {
+	return a.InterfaceIP(a.ManagementInterface)
 }
 
 type Result struct {
@@ -87,11 +144,12 @@ func (s *Store) CreateAgent(tenantID, siteID, name string) (*Agent, error) {
 
 func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	a := &Agent{}
-	var wireless, capabilities, stats, allowedCIDRs string
+	var netIfaces, capabilities, stats, allowedCIDRs string
 	var enabled int
 	err := row.Scan(&a.ID, &a.TenantID, &a.SiteID, &a.SiteName, &a.Name, &a.Token,
-		&wireless, &capabilities, &stats, &a.Version,
-		&enabled, &a.PerfmonReflectorPort, &a.PerfmonAdvertiseHost, &allowedCIDRs, &a.PerfmonAddr,
+		&netIfaces, &capabilities, &stats, &a.Version,
+		&a.ManagementInterface, &a.WlanSensorInterface,
+		&enabled, &a.PerfmonReflectorPort, &a.PerfmonReflectorInterface, &allowedCIDRs,
 		&a.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
@@ -99,10 +157,10 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	if wireless == "" {
-		wireless = "[]"
+	if netIfaces == "" {
+		netIfaces = "[]"
 	}
-	a.WirelessInterfaces = json.RawMessage(wireless)
+	a.NetworkInterfaces = json.RawMessage(netIfaces)
 	if capabilities == "" {
 		capabilities = "[]"
 	}
@@ -118,10 +176,18 @@ func (s *Store) scanAgent(row interface{ Scan(...any) error }) (*Agent, error) {
 	return a, nil
 }
 
+// agentCols reuses two pre-existing columns under new meanings, added
+// before either was ever wired to real behavior, so no destructive
+// migration was needed: wireless_interfaces now holds the full wired+
+// wireless NetworkInterfaces inventory (was wireless-only), and
+// wlan_interface (added, never read/written by any code) now holds the
+// operator-picked WLAN sensor interface. perfmon_advertise_host and
+// perfmon_addr from the previous design are left in the schema unused.
 const agentCols = `a.id, a.tenant_id, a.site_id, s.name, a.name, a.token,
 	COALESCE(a.wireless_interfaces, ''), COALESCE(a.capabilities, ''), COALESCE(a.stats, ''), a.version,
-	a.perfmon_reflector_enabled, a.perfmon_reflector_port, a.perfmon_advertise_host,
-	COALESCE(a.perfmon_allowed_cidrs, ''), a.perfmon_addr, a.created_at`
+	a.management_interface, a.wlan_interface,
+	a.perfmon_reflector_enabled, a.perfmon_reflector_port, a.perfmon_reflector_interface,
+	COALESCE(a.perfmon_allowed_cidrs, ''), a.created_at`
 const agentFrom = ` FROM agents a JOIN sites s ON s.id = a.site_id `
 
 func (s *Store) GetAgent(id string) (*Agent, error) {
@@ -185,28 +251,41 @@ func (s *Store) SetAgentVersion(id, version string) error {
 }
 
 // SetAgentPerfmonReflector records an agent's perfmon reflector settings
-// (operator-configured on the Agents page) and derives+persists PerfmonAddr
-// alongside them in the same row, so every other read path can keep using
-// that one field without recomputing it.
-func (s *Store) SetAgentPerfmonReflector(id string, enabled bool, port uint32, advertiseHost string, allowedCIDRs json.RawMessage) error {
-	addr := ""
-	if enabled && advertiseHost != "" && port != 0 {
-		addr = net.JoinHostPort(advertiseHost, strconv.Itoa(int(port)))
-	}
+// (operator-configured on the Agents page) — enabled, port, which reported
+// interface to advertise (resolved to an IP at read time, see
+// Agent.ResolvedPerfmonAddr), and the source-CIDR allowlist the agent
+// itself enforces.
+func (s *Store) SetAgentPerfmonReflector(id string, enabled bool, port uint32, iface string, allowedCIDRs json.RawMessage) error {
 	enabledInt := 0
 	if enabled {
 		enabledInt = 1
 	}
 	_, err := s.db.Exec(
 		`UPDATE agents SET perfmon_reflector_enabled = ?, perfmon_reflector_port = ?,
-		 perfmon_advertise_host = ?, perfmon_allowed_cidrs = ?, perfmon_addr = ? WHERE id = ?`,
-		enabledInt, port, advertiseHost, string(allowedCIDRs), addr, id,
+		 perfmon_reflector_interface = ?, perfmon_allowed_cidrs = ? WHERE id = ?`,
+		enabledInt, port, iface, string(allowedCIDRs), id,
 	)
 	return err
 }
 
-// SetAgentInterfaces records the wireless interfaces an agent reported.
-func (s *Store) SetAgentInterfaces(id string, interfaces json.RawMessage) error {
+// SetAgentManagementInterface records which interface's IP to show as this
+// agent's primary address in the UI — informational only.
+func (s *Store) SetAgentManagementInterface(id, iface string) error {
+	_, err := s.db.Exec(`UPDATE agents SET management_interface = ? WHERE id = ?`, iface, id)
+	return err
+}
+
+// SetAgentWlanSensorInterface records which interface pins wlan_passive/
+// wlan_active — pushed to the agent live via Config.wlan_sensor_interface,
+// so this takes effect without a restart.
+func (s *Store) SetAgentWlanSensorInterface(id, iface string) error {
+	_, err := s.db.Exec(`UPDATE agents SET wlan_interface = ? WHERE id = ?`, iface, id)
+	return err
+}
+
+// SetAgentNetworkInterfaces records the full wired+wireless interface
+// inventory an agent reported at Register.
+func (s *Store) SetAgentNetworkInterfaces(id string, interfaces json.RawMessage) error {
 	_, err := s.db.Exec(`UPDATE agents SET wireless_interfaces = ? WHERE id = ?`, string(interfaces), id)
 	return err
 }

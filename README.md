@@ -329,9 +329,10 @@ cutting the scan time significantly. It needs a monitor-capable adapter and a
 **privileged (root) agent with a host-network, `NET_ADMIN`/`NET_RAW` container** —
 the agent auto-picks a monitor-capable interface and switches it into monitor
 mode and back. To force a specific interface (e.g., if multiple monitor-capable adapters
-are present), set `-wlan-iface` or `NETLAMA_WLAN_IFACE` on the agent; if the interface
-doesn't exist or isn't monitor-capable, the test will error. Native-Go traceroute is a
-later phase — see [ROADMAP.md](ROADMAP.md).
+are present), pick it on the Agents page (Edit → WLAN sensor interface, from a dropdown
+of the agent's reported interfaces) — pushed to the agent live, no redeploy or restart.
+If the interface doesn't exist or isn't monitor-capable, the test will error. Native-Go
+traceroute is a later phase — see [ROADMAP.md](ROADMAP.md).
 
 ## TLS
 

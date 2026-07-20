@@ -38,8 +38,11 @@ message Register {
   // token authenticates the agent and maps it to a tenant/site. Issued
   // when the agent is created on the server.
   string token = 5;
-  // wireless_interfaces the agent detected, for WLAN sensing.
-  repeated WirelessInterface wireless_interfaces = 6;
+  // network_interfaces the agent detected — every non-loopback interface,
+  // wired or wireless, used both for WLAN sensing and to let the operator
+  // pick per-role interfaces (management/wlan sensor/perfmon reflector) by
+  // name from a dropdown instead of typing an IP.
+  repeated NetworkInterface network_interfaces = 6;
   // field 7 (perfmon_addr) is reserved: the agent no longer self-declares
   // its perfmon reflector address. The operator configures it centrally
   // (Agents page) and the server pushes it down via Config.perfmon_reflector
@@ -47,10 +50,12 @@ message Register {
   reserved 7;
 }
 
-message WirelessInterface {
+message NetworkInterface {
   string name = 1;
-  string phy = 2;
-  bool supports_monitor = 3;
+  bool wireless = 2;
+  bool supports_monitor = 3; // wireless only
+  uint32 speed_mbps = 4;     // wired link speed; 0 = unknown, wireless, or link down
+  string ip_address = 5;     // current IPv4; empty if none
 }
 
 // Config carries the full set of tests the agent has to run. It is
@@ -64,6 +69,11 @@ message Config {
   // included (possibly with enabled=false) so every push can turn the
   // reflector on, off, or reconfigure it live — no restart needed.
   PerfmonReflectorConfig perfmon_reflector = 3;
+  // wlan_sensor_interface overrides which interface wlan_passive/wlan_active
+  // use — operator-picked on the Agents page, pushed live (replacing the
+  // old -wlan-iface startup flag, same "no redeploy" treatment as the
+  // reflector above). Empty = auto-pick the first monitor-capable interface.
+  string wlan_sensor_interface = 4;
 }
 
 // PerfmonReflectorConfig is pushed to an agent as part of its Config to

@@ -1126,6 +1126,64 @@ What has been done so far, in chronological order. Planned work lives in
   between them (genuine throughput measured), then disabled the reflector
   live and confirmed the port actually closed (`nc -z` failed as expected).
 
+## 2026-07-20 — Per-agent interface pickers, no more typed IPs (v0.11.0)
+
+- **Same day, third perfmon iteration**: user wanted to pick the perfmon
+  reflector's advertised address from a dropdown of the agent's actual
+  interfaces instead of typing an IP, and while designing that realized the
+  existing WLAN-sensor-interface override (`-wlan-iface` flag) and a new
+  purely-informational "management interface" concept fit the same shape —
+  three interface-role pickers, one shared inventory.
+- Clarified with the user first: "management interface" is
+  **informational only** (shown as the agent's primary IP in the UI),
+  not a routing/dial-binding change — kept the change contained instead of
+  guessing into a bigger networking feature.
+- **New unified interface inventory** (`internal/probe/netiface.go`,
+  `NetworkInterfaces`): enumerates every non-loopback interface via
+  `net.Interfaces()` (stdlib, cross-platform), merges in wireless-specific
+  detail (monitor-mode support) from the existing `iw`-based
+  `WirelessInterfaces` by name — reused rather than reimplemented — and
+  adds wired link speed by reading `/sys/class/net/<iface>/speed` (Linux
+  only; a plain file read that just returns 0 elsewhere, no build-tag split
+  needed). Reported at Register (`Register.network_interfaces`, replacing
+  the old wireless-only `WirelessInterface`/`wireless_interfaces` field).
+- **Management and perfmon-reflector addresses are resolved, never
+  stored**: `Agent.ResolvedManagementAddr`/`ResolvedPerfmonAddr` look up the
+  picked interface's *current* IP from the latest reported inventory on
+  every API read, rather than persisting a derived value that could go
+  stale between re-registers. `perfmonAddr` in the API response is exactly
+  this — the operator picks an interface name, the server does the
+  IP lookup, no manual typing.
+- **WLAN sensor interface moved from a startup flag to live-pushed config**,
+  the same treatment perfmon's reflector got earlier today: removed
+  `-wlan-iface`/`NETLAMA_WLAN_IFACE`; `Config.wlan_sensor_interface` is
+  now pushed on every config push and applied via
+  `Agent.setWlanIface`/`wlanIface()` (mutex-guarded, since it can now
+  change mid-connection, unlike the old start-once flag).
+  `runWlanPassive`/`runWlanActive` read it the same way as before, just
+  from the new accessor instead of a static field.
+- **Reused two orphaned DB columns instead of migrating**: `wlan_interface`
+  (added by an earlier, never-completed design — confirmed unused by any
+  Go code before reusing it) now holds the WLAN sensor pick, and the
+  existing `wireless_interfaces` column now holds the richer wired+wireless
+  JSON — no schema-breaking migration needed for either. Two genuinely new
+  columns (`management_interface`, `perfmon_reflector_interface`) added the
+  normal way. The previous design's `perfmon_addr`/`perfmon_advertise_host`
+  columns are left in place, unused (matches the project's no-destructive-
+  migration pattern used twice already this session).
+- **UI**: Agents page → Edit gained three interface `<select>` pickers
+  (management, WLAN sensor, perfmon reflector), each option labeled with
+  link speed or wireless/sensor-capability plus current IP (or "no IP").
+  The old free-text "Advertise host" field is gone. Agents table now shows
+  the resolved management IP next to the agent name.
+- **Verification**: full local e2e run — created an agent with zero
+  perfmon/wlan flags, confirmed its real `networkInterfaces` inventory
+  came back correctly (including a live IP on the machine's actual
+  interface), then picked that interface for both management and perfmon
+  reflector via the API while the agent was already connected and
+  confirmed both `managementAddr` and `perfmonAddr` resolved to the
+  correct IP with no restart, and the reflector started listening live.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

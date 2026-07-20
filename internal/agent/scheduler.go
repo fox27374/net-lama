@@ -46,6 +46,7 @@ func (a *Agent) schedule(rootCtx, ctx context.Context, cfgCh <-chan *pb.Config, 
 				a.Logger.Info("No tests assigned, idling")
 			}
 			a.reconcilePerfmonReflector(rootCtx, cfg.PerfmonReflector)
+			a.setWlanIface(cfg.WlanSensorInterface)
 
 		case cmd := <-cmdCh:
 			if cmd.Type == pb.Command_RUN_TEST {
@@ -285,7 +286,7 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 	result := newResult(spec)
 
 	// Use override if set; otherwise auto-pick the first monitor-capable interface.
-	iface := a.WlanIface
+	iface := a.wlanIface()
 	if iface == "" {
 		if detected := probe.WirelessInterfaces(ctx); len(detected) > 0 {
 			for _, d := range detected {
@@ -404,7 +405,7 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 func (a *Agent) runWlanActive(ctx context.Context, spec *pb.TestSpec, params *pb.WlanActiveParams, results chan<- *pb.TestResult) {
 	result := newResult(spec)
 
-	iface := a.WlanIface
+	iface := a.wlanIface()
 	if iface == "" && !probe.DemoMode() {
 		if detected := probe.WirelessInterfaces(ctx); len(detected) > 0 {
 			iface = detected[0].Name

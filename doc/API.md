@@ -309,13 +309,25 @@ their own). Returns `Agent[]` with `token` always blanked out, `connected`
 added from the live gRPC registry, and `health` computed from agent
 self-metrics and connection stability. `capabilities` is an array of test
 type strings the agent can run (empty if the agent has not yet reported
-capabilities, which is backward-compatible with old agent versions):
+capabilities, which is backward-compatible with old agent versions).
+`networkInterfaces` is every non-loopback interface (wired or wireless)
+last reported at Register — `{"name", "wireless", "supportsMonitor",
+"speedMbps", "ipAddress"}` each — used to populate the interface pickers
+below. `perfmonAddr` and `managementAddr` are resolved fresh on every
+response from the agent's current `networkInterfaces` (see "Perfmon
+reflector settings" below), not stored:
 
 ```json
 [{
   "id": "...", "tenantId": "...", "siteId": "...", "siteName": "hq",
-  "name": "sensor1", "token": "", "wlanInterface": "",
-  "wirelessInterfaces": null, "capabilities": ["ping", "dns", "http", "tcp", "speedtest", "traceroute"],
+  "name": "sensor1", "token": "",
+  "networkInterfaces": [
+    {"name": "eth0", "wireless": false, "speedMbps": 1000, "ipAddress": "10.0.1.5"},
+    {"name": "wlan1", "wireless": true, "supportsMonitor": true, "ipAddress": ""}
+  ],
+  "managementInterface": "eth0", "managementAddr": "10.0.1.5",
+  "wlanSensorInterface": "", "perfmonReflectorEnabled": false,
+  "capabilities": ["ping", "dns", "http", "tcp", "speedtest", "traceroute"],
   "createdAt": "...", "connected": false,
   "health": {
     "status": "healthy",
@@ -335,21 +347,22 @@ The `health` object contains:
 Body: `{"name": "...", "siteId": "..."}` (both required; the site must
 belong to your tenant, or be any tenant's site if admin). `409` on
 duplicate name within the tenant. Response is the only place `token` is
-ever non-empty — save it, it authenticates the agent process:
-
-```json
-{"id": "...", "tenantId": "...", "siteId": "...", "siteName": "hq",
- "name": "sensor1", "token": "<enrollment token>", "wlanInterface": "",
- "wirelessInterfaces": null, "createdAt": "..."}
-```
+ever non-empty — save it, it authenticates the agent process. A freshly
+created agent has no `networkInterfaces` yet (nothing reported until it
+connects); interface pickers are edited afterwards via `PUT`.
 
 ### `PUT /api/v1/agents/{id}`
 
-Body: `{"name": "...", "siteId": "...", "wlanInterface": "..."}` (`name`/
-`siteId` required; the new site must be in the same tenant as the agent).
-Renames and/or moves the agent to another site of the same tenant, and
-pushes the resulting config live if the agent is connected. Response:
-`{"pushed": <bool>}`.
+Body: `{"name": "...", "siteId": "...", "managementInterface": "...",
+"wlanSensorInterface": "...", "perfmonReflectorEnabled": bool,
+"perfmonReflectorPort": uint32, "perfmonReflectorInterface": "...",
+"perfmonAllowedCidrs": ["..."]}` (`name`/`siteId` required; the new site
+must be in the same tenant as the agent). Renames and/or moves the agent
+to another site, sets its interface picks, and pushes the resulting
+config live if the agent is connected (reflector state and WLAN sensor
+override take effect immediately, no restart). Response: `{"pushed": <bool>}`.
+See "Perfmon reflector settings" below for what the interface fields mean
+and how they're validated.
 
 ### `POST /api/v1/agents/{id}/run`
 
@@ -443,30 +456,48 @@ client side); there is no `perfmon_reflector` capability — whether an
 agent can serve as a destination is entirely the operator's setting (see
 below), not something the agent self-reports.
 
-### Perfmon reflector settings (per agent)
+### Interface settings (per agent)
 
 `PUT /api/v1/agents/{id}` additionally takes:
-`{"perfmonReflectorEnabled": bool, "perfmonReflectorPort": uint32,
-"perfmonAdvertiseHost": "...", "perfmonAllowedCidrs": ["..."]}`.
+`{"managementInterface": "...", "wlanSensorInterface": "...",
+"perfmonReflectorEnabled": bool, "perfmonReflectorPort": uint32,
+"perfmonReflectorInterface": "...", "perfmonAllowedCidrs": ["..."]}`.
 
-Unlike the old design, the reflector is not a static agent startup flag —
-these settings are stored server-side and pushed to the agent live via its
-`Config` (over the same control stream it's already connected on), so
-enabling, disabling, or reconfiguring it never needs a redeploy or restart.
-`perfmonReflectorPort` is required when `perfmonReflectorEnabled` is true.
-`perfmonAllowedCidrs` is a source-IP allowlist the *agent* enforces on every
-connection before serving it — the reflector protocol has no other
-authentication, so **an empty list rejects every connection even when
-enabled** (the safe default: enabling with no allowlist listens but serves
-no one). A bare IP is treated as a /32 (or /128 for IPv6); both the API
-(validation) and the agent (enforcement) parse entries with the same
-`probe.ParseCIDRs`, so they can't disagree on what an entry means.
+All four interface fields are a *name* from the agent's own
+`networkInterfaces` (see `GET /api/v1/agents` above) — the operator picks
+an interface, not an IP or a raw text value. Nothing is validated against
+the current interface list at write time (it can be stale between page
+load and submit); an unresolvable name just means the derived address is
+empty until the agent reports that interface again.
 
-Agent objects from `GET /api/v1/agents` carry all four settings back, plus
-`perfmonAddr` — the derived, reachable `host:port` (empty unless enabled,
-advertised, and ported are all set) that the UI uses to filter the
-destination dropdown and that `target` should be set to when creating a
-test against this agent.
+- `managementInterface` is purely informational — resolved to
+  `managementAddr` for display, changes no behavior.
+- `wlanSensorInterface` pins `wlan_passive`/`wlan_active` to that
+  interface (empty = auto-pick the first monitor-capable one). Pushed
+  live via `Config.wlan_sensor_interface` — no restart needed, replacing
+  the old `-wlan-iface` agent startup flag.
+- `perfmonReflectorEnabled`/`perfmonReflectorPort`/`perfmonReflectorInterface`
+  configure the agent-to-agent throughput reflector — not a static agent
+  startup flag either, these are stored server-side and pushed to the
+  agent live via its `Config` (over the same control stream it's already
+  connected on), so enabling, disabling, or reconfiguring it never needs a
+  redeploy or restart. `perfmonReflectorPort` is required when
+  `perfmonReflectorEnabled` is true. `perfmonReflectorInterface`'s current
+  IP (from `networkInterfaces`) plus the port is what gets resolved into
+  `perfmonAddr`.
+- `perfmonAllowedCidrs` is a source-IP allowlist the *agent* enforces on
+  every connection before serving it — the reflector protocol has no other
+  authentication, so **an empty list rejects every connection even when
+  enabled** (the safe default: enabling with no allowlist listens but
+  serves no one). A bare IP is treated as a /32 (or /128 for IPv6); both
+  the API (validation) and the agent (enforcement) parse entries with the
+  same `probe.ParseCIDRs`, so they can't disagree on what an entry means.
+
+Agent objects from `GET /api/v1/agents` carry all the settings above back,
+plus the resolved `perfmonAddr` (the reachable `host:port`, empty unless
+enabled/interface/port are all set and that interface currently has an IP)
+that the UI uses to filter the destination dropdown and that `target`
+should be set to when creating a test against this agent.
 
 ### `GET /api/v1/me`
 

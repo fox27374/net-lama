@@ -20,11 +20,27 @@ type Health struct {
 }
 
 // agentView is the API representation of an agent. The enrollment token
-// is only included directly after creation.
+// is only included directly after creation. PerfmonAddr/ManagementAddr are
+// resolved fresh from the agent's own NetworkInterfaces on every response,
+// not persisted — see store.Agent.ResolvedPerfmonAddr/ResolvedManagementAddr.
 type agentView struct {
 	*store.Agent
-	Connected bool    `json:"connected"`
-	Health    *Health `json:"health,omitempty"`
+	Connected      bool    `json:"connected"`
+	Health         *Health `json:"health,omitempty"`
+	PerfmonAddr    string  `json:"perfmonAddr,omitempty"`
+	ManagementAddr string  `json:"managementAddr,omitempty"`
+}
+
+// newAgentView resolves the display-only derived fields once, so every
+// call site builds a consistent view.
+func newAgentView(agent *store.Agent, connected bool, health *Health) *agentView {
+	return &agentView{
+		Agent:          agent,
+		Connected:      connected,
+		Health:         health,
+		PerfmonAddr:    agent.ResolvedPerfmonAddr(),
+		ManagementAddr: agent.ResolvedManagementAddr(),
+	}
 }
 
 func (a *API) handleListAgents(w http.ResponseWriter, r *http.Request, user *store.User) {
@@ -54,11 +70,7 @@ func (a *API) handleListAgents(w http.ResponseWriter, r *http.Request, user *sto
 			health.UptimeSeconds = healthEval.UptimeSeconds
 		}
 
-		views = append(views, &agentView{
-			Agent:     agent,
-			Connected: connected,
-			Health:    health,
-		})
+		views = append(views, newAgentView(agent, connected, health))
 	}
 	writeJSON(w, http.StatusOK, views)
 }
@@ -95,7 +107,7 @@ func (a *API) handleCreateAgent(w http.ResponseWriter, r *http.Request, user *st
 	agent.SiteName = site.Name
 
 	// The one time the token is returned: right after creation
-	writeJSON(w, http.StatusCreated, &agentView{Agent: agent})
+	writeJSON(w, http.StatusCreated, newAgentView(agent, false, nil))
 }
 
 // getScopedAgent loads an agent and enforces tenant access.
@@ -113,9 +125,9 @@ func (a *API) getScopedAgent(w http.ResponseWriter, r *http.Request, user *store
 }
 
 // handleUpdateAgent renames an agent, moves it to another site of the same
-// tenant, and sets its perfmon reflector settings; the resulting config
-// (including the reflector's new desired state) is pushed live — no
-// restart needed for the reflector to pick up the change.
+// tenant, and sets its management/WLAN-sensor/perfmon-reflector interface
+// picks; the resulting config (reflector state, WLAN sensor override) is
+// pushed live — no restart needed to pick up any of these changes.
 func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *store.User) {
 	agent := a.getScopedAgent(w, r, user)
 	if agent == nil {
@@ -123,12 +135,14 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 	}
 
 	var req struct {
-		Name                    string   `json:"name"`
-		SiteID                  string   `json:"siteId"`
-		PerfmonReflectorEnabled bool     `json:"perfmonReflectorEnabled"`
-		PerfmonReflectorPort    uint32   `json:"perfmonReflectorPort"`
-		PerfmonAdvertiseHost    string   `json:"perfmonAdvertiseHost"`
-		PerfmonAllowedCIDRs     []string `json:"perfmonAllowedCidrs"`
+		Name                      string   `json:"name"`
+		SiteID                    string   `json:"siteId"`
+		ManagementInterface       string   `json:"managementInterface"`
+		WlanSensorInterface       string   `json:"wlanSensorInterface"`
+		PerfmonReflectorEnabled   bool     `json:"perfmonReflectorEnabled"`
+		PerfmonReflectorPort      uint32   `json:"perfmonReflectorPort"`
+		PerfmonReflectorInterface string   `json:"perfmonReflectorInterface"`
+		PerfmonAllowedCIDRs       []string `json:"perfmonAllowedCidrs"`
 	}
 	if !decodeBody(w, r, &req) {
 		return
@@ -157,14 +171,23 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
+	if err := a.Store.SetAgentManagementInterface(agent.ID, req.ManagementInterface); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := a.Store.SetAgentWlanSensorInterface(agent.ID, req.WlanSensorInterface); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	cidrsJSON, _ := json.Marshal(req.PerfmonAllowedCIDRs)
-	if err := a.Store.SetAgentPerfmonReflector(agent.ID, req.PerfmonReflectorEnabled, req.PerfmonReflectorPort, req.PerfmonAdvertiseHost, cidrsJSON); err != nil {
+	if err := a.Store.SetAgentPerfmonReflector(agent.ID, req.PerfmonReflectorEnabled, req.PerfmonReflectorPort, req.PerfmonReflectorInterface, cidrsJSON); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	// The connected-agent registry holds the agent's old field values;
-	// refresh it by pushing the fresh config (site, tests, reflector state).
+	// refresh it by pushing the fresh config (site, tests, reflector state,
+	// WLAN sensor interface override).
 	pushed := a.Server.RefreshAgent(agent.ID)
 	writeJSON(w, http.StatusOK, map[string]any{"pushed": pushed})
 }

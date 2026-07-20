@@ -190,6 +190,12 @@ func (s *Store) migrate() error {
 	if err := s.addColumnIfMissing("agents", "perfmon_allowed_cidrs", "TEXT"); err != nil {
 		return err
 	}
+	if err := s.addColumnIfMissing("agents", "management_interface", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("agents", "perfmon_reflector_interface", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	if err := s.addColumnIfMissing("logs", "scope", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}

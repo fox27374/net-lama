@@ -274,10 +274,13 @@ type Register struct {
 	// token authenticates the agent and maps it to a tenant/site. Issued
 	// when the agent is created on the server.
 	Token string `protobuf:"bytes,5,opt,name=token,proto3" json:"token,omitempty"`
-	// wireless_interfaces the agent detected, for WLAN sensing.
-	WirelessInterfaces []*WirelessInterface `protobuf:"bytes,6,rep,name=wireless_interfaces,json=wirelessInterfaces,proto3" json:"wireless_interfaces,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// network_interfaces the agent detected — every non-loopback interface,
+	// wired or wireless, used both for WLAN sensing and to let the operator
+	// pick per-role interfaces (management/wlan sensor/perfmon reflector) by
+	// name from a dropdown instead of typing an IP.
+	NetworkInterfaces []*NetworkInterface `protobuf:"bytes,6,rep,name=network_interfaces,json=networkInterfaces,proto3" json:"network_interfaces,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Register) Reset() {
@@ -345,36 +348,38 @@ func (x *Register) GetToken() string {
 	return ""
 }
 
-func (x *Register) GetWirelessInterfaces() []*WirelessInterface {
+func (x *Register) GetNetworkInterfaces() []*NetworkInterface {
 	if x != nil {
-		return x.WirelessInterfaces
+		return x.NetworkInterfaces
 	}
 	return nil
 }
 
-type WirelessInterface struct {
+type NetworkInterface struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Name            string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Phy             string                 `protobuf:"bytes,2,opt,name=phy,proto3" json:"phy,omitempty"`
-	SupportsMonitor bool                   `protobuf:"varint,3,opt,name=supports_monitor,json=supportsMonitor,proto3" json:"supports_monitor,omitempty"`
+	Wireless        bool                   `protobuf:"varint,2,opt,name=wireless,proto3" json:"wireless,omitempty"`
+	SupportsMonitor bool                   `protobuf:"varint,3,opt,name=supports_monitor,json=supportsMonitor,proto3" json:"supports_monitor,omitempty"` // wireless only
+	SpeedMbps       uint32                 `protobuf:"varint,4,opt,name=speed_mbps,json=speedMbps,proto3" json:"speed_mbps,omitempty"`                   // wired link speed; 0 = unknown, wireless, or link down
+	IpAddress       string                 `protobuf:"bytes,5,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                    // current IPv4; empty if none
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
-func (x *WirelessInterface) Reset() {
-	*x = WirelessInterface{}
+func (x *NetworkInterface) Reset() {
+	*x = NetworkInterface{}
 	mi := &file_proto_netlama_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WirelessInterface) String() string {
+func (x *NetworkInterface) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WirelessInterface) ProtoMessage() {}
+func (*NetworkInterface) ProtoMessage() {}
 
-func (x *WirelessInterface) ProtoReflect() protoreflect.Message {
+func (x *NetworkInterface) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_netlama_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -386,30 +391,44 @@ func (x *WirelessInterface) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WirelessInterface.ProtoReflect.Descriptor instead.
-func (*WirelessInterface) Descriptor() ([]byte, []int) {
+// Deprecated: Use NetworkInterface.ProtoReflect.Descriptor instead.
+func (*NetworkInterface) Descriptor() ([]byte, []int) {
 	return file_proto_netlama_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *WirelessInterface) GetName() string {
+func (x *NetworkInterface) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *WirelessInterface) GetPhy() string {
+func (x *NetworkInterface) GetWireless() bool {
 	if x != nil {
-		return x.Phy
+		return x.Wireless
 	}
-	return ""
+	return false
 }
 
-func (x *WirelessInterface) GetSupportsMonitor() bool {
+func (x *NetworkInterface) GetSupportsMonitor() bool {
 	if x != nil {
 		return x.SupportsMonitor
 	}
 	return false
+}
+
+func (x *NetworkInterface) GetSpeedMbps() uint32 {
+	if x != nil {
+		return x.SpeedMbps
+	}
+	return 0
+}
+
+func (x *NetworkInterface) GetIpAddress() string {
+	if x != nil {
+		return x.IpAddress
+	}
+	return ""
 }
 
 // Config carries the full set of tests the agent has to run. It is
@@ -422,8 +441,13 @@ type Config struct {
 	// included (possibly with enabled=false) so every push can turn the
 	// reflector on, off, or reconfigure it live — no restart needed.
 	PerfmonReflector *PerfmonReflectorConfig `protobuf:"bytes,3,opt,name=perfmon_reflector,json=perfmonReflector,proto3" json:"perfmon_reflector,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// wlan_sensor_interface overrides which interface wlan_passive/wlan_active
+	// use — operator-picked on the Agents page, pushed live (replacing the
+	// old -wlan-iface startup flag, same "no redeploy" treatment as the
+	// reflector above). Empty = auto-pick the first monitor-capable interface.
+	WlanSensorInterface string `protobuf:"bytes,4,opt,name=wlan_sensor_interface,json=wlanSensorInterface,proto3" json:"wlan_sensor_interface,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Config) Reset() {
@@ -468,6 +492,13 @@ func (x *Config) GetPerfmonReflector() *PerfmonReflectorConfig {
 		return x.PerfmonReflector
 	}
 	return nil
+}
+
+func (x *Config) GetWlanSensorInterface() string {
+	if x != nil {
+		return x.WlanSensorInterface
+	}
+	return ""
 }
 
 // PerfmonReflectorConfig is pushed to an agent as part of its Config to
@@ -3736,22 +3767,27 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\rServerMessage\x12,\n" +
 	"\x06config\x18\x01 \x01(\v2\x12.netlama.v1.ConfigH\x00R\x06config\x12/\n" +
 	"\acommand\x18\x02 \x01(\v2\x13.netlama.v1.CommandH\x00R\acommandB\t\n" +
-	"\apayload\"\xf2\x01\n" +
+	"\apayload\"\xef\x01\n" +
 	"\bRegister\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12\x1f\n" +
 	"\vclient_type\x18\x02 \x01(\tR\n" +
 	"clientType\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\tR\aversion\x12\"\n" +
 	"\fcapabilities\x18\x04 \x03(\tR\fcapabilities\x12\x14\n" +
-	"\x05token\x18\x05 \x01(\tR\x05token\x12N\n" +
-	"\x13wireless_interfaces\x18\x06 \x03(\v2\x1d.netlama.v1.WirelessInterfaceR\x12wirelessInterfacesJ\x04\b\a\x10\b\"d\n" +
-	"\x11WirelessInterface\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
-	"\x03phy\x18\x02 \x01(\tR\x03phy\x12)\n" +
-	"\x10supports_monitor\x18\x03 \x01(\bR\x0fsupportsMonitor\"\x8b\x01\n" +
+	"\x05token\x18\x05 \x01(\tR\x05token\x12K\n" +
+	"\x12network_interfaces\x18\x06 \x03(\v2\x1c.netlama.v1.NetworkInterfaceR\x11networkInterfacesJ\x04\b\a\x10\b\"\xab\x01\n" +
+	"\x10NetworkInterface\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
+	"\bwireless\x18\x02 \x01(\bR\bwireless\x12)\n" +
+	"\x10supports_monitor\x18\x03 \x01(\bR\x0fsupportsMonitor\x12\x1d\n" +
+	"\n" +
+	"speed_mbps\x18\x04 \x01(\rR\tspeedMbps\x12\x1d\n" +
+	"\n" +
+	"ip_address\x18\x05 \x01(\tR\tipAddress\"\xbf\x01\n" +
 	"\x06Config\x12*\n" +
 	"\x05tests\x18\x01 \x03(\v2\x14.netlama.v1.TestSpecR\x05tests\x12O\n" +
-	"\x11perfmon_reflector\x18\x03 \x01(\v2\".netlama.v1.PerfmonReflectorConfigR\x10perfmonReflectorJ\x04\b\x02\x10\x03\"k\n" +
+	"\x11perfmon_reflector\x18\x03 \x01(\v2\".netlama.v1.PerfmonReflectorConfigR\x10perfmonReflector\x122\n" +
+	"\x15wlan_sensor_interface\x18\x04 \x01(\tR\x13wlanSensorInterfaceJ\x04\b\x02\x10\x03\"k\n" +
 	"\x16PerfmonReflectorConfig\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12#\n" +
@@ -4087,7 +4123,7 @@ var file_proto_netlama_proto_goTypes = []any{
 	(*AgentMessage)(nil),           // 1: netlama.v1.AgentMessage
 	(*ServerMessage)(nil),          // 2: netlama.v1.ServerMessage
 	(*Register)(nil),               // 3: netlama.v1.Register
-	(*WirelessInterface)(nil),      // 4: netlama.v1.WirelessInterface
+	(*NetworkInterface)(nil),       // 4: netlama.v1.NetworkInterface
 	(*Config)(nil),                 // 5: netlama.v1.Config
 	(*PerfmonReflectorConfig)(nil), // 6: netlama.v1.PerfmonReflectorConfig
 	(*TestSpec)(nil),               // 7: netlama.v1.TestSpec
@@ -4132,7 +4168,7 @@ var file_proto_netlama_proto_depIdxs = []int32{
 	39, // 3: netlama.v1.AgentMessage.stats:type_name -> netlama.v1.AgentStats
 	5,  // 4: netlama.v1.ServerMessage.config:type_name -> netlama.v1.Config
 	18, // 5: netlama.v1.ServerMessage.command:type_name -> netlama.v1.Command
-	4,  // 6: netlama.v1.Register.wireless_interfaces:type_name -> netlama.v1.WirelessInterface
+	4,  // 6: netlama.v1.Register.network_interfaces:type_name -> netlama.v1.NetworkInterface
 	7,  // 7: netlama.v1.Config.tests:type_name -> netlama.v1.TestSpec
 	6,  // 8: netlama.v1.Config.perfmon_reflector:type_name -> netlama.v1.PerfmonReflectorConfig
 	8,  // 9: netlama.v1.TestSpec.speedtest:type_name -> netlama.v1.SpeedtestParams

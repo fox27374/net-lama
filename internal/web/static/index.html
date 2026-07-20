@@ -525,13 +525,22 @@
     <label>Name <input type="text" id="ea-name" required></label>
     <label>Site <select id="ea-site"></select></label>
     <p class="muted">Moving the agent to another site pushes the new site's tests immediately.</p>
+
+    <label>Management interface <select id="ea-mgmt-iface"></select></label>
+    <p class="muted">Informational only — shown as this agent's primary IP in the UI, nothing
+    routes differently because of this pick.</p>
+
+    <label>WLAN sensor interface <select id="ea-wlan-iface"></select></label>
+    <p class="muted">Which interface wlan_passive/wlan_active use. Pushed to the agent live —
+    no redeploy or restart needed.</p>
+
     <h4>Perfmon reflector</h4>
     <p class="muted">Lets other agents run a perfmon test against this one. Pushed to the agent
     live over its existing connection — no redeploy or restart needed.</p>
     <label class="check"><input type="checkbox" id="ea-pm-enabled"> Enable</label>
     <div class="grid2">
       <label>Port <input type="number" id="ea-pm-port" min="1" max="65535" placeholder="5252"></label>
-      <label>Advertise host <input type="text" id="ea-pm-host" placeholder="10.0.1.5"></label>
+      <label>Interface <select id="ea-pm-iface"></select></label>
     </div>
     <label>Allowed source CIDRs (one per line — reject-all if empty, even when enabled)
       <textarea id="ea-pm-cidrs" rows="3" placeholder="10.0.1.0/24&#10;192.168.1.5"></textarea>

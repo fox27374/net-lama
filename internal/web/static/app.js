@@ -595,7 +595,7 @@ async function loadAgents() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><span class="badge ${a.connected ? "on" : "off"}">${a.connected ? "connected" : "offline"}</span></td>
-      <td><strong>${esc(a.name)}</strong></td>
+      <td><strong>${esc(a.name)}</strong>${a.managementAddr ? ` <span class="muted mono">${esc(a.managementAddr)}</span>` : ""}</td>
       <td>${esc(a.siteName)}</td>
       <td class="mono muted">${esc(a.version || "—")}</td>
       <td>${caps}</td>
@@ -650,6 +650,28 @@ $("#form-new-agent").addEventListener("submit", async (e) => {
 
 let editingAgent = null;
 
+// ifaceLabel describes one network interface for a picker option: wired
+// interfaces show link speed, wireless show monitor-sensor capability,
+// both show current IP (or "no IP" if the interface has none right now).
+function ifaceLabel(ni) {
+  const bits = [];
+  if (ni.wireless) bits.push(ni.supportsMonitor ? "wireless, sensor-capable" : "wireless");
+  else if (ni.speedMbps) bits.push(`${ni.speedMbps} Mbps`);
+  else bits.push("wired");
+  bits.push(ni.ipAddress || "no IP");
+  return `${ni.name} — ${bits.join(" · ")}`;
+}
+
+// populateInterfaceSelect fills a <select> from an agent's reported
+// interface inventory, plus one empty option for "not set". wirelessOnly
+// restricts the list (WLAN sensor picker only makes sense for wireless).
+function populateInterfaceSelect(select, interfaces, selected, emptyLabel, wirelessOnly) {
+  const list = wirelessOnly ? interfaces.filter((ni) => ni.wireless) : interfaces;
+  const emptyOpt = `<option value="">${esc(emptyLabel)}</option>`;
+  select.innerHTML = emptyOpt + list
+    .map((ni) => `<option value="${esc(ni.name)}" ${ni.name === selected ? "selected" : ""}>${esc(ifaceLabel(ni))}</option>`).join("");
+}
+
 async function openEditAgentDialog(agent) {
   editingAgent = agent;
   await fetchSites();
@@ -657,9 +679,12 @@ async function openEditAgentDialog(agent) {
   $("#ea-name").value = agent.name;
   $("#ea-site").innerHTML = sites.map((s) =>
     `<option value="${s.id}" ${s.id === agent.siteId ? "selected" : ""}>${esc(s.name)}</option>`).join("");
+  const ifaces = agent.networkInterfaces || [];
+  populateInterfaceSelect($("#ea-mgmt-iface"), ifaces, agent.managementInterface, "— none —", false);
+  populateInterfaceSelect($("#ea-wlan-iface"), ifaces, agent.wlanSensorInterface, "Auto-pick first monitor-capable", true);
+  populateInterfaceSelect($("#ea-pm-iface"), ifaces, agent.perfmonReflectorInterface, "— none —", false);
   $("#ea-pm-enabled").checked = !!agent.perfmonReflectorEnabled;
   $("#ea-pm-port").value = agent.perfmonReflectorPort || "";
-  $("#ea-pm-host").value = agent.perfmonAdvertiseHost || "";
   $("#ea-pm-cidrs").value = (agent.perfmonAllowedCidrs || []).join("\n");
   dialogError("#ea-error", "");
   $("#dlg-edit-agent").showModal();
@@ -671,9 +696,11 @@ $("#form-edit-agent").addEventListener("submit", async (e) => {
     await api("PUT", `/api/v1/agents/${editingAgent.id}`, {
       name: $("#ea-name").value.trim(),
       siteId: $("#ea-site").value,
+      managementInterface: $("#ea-mgmt-iface").value,
+      wlanSensorInterface: $("#ea-wlan-iface").value,
       perfmonReflectorEnabled: $("#ea-pm-enabled").checked,
       perfmonReflectorPort: +$("#ea-pm-port").value || 0,
-      perfmonAdvertiseHost: $("#ea-pm-host").value.trim(),
+      perfmonReflectorInterface: $("#ea-pm-iface").value,
       perfmonAllowedCidrs: lines($("#ea-pm-cidrs").value),
     });
     $("#dlg-edit-agent").close();

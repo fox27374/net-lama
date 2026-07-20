@@ -76,10 +76,6 @@ services:
       NETLAMA_TLS_CERT: ${NETLAMA_TLS_CERT:-}
       NETLAMA_TLS_KEY: ${NETLAMA_TLS_KEY:-}
       NETLAMA_WLAN_DEMO: ${NETLAMA_WLAN_DEMO:-}
-      # Override the wireless interface for wlan_passive tests (e.g., to force
-      # a specific adapter when multiple monitor-capable interfaces are present).
-      # Leave unset to auto-pick the first monitor-capable interface.
-      # NETLAMA_WLAN_IFACE: ${NETLAMA_WLAN_IFACE:-}
       NETLAMA_TRACEROUTE_DEMO: ${NETLAMA_TRACEROUTE_DEMO:-}
     depends_on:
       - server

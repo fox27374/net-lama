@@ -73,10 +73,6 @@ services:
       # wireless radio (for trying the Wireless UI). Leave unset for real
       # monitor-mode capture (needs a monitor-capable interface + NET_ADMIN).
       NETLAMA_WLAN_DEMO: ${NETLAMA_WLAN_DEMO:-}
-      # Override the wireless interface for wlan_passive tests (e.g., to force
-      # a specific adapter when multiple monitor-capable interfaces are present).
-      # Leave unset to auto-pick the first monitor-capable interface.
-      # NETLAMA_WLAN_IFACE: ${NETLAMA_WLAN_IFACE:-}
       # Set NETLAMA_TRACEROUTE_DEMO=1 to emit synthetic path data (for the
       # Path UI) where raw-socket traceroute is not available. Leave unset
       # for real traceroute (needs mtr in the image + CAP_NET_RAW; see README).
