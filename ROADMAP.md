@@ -136,11 +136,8 @@ Planned work, roughly grouped. Not ordered by priority yet.
       light/dark favicons)
 - [x] Version tag reported by server and agent, shown in UI/API (incl. the
       agent overview listing each agent's version)
-- [ ] Semantic versioning: tag releases as vMAJOR.MINOR.PATCH git tags (the
-      version stamping already prefers tags via `git describe --tags`), so
-      server/agents report e.g. `v0.2.0` instead of `git-<sha>`; define a
-      release flow (changelog entry, tag, CI builds the tagged images — the
-      containers workflow already emits semver image tags)
+- [x] Semantic versioning: releases tagged vMAJOR.MINOR.PATCH (v0.1.0-v0.6.0
+      shipped), server/agents report the tag via `git describe --tags`
 - [ ] Configurable result retention: time-based (e.g. "keep 30 days") and/or
       per-test caps instead of the fixed 5000-results-per-agent limit, which
       is shared across all of an agent's tests (a chatty 1-minute test crowds
