@@ -44,17 +44,18 @@ func computeResultState(testType string, value float64, thresholds *Thresholds) 
 }
 
 type TestHealth struct {
-	TestID   string     `json:"testId"`
-	Name     string     `json:"name"`
-	Type     string     `json:"type"`
-	Checks   int        `json:"checks"` // recent checks considered
-	OK       int        `json:"ok"`     // of those, how many were healthy
-	Agents   int        `json:"agents"` // distinct agents reporting
-	Status   string     `json:"status"` // healthy | degraded | failing | nodata
-	LastSeen *time.Time `json:"lastSeen,omitempty"`
-	Series   []float64  `json:"series,omitempty"`   // last ~30 values, oldest first; null values omitted
-	Unit     string     `json:"unit,omitempty"`     // ms, Mbps, hops, APs
-	Current  *float64   `json:"current,omitempty"` // last value
+	TestID     string     `json:"testId"`
+	Name       string     `json:"name"`
+	Type       string     `json:"type"`
+	Checks     int        `json:"checks"`               // recent checks considered
+	OK         int        `json:"ok"`                   // of those, how many were healthy
+	Agents     int        `json:"agents"`               // distinct agents reporting
+	AgentNames []string   `json:"agentNames,omitempty"` // names of those agents
+	Status     string     `json:"status"`               // healthy | degraded | failing | nodata
+	LastSeen   *time.Time `json:"lastSeen,omitempty"`
+	Series     []float64  `json:"series,omitempty"`  // last ~30 values, oldest first; null values omitted
+	Unit       string     `json:"unit,omitempty"`    // ms, Mbps, hops, APs
+	Current    *float64   `json:"current,omitempty"` // last value
 }
 
 // SiteHealth is the per-site rollup: how many of the site's assigned tests
@@ -142,7 +143,7 @@ func (s *Store) TenantOverview(tenantID, siteID string) (*Overview, error) {
 	for _, t := range tests {
 		h := &TestHealth{TestID: t.ID, Name: t.Name, Type: t.Type, Status: "nodata"}
 
-		status, checks, okSum, agents, err := s.testStatus(tenantID, siteID, t)
+		status, checks, okSum, agents, agentNames, err := s.testStatus(tenantID, siteID, t)
 		if err != nil {
 			return nil, err
 		}
@@ -152,6 +153,7 @@ func (s *Store) TenantOverview(tenantID, siteID string) (*Overview, error) {
 			h.Checks = checks
 			h.OK = okSum
 			h.Agents = agents
+			h.AgentNames = agentNames
 
 			// Fetch last-seen as a plain column scan (aggregate MAX loses
 			// the time affinity in the sqlite driver).
@@ -214,7 +216,7 @@ func (s *Store) TenantOverview(tenantID, siteID string) (*Overview, error) {
 		if !ok {
 			continue
 		}
-		status, _, _, _, err := s.testStatus(tenantID, p.siteID, t)
+		status, _, _, _, _, err := s.testStatus(tenantID, p.siteID, t)
 		if err != nil {
 			return nil, err
 		}
@@ -242,7 +244,7 @@ func (s *Store) TenantOverview(tenantID, siteID string) (*Overview, error) {
 // clamped to [90s, 1h] — optionally restricted to a single site's agents.
 // A test with no results in the window is "nodata".
 // Health rollup now incorporates state thresholds: red > orange > green.
-func (s *Store) testStatus(tenantID, siteID string, t *TestDef) (status string, checks, okSum, agents int, err error) {
+func (s *Store) testStatus(tenantID, siteID string, t *TestDef) (status string, checks, okSum, agents int, agentNames []string, err error) {
 	windowSec := t.IntervalSeconds * 3
 	if windowSec < 90 {
 		windowSec = 90
@@ -273,7 +275,7 @@ func (s *Store) testStatus(tenantID, siteID string, t *TestDef) (status string, 
 	}
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
-		return "", 0, 0, 0, err
+		return "", 0, 0, 0, nil, err
 	}
 	defer rows.Close()
 
@@ -310,12 +312,12 @@ func (s *Store) testStatus(tenantID, siteID string, t *TestDef) (status string, 
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return "", 0, 0, 0, err
+		return "", 0, 0, 0, nil, err
 	}
 
-	// Count distinct agents
+	// Distinct agents that reported in the window (name, not just count)
 	agentQuery := `
-		SELECT COUNT(DISTINCT r.agent_id)
+		SELECT DISTINCT a.name
 		FROM results r
 		JOIN agents a ON a.id = r.agent_id
 		WHERE a.tenant_id = ? AND r.test_id = ? AND r.time >= ?`
@@ -324,9 +326,17 @@ func (s *Store) testStatus(tenantID, siteID string, t *TestDef) (status string, 
 		agentQuery += ` AND a.site_id = ?`
 		agentArgs = append(agentArgs, siteID)
 	}
-	if err := s.db.QueryRow(agentQuery, agentArgs...).Scan(&agents); err != nil {
-		agents = 0
+	agentQuery += ` ORDER BY a.name`
+	if nameRows, err := s.db.Query(agentQuery, agentArgs...); err == nil {
+		for nameRows.Next() {
+			var name string
+			if nameRows.Scan(&name) == nil {
+				agentNames = append(agentNames, name)
+			}
+		}
+		nameRows.Close()
 	}
+	agents = len(agentNames)
 
 	// Determine status: red > orange > mixed > all green
 	switch {
@@ -343,7 +353,7 @@ func (s *Store) testStatus(tenantID, siteID string, t *TestDef) (status string, 
 	default:
 		status = "degraded"
 	}
-	return status, checks, okSum, agents, nil
+	return status, checks, okSum, agents, agentNames, nil
 }
 
 // extractMetricValue extracts the primary metric from a result payload.
