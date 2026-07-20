@@ -1625,6 +1625,7 @@ async function renderWirelessAgent() {
   const results = await api("GET", "/api/v1/results?" + params.toString());
   renderWirelessNetworks(results[0]);
   renderWirelessActive(agent);
+  renderWirelessRoaming(agent);
 }
 
 // netmaskToPrefix converts a dotted netmask ("255.255.255.0") to a prefix
@@ -1821,6 +1822,171 @@ function renderWlActiveWaterfall(wa) {
 window.addEventListener("resize", () => {
   if (wlActiveChart && currentSection() === "wireless") wlActiveChart.resize();
 });
+
+// --- Roaming (Meraki-style analytics) on the Wireless page ---
+let wlRoamSummary = null; // last fetched summary, for the client dropdown + timeline
+let wlRoamSelectedClient = null;
+
+// wlRoamBand approximates band from a channel number — roam events carry
+// channel, not frequency, so 6 GHz (which shares numbering with 5 GHz in
+// some regional plans) reads as "5 GHz" here. Good enough for the roaming
+// view; the Nearby networks table has the precise per-network band.
+function wlRoamBand(channel) {
+  if (!channel) return "—";
+  return channel <= 14 ? "2.4 GHz" : "5 GHz";
+}
+
+function wlRoamDuration(ms) {
+  if (!ms || ms <= 0) return "—";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+$("#wl-roam-range").addEventListener("change", () => renderWirelessRoaming(currentWlAgent()));
+$("#wl-roam-client").addEventListener("change", () => {
+  wlRoamSelectedClient = $("#wl-roam-client").value;
+  renderWlRoamTimeline();
+});
+
+async function renderWirelessRoaming(agent) {
+  if (!agent) return;
+  const days = +$("#wl-roam-range").value || 7;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const params = new URLSearchParams({ agentId: agent.id, since });
+  const tid = tenantParam("");
+  if (tid) params.set("tenantId", tid.split("=")[1]);
+
+  let summary;
+  try {
+    summary = await api("GET", "/api/v1/wlan-roaming?" + params.toString());
+  } catch (e) {
+    return;
+  }
+  wlRoamSummary = summary;
+
+  $("#wl-roam-bad").textContent = summary.badRoams;
+  $("#wl-roam-pingpong").textContent = summary.pingPongClients;
+  $("#wl-roam-sticky").textContent = summary.stickyClients;
+  $("#wl-roam-suboptimal").textContent = summary.suboptimalRoams;
+  $("#wl-roam-good").textContent = summary.goodRoams;
+  $("#wl-roam-disconnects").textContent = summary.disconnects;
+
+  const events = summary.events || [];
+  $("#wl-roam-empty").classList.toggle("hidden", events.length > 0);
+  $("#wl-roam-timeline-wrap").classList.toggle("hidden", events.length === 0);
+
+  // Client dropdown: top clients by event count, most active first
+  const countByClient = new Map();
+  for (const e of events) countByClient.set(e.clientMac, (countByClient.get(e.clientMac) || 0) + 1);
+  const clients = [...countByClient.entries()].sort((a, b) => b[1] - a[1]).map(([mac]) => mac);
+  if (!wlRoamSelectedClient || !clients.includes(wlRoamSelectedClient)) {
+    wlRoamSelectedClient = clients[0] || null;
+  }
+  $("#wl-roam-client").innerHTML = clients
+    .map((mac) => `<option value="${esc(mac)}"${mac === wlRoamSelectedClient ? " selected" : ""}>${esc(mac)} (${countByClient.get(mac)} events)</option>`)
+    .join("");
+  renderWlRoamTimeline();
+
+  // Event log table
+  const tbody = $("#wl-roam-table tbody");
+  tbody.innerHTML = events
+    .map((e) => {
+      const cls = e.classification || "";
+      const badge = cls ? `<span class="wl-roam-badge ${cls}" title="${cls}"></span>` : "";
+      const route = e.toBssid
+        ? `<span class="mono">${esc(e.fromBssid || "—")}</span> → <span class="mono">${esc(e.toBssid)}</span>`
+        : `<span class="mono">${esc(e.fromBssid)}</span> → <span class="error">disconnected</span>`;
+      const roamTime = e.toBssid ? fmt(e.roamTimeMs, 0) : "—";
+      const rssi = e.fromRssiDbm && e.toRssiDbm ? `${e.fromRssiDbm} → ${e.toRssiDbm}` : (e.toRssiDbm || e.fromRssiDbm || "—");
+      const band = wlRoamBand(e.toChannel || e.fromChannel);
+      return `<tr>
+        <td>${badge}</td>
+        <td>${esc(e.clientMac)}${e.ssid ? ` <span class="muted">(${esc(e.ssid)})</span>` : ""}</td>
+        <td>${route}</td>
+        <td class="num">${roamTime}</td>
+        <td class="num">${rssi}</td>
+        <td>${band}</td>
+        <td class="muted nowrap">${new Date(e.detectedAtMs).toLocaleString()}</td>
+        <td class="muted nowrap">${wlRoamDuration(e.durationMs)}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+// renderWlRoamTimeline draws a per-AP swimlane for the selected client:
+// one row per BSSID it visited, a horizontal segment for each span of time
+// connected to that AP, and a colored dot at each roam-in transition.
+function renderWlRoamTimeline() {
+  const container = $("#wl-roam-timeline");
+  container.innerHTML = "";
+  const events = (wlRoamSummary && wlRoamSummary.events) || [];
+  const clientEvents = events.filter((e) => e.clientMac === wlRoamSelectedClient).slice().reverse(); // oldest first
+  if (!clientEvents.length) return;
+
+  const rangeStart = clientEvents[0].detectedAtMs;
+  const rangeEnd = Date.now();
+  const span = Math.max(1, rangeEnd - rangeStart);
+  const pct = (ms) => Math.min(100, Math.max(0, ((ms - rangeStart) / span) * 100));
+
+  // One lane per distinct BSSID this client visited
+  const bssids = [...new Set(clientEvents.filter((e) => e.toBssid).map((e) => e.toBssid))];
+  for (const bssid of bssids) {
+    const lane = document.createElement("div");
+    lane.className = "wl-roam-lane";
+    const label = document.createElement("div");
+    label.className = "wl-roam-lane-label";
+    label.textContent = bssid;
+    label.title = bssid;
+    const track = document.createElement("div");
+    track.className = "wl-roam-lane-track";
+
+    for (let i = 0; i < clientEvents.length; i++) {
+      const e = clientEvents[i];
+      if (e.toBssid !== bssid) continue;
+      const segEnd = e.durationMs ? e.detectedAtMs + e.durationMs : rangeEnd;
+      const seg = document.createElement("div");
+      seg.className = "wl-roam-segment";
+      seg.style.left = pct(e.detectedAtMs) + "%";
+      seg.style.width = Math.max(0.5, pct(segEnd) - pct(e.detectedAtMs)) + "%";
+      seg.title = `${new Date(e.detectedAtMs).toLocaleString()} – ${wlRoamDuration(e.durationMs) || "now"}`;
+      track.appendChild(seg);
+
+      if (e.classification) {
+        const dot = document.createElement("div");
+        dot.className = "wl-roam-dot " + e.classification;
+        dot.style.left = pct(e.detectedAtMs) + "%";
+        dot.title = `${e.fromBssid} → ${e.toBssid} (${e.classification}, ${fmt(e.roamTimeMs, 0)} ms)`;
+        track.appendChild(dot);
+      }
+    }
+    lane.appendChild(label);
+    lane.appendChild(track);
+    container.appendChild(lane);
+  }
+
+  const axis = document.createElement("div");
+  axis.className = "wl-roam-axis";
+  const axisLabel = document.createElement("div");
+  const axisTrack = document.createElement("div");
+  axisTrack.className = "wl-roam-axis-track";
+  const startTick = document.createElement("span");
+  startTick.className = "wl-roam-axis-tick";
+  startTick.style.left = "0%";
+  startTick.textContent = new Date(rangeStart).toLocaleString();
+  const endTick = document.createElement("span");
+  endTick.className = "wl-roam-axis-tick";
+  endTick.style.left = "100%";
+  endTick.textContent = "now";
+  axisTrack.appendChild(startTick);
+  axisTrack.appendChild(endTick);
+  axis.appendChild(axisLabel);
+  axis.appendChild(axisTrack);
+  container.appendChild(axis);
+}
 
 // signalClass buckets an RSSI (dBm) into a health color: >=-60 ok,
 // -75..-60 warn, <-75 bad.

@@ -55,6 +55,7 @@ func (a *API) Register(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /api/v1/results", a.auth(a.handleListResults))
 	mux.HandleFunc("GET /api/v1/oui", a.auth(a.handleOUILookup))
+	mux.HandleFunc("GET /api/v1/wlan-roaming", a.auth(a.handleWlanRoaming))
 	mux.HandleFunc("GET /api/v1/overview", a.auth(a.handleOverview))
 	mux.HandleFunc("GET /api/v1/logs", a.auth(a.handleListLogs))
 

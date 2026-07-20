@@ -21,7 +21,7 @@ type Health struct {
 // is only included directly after creation.
 type agentView struct {
 	*store.Agent
-	Connected bool   `json:"connected"`
+	Connected bool    `json:"connected"`
 	Health    *Health `json:"health,omitempty"`
 }
 
@@ -252,4 +252,37 @@ func (a *API) handleOUILookup(w http.ResponseWriter, r *http.Request, _ *store.U
 		}
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// handleWlanRoaming returns the aggregated roaming picture (summary tiles +
+// classified event log) over a time window. GET /api/v1/wlan-roaming
+// ?tenantId=&siteId=&agentId=&since= (RFC3339, default: last 7 days).
+func (a *API) handleWlanRoaming(w http.ResponseWriter, r *http.Request, user *store.User) {
+	q := r.URL.Query()
+	tenantID, ok := tenantScope(user, q.Get("tenantId"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "tenantId is required")
+		return
+	}
+
+	since := time.Now().Add(-7 * 24 * time.Hour)
+	if s := q.Get("since"); s != "" {
+		parsed, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "since must be RFC3339")
+			return
+		}
+		since = parsed
+	}
+	summary, err := a.Store.WlanRoaming(store.ResultFilter{
+		TenantID: tenantID,
+		SiteID:   q.Get("siteId"),
+		AgentID:  q.Get("agentId"),
+		Since:    since,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
 }

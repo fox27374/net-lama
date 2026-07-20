@@ -55,8 +55,13 @@ Planned work, roughly grouped. Not ordered by priority yet.
 - [x] WLAN active traffic generation: a 20-ping burst to the gateway after
       DHCP guarantees a real TX-retransmit sample (loss %/RTT shown too),
       independent of the optional throughput download
-- [ ] WLAN roaming observation: detect roaming events of the active test
-      station (or tracked clients) and measure roam duration between APs
+- [x] WLAN roaming observation: passive-sweep detection of real client
+      BSSID transitions and disconnects, classified (good/suboptimal/bad by
+      RSSI delta) with ping-pong and sticky-client detection, a Meraki-style
+      Roaming section on the Wireless page (summary tiles, per-client
+      timeline, event log). Roam timing is sweep-bounded (seconds), not
+      sub-100ms radio-handoff precision — the sensor is a single time-sliced
+      radio, not a synced AP mesh
 - [x] SSID security + PHY standards: security (Open/WEP/WPA2/WPA3/WPA2-WPA3
       transition/Enterprise/OWE) and PHY generation (n/ac/ax/be) parsed from
       RSN/HT/VHT/HE/EHT beacon information elements, shown in the SSID table

@@ -8,6 +8,15 @@ import (
 // Synthetic WLAN monitor-mode sensing data for pipeline testing on hosts without
 // a monitor-capable radio, enabled with NETLAMA_WLAN_DEMO.
 
+// demoRoamBSSID alternates a demo station between the two corp-wifi BSSIDs
+// every 60s, so demo mode produces real roam and ping-pong events.
+func demoRoamBSSID() string {
+	if (time.Now().Unix()/60)%2 == 0 {
+		return "a0:f8:49:74:8b:20"
+	}
+	return "c0:25:5c:ec:bb:40"
+}
+
 func demoSense(iface string) (string, []WlanStation, []WlanChannelStat, []WlanNetwork, uint32, error) {
 	now := time.Now().UnixMilli()
 
@@ -26,8 +35,10 @@ func demoSense(iface string) (string, []WlanStation, []WlanChannelStat, []WlanNe
 			LastSeenMs: now,
 		},
 		{
+			// Roams between the two corp-wifi BSSIDs every other sweep, so
+			// demo mode exercises roam/ping-pong detection.
 			MAC:        "aa:bb:cc:dd:ee:02",
-			BSSID:      "a0:f8:49:74:8b:20",
+			BSSID:      demoRoamBSSID(),
 			SSID:       "corp-wifi",
 			RSSIdBm:    int32(-55 - rand.Intn(20)),
 			RSSIAvgdBm: int32(-58 - rand.Intn(20)),

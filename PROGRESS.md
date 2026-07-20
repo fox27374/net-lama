@@ -954,6 +954,50 @@ What has been done so far, in chronological order. Planned work lives in
   one-line summary. Small-sample threshold on the retransmit row lowered
   from 50 to 25 attempts to match the new baseline.
 
+## 2026-07-20 — WLAN roaming analytics, Meraki-style (v0.7.0)
+
+- **Passive detection** (`internal/agent/scheduler.go`): `mergeWlanRetained`
+  now detects, per wlan_passive sweep, any tracked station whose BSSID
+  changed since the last sighting (a roam) or that aged out of the 10-minute
+  retention window without reappearing (a disconnect), and emits
+  `WlanRoamEvent`s (proto field 7 on `WlanPassiveResult`) alongside the
+  regular networks/stations. Detection reuses the existing per-station
+  retention state — no new polling, no extra agent-side storage. Roam timing
+  (`roamTimeMs`) is the gap between last-seen-on-origin and first-seen-on-new
+  — bounded by sweep cadence (seconds), explicitly NOT the sub-100ms
+  radio-handoff precision a synced AP mesh (like Meraki's) can report; this
+  is a single time-sliced sensor radio.
+- **Server aggregation** (`internal/store/wlanroaming.go`,
+  `GET /api/v1/wlan-roaming?tenantId=&siteId=&agentId=&since=`): scans
+  wlan_passive results in the window (reuses `ListResults`, no new table),
+  flattens embedded roam events, and computes: classification by RSSI delta
+  (better/same = good, small drop = suboptimal, big drop = bad — chosen over
+  Meraki's ms-based thresholds since our timing precision doesn't support
+  them honestly), ping-pong clients (A↔B bounce within 5 min), sticky clients
+  (dwelling ≥5 min on a BSSID ≥10dB weaker than a same-SSID sibling — the
+  dwell requirement specifically excludes a client that just bad-roamed there
+  a moment ago, caught by a unit test), and per-event duration (time to the
+  client's next event, or now).
+- **UI**: new "Roaming" card on the Wireless page — 6 summary tiles (bad/
+  suboptimal/good roams, ping-pong/sticky clients, disconnects), a
+  per-client swimlane timeline (plain CSS-positioned segments/dots per AP
+  row, client selectable from a dropdown ranked by activity — native
+  positioning over pulling in ECharts' Gantt machinery), and an event log
+  table (client, origin→new AP, roam time, RSSI before→after, band, start
+  time, duration). Time range selector (24h/7d/30d).
+- **Gotcha hit during e2e** (same class as the earlier `lastSeenMs` bug):
+  protojson serializes the new `detectedAtMs` int64 as a JSON *string* —
+  the store's parsing struct needed `json:"detectedAtMs,string"` or every
+  row silently failed to unmarshal and the endpoint returned all zeros
+  despite correct agent-side detection. Caught by an isolated e2e run (demo
+  mode's synthetic corp-wifi station alternates BSSID every 60s specifically
+  to exercise this path) before shipping; the unit test's hand-written JSON
+  fixtures were fixed to quote the value too, since they weren't realistic
+  enough to have caught the bug themselves.
+- Demo mode: one synthetic station now alternates between the two corp-wifi
+  BSSIDs every 60s, so `NETLAMA_WLAN_DEMO=1` exercises roam/ping-pong
+  detection without real hardware.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

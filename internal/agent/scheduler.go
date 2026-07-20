@@ -366,7 +366,8 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 	if fullSweep {
 		state.LastFullSweep = time.Now()
 	}
-	networks, stations = mergeWlanRetained(state, networks, stations, time.Now())
+	var roams []probe.WlanRoamEvent
+	networks, stations, roams = mergeWlanRetained(state, networks, stations, time.Now())
 
 	// Update interesting channels from the retained sightings, so channels of
 	// recently-faded APs stay watched until retention expires.
@@ -387,7 +388,7 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 		slog.String("test", spec.Name), slog.String("interface", usedIface),
 		slog.Int("stations", len(stations)), slog.Int("networks", len(networks)),
 		slog.Uint64("sweepMs", uint64(sweepMs)))
-	result.Result = wlanPassiveResult(usedIface, stations, channelStats, networks, sweepMs)
+	result.Result = wlanPassiveResult(usedIface, stations, channelStats, networks, roams, sweepMs)
 	sendResult(ctx, results, result)
 }
 
@@ -483,8 +484,8 @@ const wlanRetention = 10 * time.Minute
 
 // mergeWlanRetained folds this sweep's networks/stations into the state's
 // retained maps, drops entries older than wlanRetention, and returns the
-// merged lists that the result should carry.
-func mergeWlanRetained(state *wlanPassiveState, networks []probe.WlanNetwork, stations []probe.WlanStation, now time.Time) ([]probe.WlanNetwork, []probe.WlanStation) {
+// merged lists plus any roam/disconnect events detected along the way.
+func mergeWlanRetained(state *wlanPassiveState, networks []probe.WlanNetwork, stations []probe.WlanStation, now time.Time) ([]probe.WlanNetwork, []probe.WlanStation, []probe.WlanRoamEvent) {
 	nowMs := now.UnixMilli()
 	cutoff := now.Add(-wlanRetention).UnixMilli()
 
@@ -500,9 +501,15 @@ func mergeWlanRetained(state *wlanPassiveState, networks []probe.WlanNetwork, st
 		}
 		state.Networks[n.BSSID] = n
 	}
+
+	var roams []probe.WlanRoamEvent
+	channelOf := func(bssid string) uint32 { return state.Networks[bssid].Channel }
 	for _, s := range stations {
 		if s.LastSeenMs == 0 {
 			s.LastSeenMs = nowMs
+		}
+		if old, ok := state.Stations[s.MAC]; ok && old.BSSID != "" && s.BSSID != "" && old.BSSID != s.BSSID {
+			roams = append(roams, roamEvent(s.MAC, ssidFor(s, state), old, s, channelOf))
 		}
 		state.Stations[s.MAC] = s
 	}
@@ -519,13 +526,49 @@ func mergeWlanRetained(state *wlanPassiveState, networks []probe.WlanNetwork, st
 	for mac, s := range state.Stations {
 		if s.LastSeenMs < cutoff {
 			delete(state.Stations, mac)
+			if s.BSSID != "" {
+				// Disconnect: the station aged out without a new BSSID.
+				roams = append(roams, probe.WlanRoamEvent{
+					ClientMAC: mac, SSID: ssidFor(s, state),
+					FromBSSID: s.BSSID, FromChannel: channelOf(s.BSSID),
+					FromRSSIdBm: s.RSSIdBm, DetectedAtMs: nowMs,
+				})
+			}
 			continue
 		}
 		mergedStas = append(mergedStas, s)
 	}
 	sort.Slice(mergedNets, func(i, j int) bool { return mergedNets[i].BSSID < mergedNets[j].BSSID })
 	sort.Slice(mergedStas, func(i, j int) bool { return mergedStas[i].MAC < mergedStas[j].MAC })
-	return mergedNets, mergedStas
+	sort.Slice(roams, func(i, j int) bool { return roams[i].DetectedAtMs < roams[j].DetectedAtMs })
+	return mergedNets, mergedStas, roams
+}
+
+// ssidFor resolves a station's SSID from its own record, falling back to
+// either BSSID's known network entry.
+func ssidFor(s probe.WlanStation, state *wlanPassiveState) string {
+	if s.SSID != "" {
+		return s.SSID
+	}
+	return state.Networks[s.BSSID].SSID
+}
+
+// roamEvent builds a WlanRoamEvent from a station's old and new sighting.
+// RoamTimeMs is the gap between the last-seen time on the origin BSSID and
+// the first-seen time on the new one — an approximation bounded by sweep
+// cadence, not true radio-handoff timing (see proto comment).
+func roamEvent(mac, ssid string, old, next probe.WlanStation, channelOf func(string) uint32) probe.WlanRoamEvent {
+	roamMs := float64(next.LastSeenMs - old.LastSeenMs)
+	if roamMs < 0 {
+		roamMs = 0
+	}
+	return probe.WlanRoamEvent{
+		ClientMAC: mac, SSID: ssid,
+		FromBSSID: old.BSSID, ToBSSID: next.BSSID,
+		FromChannel: channelOf(old.BSSID), ToChannel: channelOf(next.BSSID),
+		FromRSSIdBm: old.RSSIdBm, ToRSSIdBm: next.RSSIdBm,
+		RoamTimeMs: roamMs, DetectedAtMs: next.LastSeenMs,
+	}
 }
 
 // extractInterestingChannels returns the set of channels where APs or stations were heard
@@ -546,7 +589,7 @@ func extractInterestingChannels(networks []probe.WlanNetwork, stations []probe.W
 }
 
 // wlanPassiveResult converts probe results into the protobuf WlanPassiveResult payload.
-func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats []probe.WlanChannelStat, networks []probe.WlanNetwork, sweepMs uint32) *pb.TestResult_WlanPassive {
+func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats []probe.WlanChannelStat, networks []probe.WlanNetwork, roams []probe.WlanRoamEvent, sweepMs uint32) *pb.TestResult_WlanPassive {
 	pbStations := make([]*pb.WlanStation, 0, len(stations))
 	for _, st := range stations {
 		pbStations = append(pbStations, &pb.WlanStation{
@@ -604,13 +647,30 @@ func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats 
 		})
 	}
 
+	pbRoams := make([]*pb.WlanRoamEvent, 0, len(roams))
+	for _, r := range roams {
+		pbRoams = append(pbRoams, &pb.WlanRoamEvent{
+			ClientMac:    r.ClientMAC,
+			Ssid:         r.SSID,
+			FromBssid:    r.FromBSSID,
+			ToBssid:      r.ToBSSID,
+			FromChannel:  r.FromChannel,
+			ToChannel:    r.ToChannel,
+			FromRssiDbm:  r.FromRSSIdBm,
+			ToRssiDbm:    r.ToRSSIdBm,
+			RoamTimeMs:   r.RoamTimeMs,
+			DetectedAtMs: r.DetectedAtMs,
+		})
+	}
+
 	return &pb.TestResult_WlanPassive{WlanPassive: &pb.WlanPassiveResult{
-		Interface: iface,
-		Stations:  pbStations,
-		Channels:  pbChannels,
-		Networks:  pbNetworks,
-		SweepMs:   sweepMs,
-		Demo:      probe.DemoMode(),
+		Interface:  iface,
+		Stations:   pbStations,
+		Channels:   pbChannels,
+		Networks:   pbNetworks,
+		SweepMs:    sweepMs,
+		Demo:       probe.DemoMode(),
+		RoamEvents: pbRoams,
 	}}
 }
 

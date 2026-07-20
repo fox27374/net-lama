@@ -19,25 +19,42 @@ type WlanSenseDemo struct {
 }
 
 type WlanStation struct {
-	MAC       string  // station MAC address
-	BSSID     string  // access point MAC, empty for probe-only
-	SSID      string  // resolved network name when known
-	RSSIdBm   int32   // last observed signal strength
-	RSSIAvgdBm int32  // average RSSI over the sweep
-	RateMbps  float64 // last observed data rate (0 = unknown)
-	MCS       int32   // -1 = unknown/legacy
-	Frames    uint32  // frame count
-	ProbeOnly bool    // true if only seen probing
-	LastSeenMs int64  // unix milliseconds
+	MAC        string  // station MAC address
+	BSSID      string  // access point MAC, empty for probe-only
+	SSID       string  // resolved network name when known
+	RSSIdBm    int32   // last observed signal strength
+	RSSIAvgdBm int32   // average RSSI over the sweep
+	RateMbps   float64 // last observed data rate (0 = unknown)
+	MCS        int32   // -1 = unknown/legacy
+	Frames     uint32  // frame count
+	ProbeOnly  bool    // true if only seen probing
+	LastSeenMs int64   // unix milliseconds
+}
+
+// WlanRoamEvent is a client station's BSSID transition (roam) or its
+// disappearance (disconnect, ToBSSID empty), detected by the agent from
+// consecutive sweeps. RoamTimeMs is bounded by sweep cadence, not
+// sub-100ms radio-handoff precision — see proto WlanRoamEvent comment.
+type WlanRoamEvent struct {
+	ClientMAC    string
+	SSID         string
+	FromBSSID    string
+	ToBSSID      string
+	FromChannel  uint32
+	ToChannel    uint32
+	FromRSSIdBm  int32
+	ToRSSIdBm    int32
+	RoamTimeMs   float64
+	DetectedAtMs int64
 }
 
 type WlanChannelStat struct {
-	Channel       uint32  // channel number (1-177)
-	FreqMHz       uint32  // center frequency
-	ActiveMs      uint64  // time the channel was active
-	BusyMs        uint64  // time the channel was busy
+	Channel        uint32  // channel number (1-177)
+	FreqMHz        uint32  // center frequency
+	ActiveMs       uint64  // time the channel was active
+	BusyMs         uint64  // time the channel was busy
 	UtilizationPct float64 // busy/active*100, 0 if unavailable
-	Frames        uint32  // frame count on this channel
+	Frames         uint32  // frame count on this channel
 }
 
 // WlanNetwork is an access point heard from its beacons/probe responses.
@@ -421,19 +438,19 @@ type beaconInfo struct {
 	Security  string // derived from RSN/WPA elements + privacy capability bit
 	Standards string // PHY generations from HT/VHT/HE/EHT elements, "n/ac/ax"
 
-	WidthMHz           uint32  // 20/40 from HT operation, 80/160 from VHT operation
-	BeaconIntervalTU   uint32  // fixed-body beacon interval
-	Country            string  // Country IE
-	LoadPresent        bool    // BSS Load IE seen
+	WidthMHz           uint32 // 20/40 from HT operation, 80/160 from VHT operation
+	BeaconIntervalTU   uint32 // fixed-body beacon interval
+	Country            string // Country IE
+	LoadPresent        bool   // BSS Load IE seen
 	LoadStations       uint32
 	LoadChannelUtilPct float64
-	SecurityDetail     string // AKM + pairwise cipher, e.g. "PSK+SAE · CCMP"
-	Roaming            string // "k/r/v" from RM/Mobility-Domain/BSS-Transition
-	MFP                string // "", "capable", "required" from RSN capabilities
-	GroupCipher        string // RSN group cipher name
-	DTIMPeriod         uint32 // from the TIM element
-	WPS                bool   // WPS vendor element present
-	Streams            uint32 // spatial streams from HT/VHT MCS maps
+	SecurityDetail     string  // AKM + pairwise cipher, e.g. "PSK+SAE · CCMP"
+	Roaming            string  // "k/r/v" from RM/Mobility-Domain/BSS-Transition
+	MFP                string  // "", "capable", "required" from RSN capabilities
+	GroupCipher        string  // RSN group cipher name
+	DTIMPeriod         uint32  // from the TIM element
+	WPS                bool    // WPS vendor element present
+	Streams            uint32  // spatial streams from HT/VHT MCS maps
 	MaxRateMbps        float64 // estimated max PHY rate
 }
 

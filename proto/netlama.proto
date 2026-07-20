@@ -291,6 +291,26 @@ message WlanPassiveResult {
   repeated WlanChannelStat channels = 4;
   uint32 sweep_ms = 5;              // total sweep duration
   repeated WlanNetwork networks = 6; // APs/SSIDs heard from beacons
+  repeated WlanRoamEvent roam_events = 7; // client BSSID transitions/disconnects detected this sweep
+}
+
+// WlanRoamEvent is a client station's BSSID transition (roam) or its
+// disappearance (disconnect), detected by comparing this sweep against the
+// agent's retained per-station state. roam_time_ms is bounded by the sweep
+// cadence (seconds, not the sub-100ms precision a synced AP mesh reports) —
+// it's the gap between the station's last-seen time on the origin BSSID and
+// its first-seen time on the new one, not a true radio-handoff timing.
+message WlanRoamEvent {
+  string client_mac = 1;
+  string ssid = 2;          // resolved from either BSSID's beacon, if known
+  string from_bssid = 3;
+  string to_bssid = 4;      // empty = disconnect (from_bssid aged out, no new AP seen)
+  uint32 from_channel = 5;
+  uint32 to_channel = 6;
+  int32 from_rssi_dbm = 7;
+  int32 to_rssi_dbm = 8;
+  double roam_time_ms = 9;  // approximate; see message comment
+  int64 detected_at_ms = 10;
 }
 
 message WlanNetwork {

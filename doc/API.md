@@ -428,6 +428,35 @@ locally-administered (randomized) MACs are omitted from the response:
 {"a0:f8:49:74:8b:20": "Cisco Systems, Inc"}
 ```
 
+### `GET /api/v1/wlan-roaming`
+
+Query: `tenantId` (required for admins), optionally `siteId`, `agentId`,
+`since` (RFC3339, default: last 7 days). Aggregates client BSSID
+transitions/disconnects detected during `wlan_passive` sweeps in the window:
+
+```json
+{
+  "goodRoams": 12, "suboptimalRoams": 2, "badRoams": 1,
+  "pingPongClients": 0, "stickyClients": 1, "disconnects": 3,
+  "events": [{
+    "clientMac": "...", "ssid": "corp-wifi",
+    "fromBssid": "...", "toBssid": "...", "fromChannel": 6, "toChannel": 36,
+    "fromRssiDbm": -64, "toRssiDbm": -71, "roamTimeMs": 60000,
+    "detectedAtMs": 1784519926421, "classification": "good",
+    "durationMs": 64775
+  }]
+}
+```
+
+`toBssid` empty means a disconnect (the client aged out of the sensor's
+10-minute retention without reappearing). `roamTimeMs` is the gap between
+last-seen-on-origin and first-seen-on-new-BSSID — bounded by the sensor's
+sweep cadence (seconds), not sub-100ms radio-handoff timing. `classification`
+is `good`/`suboptimal`/`bad` (by RSSI delta), `disconnect`, or omitted when
+signal data is unavailable. `durationMs` is how long the client stayed on
+`toBssid` until its next event (or now, if still current). `events` is
+newest first.
+
 ---
 
 ## Overview
