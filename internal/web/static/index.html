@@ -238,58 +238,6 @@
         <p class="muted">Wireless networks from monitor-mode sweeps will appear here.</p>
       </div>
       <div id="wl-body" class="hidden">
-        <div class="card" id="wl-roaming">
-          <div class="section-head">
-            <h3>Roaming</h3>
-            <select id="wl-roam-range" class="compact">
-              <option value="1">Last 24 hours</option>
-              <option value="7" selected>Last week</option>
-              <option value="30">Last 30 days</option>
-            </select>
-            <span class="spacer"></span>
-            <span class="muted" id="wl-roam-meta"></span>
-          </div>
-          <div class="stat-row wl-roam-tiles">
-            <div class="stat-tile"><div class="stat-label">Bad roams</div><div class="stat-value" id="wl-roam-bad">–</div></div>
-            <div class="stat-tile"><div class="stat-label">Ping-pong clients</div><div class="stat-value" id="wl-roam-pingpong">–</div></div>
-            <div class="stat-tile"><div class="stat-label">Sticky clients</div><div class="stat-value" id="wl-roam-sticky">–</div></div>
-            <div class="stat-tile"><div class="stat-label">Suboptimal roams</div><div class="stat-value" id="wl-roam-suboptimal">–</div></div>
-            <div class="stat-tile"><div class="stat-label">Good roams</div><div class="stat-value" id="wl-roam-good">–</div></div>
-            <div class="stat-tile"><div class="stat-label">Client disconnects</div><div class="stat-value" id="wl-roam-disconnects">–</div></div>
-          </div>
-          <div id="wl-roam-timeline-wrap" class="hidden">
-            <div class="section-head">
-              <h4>Roaming status</h4>
-              <select id="wl-roam-client" class="compact"></select>
-            </div>
-            <div id="wl-roam-timeline"></div>
-          </div>
-          <h4 class="wl-roam-log-head">Roaming event log</h4>
-          <table id="wl-roam-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Client</th>
-                <th>Origin AP → New AP</th>
-                <th class="num">Roam time (ms)</th>
-                <th>RSSI (dBm)</th>
-                <th>Band</th>
-                <th>Start time</th>
-                <th>Duration</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-          <p id="wl-roam-empty" class="empty hidden">No roaming activity in this window.</p>
-        </div>
-        <div class="card hidden" id="wl-active">
-          <div class="section-head">
-            <h3>Active connection test</h3>
-            <span class="muted" id="wl-active-meta"></span>
-          </div>
-          <div class="wl-detail-grid" id="wl-active-summary"></div>
-          <div id="wl-active-waterfall"></div>
-        </div>
         <div class="card table-card">
           <div class="section-head">
             <h3>Nearby networks</h3>
@@ -356,6 +304,58 @@
             <tbody></tbody>
           </table>
           <p id="wl-stations-empty" class="empty hidden">No client stations seen in the last sweep.</p>
+        </div>
+        <div class="card hidden" id="wl-active">
+          <div class="section-head">
+            <h3>Active connection</h3>
+            <span class="muted" id="wl-active-meta"></span>
+          </div>
+          <div class="wl-detail-grid" id="wl-active-summary"></div>
+          <div id="wl-active-waterfall"></div>
+        </div>
+        <div class="card" id="wl-roaming">
+          <div class="section-head">
+            <h3>Roaming</h3>
+            <select id="wl-roam-range" class="compact">
+              <option value="1">Last 24 hours</option>
+              <option value="7" selected>Last week</option>
+              <option value="30">Last 30 days</option>
+            </select>
+            <span class="spacer"></span>
+            <span class="muted" id="wl-roam-meta"></span>
+          </div>
+          <div class="stat-row wl-roam-tiles">
+            <div class="stat-tile"><div class="stat-label">Bad roams</div><div class="stat-value" id="wl-roam-bad">–</div></div>
+            <div class="stat-tile"><div class="stat-label">Ping-pong clients</div><div class="stat-value" id="wl-roam-pingpong">–</div></div>
+            <div class="stat-tile"><div class="stat-label">Sticky clients</div><div class="stat-value" id="wl-roam-sticky">–</div></div>
+            <div class="stat-tile"><div class="stat-label">Suboptimal roams</div><div class="stat-value" id="wl-roam-suboptimal">–</div></div>
+            <div class="stat-tile"><div class="stat-label">Good roams</div><div class="stat-value" id="wl-roam-good">–</div></div>
+            <div class="stat-tile"><div class="stat-label">Client disconnects</div><div class="stat-value" id="wl-roam-disconnects">–</div></div>
+          </div>
+          <div id="wl-roam-timeline-wrap" class="hidden">
+            <div class="section-head">
+              <h4>Roaming status</h4>
+              <select id="wl-roam-client" class="compact"></select>
+            </div>
+            <div id="wl-roam-timeline"></div>
+          </div>
+          <h4 class="wl-roam-log-head">Roaming event log</h4>
+          <table id="wl-roam-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Client</th>
+                <th>Origin AP → New AP</th>
+                <th class="num">Roam time (ms)</th>
+                <th>RSSI (dBm)</th>
+                <th>Band</th>
+                <th>Start time</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p id="wl-roam-empty" class="empty hidden">No roaming activity in this window.</p>
         </div>
       </div>
     </section>
