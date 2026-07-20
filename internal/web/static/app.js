@@ -361,9 +361,11 @@ async function renderDashboardWireless(siteId) {
 
   try {
     // Fetch latest wlan_passive results
-    let resultsUrl = "/api/v1/results?testType=wlan_passive&limit=100" + tenantParam();
-    if (siteId) resultsUrl += (tenantParam() ? "&" : "?") + `siteId=${siteId}`;
-    const results = await api("GET", resultsUrl);
+    const params = new URLSearchParams({ type: "wlan_passive", limit: "100" });
+    if (siteId) params.set("siteId", siteId);
+    const tid = tenantParam("");
+    if (tid) params.set("tenantId", tid.split("=")[1]);
+    const results = await api("GET", "/api/v1/results?" + params.toString());
 
     // Group by agent, keep latest per agent
     const latestByAgent = {};
