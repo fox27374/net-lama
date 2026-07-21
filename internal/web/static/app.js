@@ -1983,6 +1983,8 @@ window.addEventListener("resize", () => {
 // --- Roaming (Meraki-style analytics) on the Wireless page ---
 let wlRoamSummary = null; // last fetched summary, for the client dropdown + timeline
 let wlRoamSelectedClient = null;
+let wlRoamPage = 0;
+const WL_ROAM_PER_PAGE = 10;
 
 // wlRoamBand approximates band from a channel number — roam events carry
 // channel, not frequency, so 6 GHz (which shares numbering with 5 GHz in
@@ -2048,9 +2050,23 @@ async function renderWirelessRoaming(agent) {
     .join("");
   renderWlRoamTimeline();
 
-  // Event log table
+  wlRoamPage = 0;
+  renderWlRoamLog();
+}
+
+// renderWlRoamLog paints one page of the roaming event-log table plus its
+// pager, reading from the already-fetched wlRoamSummary.events.
+function renderWlRoamLog() {
+  const events = (wlRoamSummary && wlRoamSummary.events) || [];
+  const pager = $("#wl-roam-pager");
   const tbody = $("#wl-roam-table tbody");
-  tbody.innerHTML = events
+
+  const pages = Math.ceil(events.length / WL_ROAM_PER_PAGE);
+  if (wlRoamPage > pages - 1) wlRoamPage = Math.max(0, pages - 1);
+  const start = wlRoamPage * WL_ROAM_PER_PAGE;
+  const slice = events.slice(start, start + WL_ROAM_PER_PAGE);
+
+  tbody.innerHTML = slice
     .map((e) => {
       const cls = e.classification || "";
       const badge = cls ? `<span class="wl-roam-badge ${cls}" title="${cls}"></span>` : "";
@@ -2072,6 +2088,23 @@ async function renderWirelessRoaming(agent) {
       </tr>`;
     })
     .join("");
+
+  pager.innerHTML = "";
+  if (pages <= 1) return;
+  const prev = document.createElement("button");
+  prev.className = "ghost";
+  prev.textContent = "‹ Prev";
+  prev.disabled = wlRoamPage === 0;
+  prev.addEventListener("click", () => { wlRoamPage--; renderWlRoamLog(); });
+  const next = document.createElement("button");
+  next.className = "ghost";
+  next.textContent = "Next ›";
+  next.disabled = wlRoamPage >= pages - 1;
+  next.addEventListener("click", () => { wlRoamPage++; renderWlRoamLog(); });
+  const info = document.createElement("span");
+  info.className = "muted";
+  info.textContent = `Page ${wlRoamPage + 1} of ${pages} · ${events.length} events`;
+  pager.append(prev, info, next);
 }
 
 // renderWlRoamTimeline draws a per-AP swimlane for the selected client:
