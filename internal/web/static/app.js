@@ -1524,6 +1524,18 @@ function buildSeries(results) {
       unit = "Mbps";
       add("Download", r.time, p.speedtest.downloadMbps);
       add("Upload", r.time, p.speedtest.uploadMbps);
+    } else if (type === "perfmon" && p.perfmon) {
+      unit = "Mbps";
+      if (p.perfmon.success) {
+        add("Download", r.time, p.perfmon.downloadMbps);
+        add("Upload", r.time, p.perfmon.uploadMbps);
+      }
+    } else if (type === "wlan_active" && p.wlanActive) {
+      if (p.wlanActive.success) {
+        add("Associate", r.time, p.wlanActive.associateMs);
+        add("Authenticate", r.time, p.wlanActive.authenticateMs);
+        add("DHCP", r.time, p.wlanActive.dhcpMs);
+      }
     }
   }
 
