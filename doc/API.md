@@ -378,6 +378,63 @@ Response: `{"triggered": true}`.
 Deletes the agent (its token stops working immediately, and it will be
 rejected on its next stream reconnect). `204`.
 
+### Enrollment (unclaimed agents)
+
+A device can also self-register with a shared per-tenant enrollment token
+instead of a pre-issued per-agent token — it connects, is recorded as
+"unclaimed" (no site, no name yet), and its stream is rejected with
+`FailedPrecondition` until an admin claims it; the agent's own
+reconnect/backoff loop retries automatically in the meantime (this is only
+available when the server is not running with mTLS — see README).
+
+### `GET /api/v1/enroll-token`
+
+Query: `tenantId` (required for admins; tenant users are forced to their
+own). Returns `{"token": "nle_..."}`, or `{"token": ""}` if none has been
+generated (or it was revoked).
+
+### `POST /api/v1/enroll-token`
+
+Body: `{"tenantId": "..."}` (admins only; tenant users omit it). Generates
+a new enrollment token, replacing any previous one — devices still using
+the old code stop being able to enroll (already-claimed agents are
+unaffected, they use their own per-agent token). Response:
+`{"token": "nle_..."}`.
+
+### `DELETE /api/v1/enroll-token`
+
+Query: `tenantId` (as above). Revokes the tenant's enrollment token. `200`,
+`{"revoked": true}`.
+
+### `GET /api/v1/agents/unclaimed`
+
+Query: `tenantId` (admins: empty = all tenants; tenant users: forced to
+their own). Returns pending enrollments:
+
+```json
+[{
+  "id": "...", "tenantId": "...", "clientId": "pi-01",
+  "version": "v0.11.2", "capabilities": ["ping", "dns", "http"],
+  "networkInterfaces": [{"name": "eth0", "wireless": false, "ipAddress": "10.0.1.9"}],
+  "firstSeen": "...", "lastSeen": "..."
+}]
+```
+
+### `POST /api/v1/agents/unclaimed/{id}/claim`
+
+Body: `{"name": "...", "siteId": "..."}` (both required; the site must
+belong to the same tenant as the pending device). Creates a real agent
+(same as `POST /api/v1/agents`, with a fresh token) carrying over the
+capabilities/interfaces/version already reported while unclaimed, and
+removes the pending entry. Response is a normal agent view with `token`
+populated — same shape as `POST /api/v1/agents`.
+
+### `DELETE /api/v1/agents/unclaimed/{id}`
+
+Dismisses a pending enrollment without claiming it. Not a hard block — if
+the device is still retrying, it reappears on its next reconnect attempt.
+`200`, `{"deleted": true}`.
+
 ---
 
 ## Results

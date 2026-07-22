@@ -199,6 +199,34 @@ func (s *Store) migrate() error {
 	if err := s.addColumnIfMissing("logs", "scope", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	// Per-tenant enrollment token: lets a not-yet-claimed device self-register
+	// (see unclaimed_agents below) instead of requiring a pre-issued per-agent
+	// token before it can connect at all.
+	if err := s.addColumnIfMissing("tenants", "enroll_token", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+
+	// Unclaimed agents: devices that registered with a tenant's enrollment
+	// token instead of a real per-agent one. They have no site/name yet and
+	// sit here until an admin claims them (internal/api/unclaimed.go), which
+	// creates a real `agents` row and deletes this one. Keyed by
+	// (tenant_id, client_id) so a reconnecting device updates the same row
+	// instead of piling up duplicates.
+	if _, err := s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS unclaimed_agents (
+			id                 TEXT PRIMARY KEY,
+			tenant_id          TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			client_id          TEXT NOT NULL,
+			version            TEXT NOT NULL DEFAULT '',
+			capabilities       TEXT,
+			network_interfaces TEXT,
+			first_seen         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_seen          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (tenant_id, client_id)
+		)
+	`); err != nil {
+		return err
+	}
 
 	// Alert targets table
 	if _, err := s.db.Exec(`
@@ -358,4 +386,12 @@ func NewToken() string {
 	b := make([]byte, 32)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// NewEnrollToken returns a random per-tenant enrollment token, prefixed like
+// API keys' "nlk_" so it's visually distinguishable from a per-agent token.
+func NewEnrollToken() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return "nle_" + hex.EncodeToString(b)
 }

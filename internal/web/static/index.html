@@ -155,7 +155,15 @@
     <section id="section-agents" class="hidden">
       <div class="section-head">
         <h2>Agents</h2>
+        <button id="btn-enroll-token" class="ghost">Enrollment code</button>
         <button id="btn-new-agent" class="primary">New agent</button>
+      </div>
+      <div class="card table-card hidden" id="unclaimed-card">
+        <div class="section-head"><h3>Pending enrollment</h3></div>
+        <table id="unclaimed-table">
+          <thead><tr><th>Client ID</th><th>Version</th><th>Capabilities</th><th>First seen</th><th>Last seen</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
       <div class="card table-card">
         <table id="agents-table">
@@ -563,7 +571,7 @@
 </dialog>
 
 <dialog id="dlg-token">
-  <h3>Agent created</h3>
+  <h3 id="token-dlg-title">Agent created</h3>
   <p>Start the agent with this token. It is shown <strong>only once</strong>:</p>
   <pre id="token-value" class="token"></pre>
   <pre id="token-cmd"></pre>
@@ -571,6 +579,40 @@
     <button class="ghost" id="btn-copy-token">Copy token</button>
     <button class="primary" onclick="this.closest('dialog').close()">Done</button>
   </div>
+</dialog>
+
+<dialog id="dlg-enroll-token">
+  <h3>Enrollment code</h3>
+  <p class="muted">Any device started with this code self-enrolls and waits in
+    "Pending enrollment" below until you assign it to a site — no per-agent
+    token needed up front. Regenerating invalidates the old code for any
+    device that hasn't been claimed yet.</p>
+  <p id="et-none" class="empty hidden">No enrollment code generated yet.</p>
+  <div id="et-body" class="hidden">
+    <pre id="et-value" class="token"></pre>
+    <pre id="et-cmd"></pre>
+  </div>
+  <p class="error hidden" id="et-error"></p>
+  <div class="row end">
+    <button class="ghost hidden" id="btn-copy-enroll">Copy code</button>
+    <button class="danger hidden" id="btn-revoke-enroll">Revoke</button>
+    <button class="ghost" id="btn-generate-enroll">Generate / Regenerate</button>
+    <button class="primary" onclick="this.closest('dialog').close()">Done</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-claim-agent">
+  <form id="form-claim-agent">
+    <h3>Claim agent</h3>
+    <p class="muted">Client ID: <strong id="ca-client-id" class="mono"></strong></p>
+    <label>Name <input type="text" id="ca-name" required></label>
+    <label>Site <select id="ca-site"></select></label>
+    <p class="error hidden" id="ca-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Claim</button>
+    </div>
+  </form>
 </dialog>
 
 <dialog id="dlg-test">

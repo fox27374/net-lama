@@ -576,7 +576,7 @@ function humanUptime(sec) {
 }
 
 async function loadAgents() {
-  await fetchAgents();
+  await Promise.all([fetchAgents(), loadUnclaimedAgents()]);
   const tbody = $("#agents-table tbody");
   tbody.innerHTML = "";
   $("#agents-empty").classList.toggle("hidden", agents.length > 0);
@@ -631,6 +631,24 @@ $("#btn-new-agent").addEventListener("click", async () => {
   $("#dlg-new-agent").showModal();
 });
 
+// agentRunCommand is the ready-to-paste bootstrap command for a token —
+// either a real per-agent one (create/claim flows) or a shared enrollment
+// code (any device started with it self-enrolls).
+function agentRunCommand(token) {
+  return `podman run -d --init --name netlama-agent \\\n` +
+    `  --sysctl net.ipv4.ping_group_range="0 65535" \\\n` +
+    `  -e NETLAMA_SERVER=<server>:50051 \\\n` +
+    `  -e NETLAMA_TOKEN=${token} \\\n` +
+    `  netlama-agent`;
+}
+
+function showTokenDialog(title, token) {
+  $("#token-dlg-title").textContent = title;
+  $("#token-value").textContent = token;
+  $("#token-cmd").textContent = agentRunCommand(token);
+  $("#dlg-token").showModal();
+}
+
 $("#form-new-agent").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
@@ -639,14 +657,7 @@ $("#form-new-agent").addEventListener("submit", async (e) => {
       siteId: $("#na-site").value,
     });
     $("#dlg-new-agent").close();
-    $("#token-value").textContent = agent.token;
-    $("#token-cmd").textContent =
-      `podman run -d --init --name netlama-agent \\\n` +
-      `  --sysctl net.ipv4.ping_group_range="0 65535" \\\n` +
-      `  -e NETLAMA_SERVER=<server>:50051 \\\n` +
-      `  -e NETLAMA_TOKEN=${agent.token} \\\n` +
-      `  netlama-agent`;
-    $("#dlg-token").showModal();
+    showTokenDialog("Agent created", agent.token);
     loadAgents();
   } catch (err) {
     dialogError("#na-error", err.message);
@@ -718,6 +729,117 @@ $("#btn-copy-token").addEventListener("click", () => {
   navigator.clipboard.writeText($("#token-value").textContent);
   $("#btn-copy-token").textContent = "Copied!";
   setTimeout(() => { $("#btn-copy-token").textContent = "Copy token"; }, 1500);
+});
+
+// --- Unclaimed agents (self-enrollment via a per-tenant code) ---
+
+async function loadUnclaimedAgents() {
+  const unclaimed = await api("GET", "/api/v1/agents/unclaimed" + tenantParam());
+  const tbody = $("#unclaimed-table tbody");
+  tbody.innerHTML = "";
+  $("#unclaimed-card").classList.toggle("hidden", unclaimed.length === 0);
+  for (const u of unclaimed) {
+    const caps = (u.capabilities || []).map((c) => `<span class="chip type-${esc(c)}">${esc(c)}</span>`).join(" ");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${esc(u.clientId)}</strong></td>
+      <td class="mono muted">${esc(u.version || "—")}</td>
+      <td>${caps}</td>
+      <td class="muted">${new Date(u.firstSeen).toLocaleString()}</td>
+      <td class="muted">${new Date(u.lastSeen).toLocaleString()}</td>
+      <td style="text-align:right">
+        <button class="primary" data-claim>Claim</button>
+        <button class="danger" data-dismiss>Dismiss</button>
+      </td>`;
+    tr.querySelector("[data-claim]").addEventListener("click", () => openClaimAgentDialog(u));
+    tr.querySelector("[data-dismiss]").addEventListener("click", async () => {
+      if (!confirm(`Dismiss pending device "${u.clientId}"? It reappears if it's still trying to connect.`)) return;
+      await api("DELETE", `/api/v1/agents/unclaimed/${u.id}`);
+      loadUnclaimedAgents();
+    });
+    tbody.appendChild(tr);
+  }
+}
+
+let claimingAgent = null;
+
+async function openClaimAgentDialog(u) {
+  claimingAgent = u;
+  await fetchSites();
+  if (!sites.length) { alert("Create a site first (Sites page)."); return; }
+  $("#ca-client-id").textContent = u.clientId;
+  $("#ca-name").value = u.clientId;
+  $("#ca-site").innerHTML = sites.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
+  dialogError("#ca-error", "");
+  $("#dlg-claim-agent").showModal();
+}
+
+$("#form-claim-agent").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const agent = await api("POST", `/api/v1/agents/unclaimed/${claimingAgent.id}/claim`, {
+      name: $("#ca-name").value.trim(),
+      siteId: $("#ca-site").value,
+    });
+    $("#dlg-claim-agent").close();
+    showTokenDialog("Agent claimed", agent.token);
+    loadAgents();
+  } catch (err) {
+    dialogError("#ca-error", err.message);
+  }
+});
+
+function setEnrollTokenView(token) {
+  const has = !!token;
+  $("#et-none").classList.toggle("hidden", has);
+  $("#et-body").classList.toggle("hidden", !has);
+  $("#btn-copy-enroll").classList.toggle("hidden", !has);
+  $("#btn-revoke-enroll").classList.toggle("hidden", !has);
+  if (has) {
+    $("#et-value").textContent = token;
+    $("#et-cmd").textContent = agentRunCommand(token);
+  }
+}
+
+$("#btn-enroll-token").addEventListener("click", async () => {
+  dialogError("#et-error", "");
+  try {
+    const { token } = await api("GET", "/api/v1/enroll-token" + tenantParam());
+    setEnrollTokenView(token);
+  } catch (err) {
+    setEnrollTokenView("");
+    dialogError("#et-error", err.message);
+  }
+  $("#dlg-enroll-token").showModal();
+});
+
+$("#btn-generate-enroll").addEventListener("click", async () => {
+  const body = {};
+  const tid = tenantParam("");
+  if (tid) body.tenantId = tid.split("=")[1];
+  try {
+    const { token } = await api("POST", "/api/v1/enroll-token", body);
+    setEnrollTokenView(token);
+    dialogError("#et-error", "");
+  } catch (err) {
+    dialogError("#et-error", err.message);
+  }
+});
+
+$("#btn-revoke-enroll").addEventListener("click", async () => {
+  if (!confirm("Revoke the enrollment code? Devices that haven't been claimed yet won't be able to enroll until you generate a new one.")) return;
+  try {
+    await api("DELETE", "/api/v1/enroll-token" + tenantParam());
+    setEnrollTokenView("");
+  } catch (err) {
+    dialogError("#et-error", err.message);
+  }
+});
+
+$("#btn-copy-enroll").addEventListener("click", () => {
+  navigator.clipboard.writeText($("#et-value").textContent);
+  $("#btn-copy-enroll").textContent = "Copied!";
+  setTimeout(() => { $("#btn-copy-enroll").textContent = "Copy code"; }, 1500);
 });
 
 // --- Tests ---

@@ -63,6 +63,12 @@ NETLAMA_ADMIN_PASSWORD=changeme ./bin/netlama-server -db netlama.db
 On first start with an empty database the server creates an `admin` user; the password
 comes from `NETLAMA_ADMIN_PASSWORD` or is generated and printed in the log.
 
+Alternatively, generate a tenant enrollment code (Agents page → "Enrollment code")
+and start any number of agents with it instead of a per-agent token — they show up
+under "Pending enrollment" until you claim one into a site, at which point it gets
+its own permanent token like any manually created agent. Not available when
+`NETLAMA_MTLS` is enabled (see [mTLS](#mtls-per-agent-client-certificates)).
+
 Server flags/env: `-grpc`/`NETLAMA_GRPC_ADDR` (default `:50051`), `-http`/`NETLAMA_HTTP_ADDR`
 (default `:9090`), `-db`/`NETLAMA_DB`, `-log-history`/`NETLAMA_LOG_HISTORY` (default `1000`,
 see [Logs](#logs) below). Email alert notifications use `NETLAMA_SMTP_HOST` (required to enable
@@ -380,6 +386,10 @@ docker compose run --rm server -issue-agent-cert branch1
 Agent (env): `NETLAMA_TLS_CERT` + `NETLAMA_TLS_KEY` point at the issued pair
 (mount it into the container). An agent without a matching client certificate
 cannot connect.
+
+Unclaimed-agent self-enrollment (see [Quick start](#quick-start)) needs no
+client cert, so it's only offered when mTLS is off — with mTLS on, every
+agent needs a pre-issued token and a pre-issued client certificate, full stop.
 
 ACME/Let's Encrypt automation is on the roadmap.
 

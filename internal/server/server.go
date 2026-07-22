@@ -44,7 +44,7 @@ type Server struct {
 	goodCount   map[string]int // consecutive non-breach samples (for hysteresis), keyed by rule|agent|subject
 
 	reconnectMu    sync.Mutex
-	reconnectCount map[string]int // count of "connected" transitions in 15m window, keyed by agent ID
+	reconnectCount map[string]int         // count of "connected" transitions in 15m window, keyed by agent ID
 	reconnectTimes map[string][]time.Time // timestamps of recent reconnects per agent
 }
 
@@ -161,6 +161,35 @@ func perfmonReflectorConfigFor(agent *store.Agent) *pb.PerfmonReflectorConfig {
 	}
 }
 
+// marshalNetworkInterfaces converts a Register's reported interfaces to the
+// JSON shape stored on an agent (and, for a not-yet-claimed device, on its
+// unclaimed_agents row). Returns nil if ifaces is empty, so callers can tell
+// "nothing reported" from "reported an empty list".
+func marshalNetworkInterfaces(ifaces []*pb.NetworkInterface) json.RawMessage {
+	if ifaces == nil {
+		return nil
+	}
+	type ni struct {
+		Name            string `json:"name"`
+		Wireless        bool   `json:"wireless"`
+		SupportsMonitor bool   `json:"supportsMonitor"`
+		SpeedMbps       uint32 `json:"speedMbps"`
+		IPAddress       string `json:"ipAddress"`
+	}
+	list := make([]ni, 0, len(ifaces))
+	for _, w := range ifaces {
+		list = append(list, ni{
+			Name: w.Name, Wireless: w.Wireless, SupportsMonitor: w.SupportsMonitor,
+			SpeedMbps: w.SpeedMbps, IPAddress: w.IpAddress,
+		})
+	}
+	data, err := json.Marshal(list)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
 // legacyCapabilities is the capability list hardcoded by pre-detection
 // agent binaries. Those agents claimed this fixed list regardless of what
 // they could actually run (note: no traceroute, even on sensor images).
@@ -199,6 +228,15 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 
 	agent, err := s.Store.GetAgentByToken(register.Token)
 	if err != nil {
+		// Not a claimed agent's token — maybe a tenant enrollment token
+		// instead. Self-enrollment needs no client cert, so it's only
+		// offered when mTLS is off (mTLS rejects an uncertified client at
+		// the TLS handshake, before this code ever runs anyway).
+		if err == store.ErrNotFound && !s.MTLS {
+			if tenant, tErr := s.Store.GetTenantByEnrollToken(register.Token); tErr == nil {
+				return s.handleUnclaimedRegister(tenant, register)
+			}
+		}
 		s.Logger.Warn("Agent with invalid token rejected", slog.String("clientId", register.ClientId))
 		return status.Error(codes.Unauthenticated, "invalid agent token")
 	}
@@ -217,27 +255,11 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 
 	// Record the network interfaces the agent reported, so the UI can
 	// offer them for selection (management/WLAN sensor/perfmon reflector).
-	if ifaces := register.NetworkInterfaces; ifaces != nil {
-		type ni struct {
-			Name            string `json:"name"`
-			Wireless        bool   `json:"wireless"`
-			SupportsMonitor bool   `json:"supportsMonitor"`
-			SpeedMbps       uint32 `json:"speedMbps"`
-			IPAddress       string `json:"ipAddress"`
+	if data := marshalNetworkInterfaces(register.NetworkInterfaces); data != nil {
+		if err := s.Store.SetAgentNetworkInterfaces(agent.ID, data); err != nil {
+			s.Logger.Warn("Storing agent interfaces failed", slog.Any("error", err))
 		}
-		list := make([]ni, 0, len(ifaces))
-		for _, w := range ifaces {
-			list = append(list, ni{
-				Name: w.Name, Wireless: w.Wireless, SupportsMonitor: w.SupportsMonitor,
-				SpeedMbps: w.SpeedMbps, IPAddress: w.IpAddress,
-			})
-		}
-		if data, err := json.Marshal(list); err == nil {
-			if err := s.Store.SetAgentNetworkInterfaces(agent.ID, data); err != nil {
-				s.Logger.Warn("Storing agent interfaces failed", slog.Any("error", err))
-			}
-			agent.NetworkInterfaces = data
-		}
+		agent.NetworkInterfaces = data
 	}
 
 	// Record the capabilities the agent reported. The hardcoded list sent
@@ -451,7 +473,6 @@ func (s *Server) RunTest(agentID, testID string) bool {
 	}
 }
 
-
 // AgentConnected reports whether an agent currently has an open stream.
 func (s *Server) AgentConnected(agentID string) bool {
 	s.mu.Lock()
@@ -588,27 +609,27 @@ func (s *Server) handleAgentStats(logger *slog.Logger, conn *connectedAgent, sta
 	// marshaling the proto struct directly would produce snake_case keys
 	// and a {seconds,nanos} timestamp object.
 	snapshot := struct {
-		Time              string  `json:"time"`
-		CPUPercent        float64 `json:"cpuPercent"`
-		MemUsedBytes      uint64  `json:"memUsedBytes"`
-		MemTotalBytes     uint64  `json:"memTotalBytes"`
-		DiskUsedBytes     uint64  `json:"diskUsedBytes"`
-		DiskTotalBytes    uint64  `json:"diskTotalBytes"`
-		AgentCpuPercent   float64 `json:"agentCpuPercent"`
-		AgentMemBytes     uint64  `json:"agentMemBytes"`
-		PidCount          uint32  `json:"pidCount"`
-		UptimeSeconds     uint64  `json:"uptimeSeconds"`
+		Time            string  `json:"time"`
+		CPUPercent      float64 `json:"cpuPercent"`
+		MemUsedBytes    uint64  `json:"memUsedBytes"`
+		MemTotalBytes   uint64  `json:"memTotalBytes"`
+		DiskUsedBytes   uint64  `json:"diskUsedBytes"`
+		DiskTotalBytes  uint64  `json:"diskTotalBytes"`
+		AgentCpuPercent float64 `json:"agentCpuPercent"`
+		AgentMemBytes   uint64  `json:"agentMemBytes"`
+		PidCount        uint32  `json:"pidCount"`
+		UptimeSeconds   uint64  `json:"uptimeSeconds"`
 	}{
-		Time:              stats.GetTime().AsTime().Format(time.RFC3339),
-		CPUPercent:        stats.GetCpuPercent(),
-		MemUsedBytes:      stats.GetMemUsedBytes(),
-		MemTotalBytes:     stats.GetMemTotalBytes(),
-		DiskUsedBytes:     stats.GetDiskUsedBytes(),
-		DiskTotalBytes:    stats.GetDiskTotalBytes(),
-		AgentCpuPercent:   stats.GetAgentCpuPercent(),
-		AgentMemBytes:     stats.GetAgentMemBytes(),
-		PidCount:          stats.GetPidCount(),
-		UptimeSeconds:     stats.GetUptimeSeconds(),
+		Time:            stats.GetTime().AsTime().Format(time.RFC3339),
+		CPUPercent:      stats.GetCpuPercent(),
+		MemUsedBytes:    stats.GetMemUsedBytes(),
+		MemTotalBytes:   stats.GetMemTotalBytes(),
+		DiskUsedBytes:   stats.GetDiskUsedBytes(),
+		DiskTotalBytes:  stats.GetDiskTotalBytes(),
+		AgentCpuPercent: stats.GetAgentCpuPercent(),
+		AgentMemBytes:   stats.GetAgentMemBytes(),
+		PidCount:        stats.GetPidCount(),
+		UptimeSeconds:   stats.GetUptimeSeconds(),
 	}
 	if err := s.Store.SetAgentStats(conn.agent.ID, snapshot); err != nil {
 		logger.Warn("Storing agent stats failed", slog.Any("error", err))

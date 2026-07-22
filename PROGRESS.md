@@ -1231,6 +1231,44 @@ What has been done so far, in chronological order. Planned work lives in
   — the same `since` param the Results page timeline already used, no API
   change needed.
 
+## 2026-07-22 — Unclaimed agent state
+
+- **A new device can now self-enroll without a pre-created agent record.**
+  Previously an admin had to create the agent's row (name + site chosen up
+  front) before the physical device could connect at all. Now the Agents
+  page has an "Enrollment code" button generating a per-tenant token
+  (`nle_...`, same random-token machinery as API keys' `nlk_...`); any
+  number of devices can start with that one code (`-token <code>`) instead
+  of a per-agent token and show up under a new "Pending enrollment" table
+  until an admin claims one (name + site), at which point it becomes a
+  completely normal agent with its own fresh token — the manual
+  create-agent-first flow keeps working unchanged alongside this.
+- **New `unclaimed_agents` table**, not a nullable `agents.site_id`:
+  `site_id` is `NOT NULL` with `ON DELETE CASCADE` and every agent read
+  goes through an `INNER JOIN` on it, so nullifying it would have meant a
+  full SQLite table rebuild. A separate table keyed by
+  `(tenant_id, client_id)` — agents already send a stable `client_id`,
+  defaulting to hostname — needed zero changes to the `agents` schema.
+  `ControlStream` (`internal/server/server.go`) gained one branch: a
+  token that doesn't match any agent is now also checked against
+  `tenants.enroll_token`; a match upserts the pending row and rejects the
+  stream with `FailedPrecondition` — the agent's own reconnect/backoff
+  loop (1s→30s) becomes the enrollment heartbeat for free, no agent-side
+  changes needed anywhere, and no proto changes either (the existing
+  `Register` message already carries everything).
+- Claiming (`POST /api/v1/agents/unclaimed/{id}/claim`) runs the exact
+  same `CreateAgent` path as the manual flow — a fresh unique token, shown
+  once via the same token dialog — and carries over the
+  capabilities/interfaces/version already reported while pending, so a
+  freshly claimed agent doesn't show blank fields until its next
+  reconnect.
+- **Known limitation, by design**: self-enrollment only works with mTLS
+  off. With `NETLAMA_MTLS=1` the gRPC listener requires a CA-signed
+  client cert at the TLS handshake layer, before `ControlStream` ever
+  runs — an unclaimed device has no cert yet. Solving that would need a
+  second, provisional-cert PKI flow; out of scope here, documented in the
+  README instead.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

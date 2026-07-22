@@ -13,7 +13,7 @@ Planned work, roughly grouped. Not ordered by priority yet.
 
 - [ ] Zero-touch enrollment: agent automatically finds its server (public DNS
       discovery) and connects through a WireGuard tunnel
-- [ ] Unclaimed state: a new agent connects without a site and waits until
+- [x] Unclaimed state: a new agent connects without a site and waits until
       someone assigns it to a site in the UI (replaces pre-issued tokens as the
       only flow)
 - [x] Encryption for the gRPC control stream (TLS): one cert for gRPC + HTTPS

@@ -53,6 +53,14 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/agents/{id}/run", a.auth(a.handleRunTest))
 	mux.HandleFunc("DELETE /api/v1/agents/{id}", a.auth(a.handleDeleteAgent))
 
+	mux.HandleFunc("GET /api/v1/agents/unclaimed", a.auth(a.handleListUnclaimedAgents))
+	mux.HandleFunc("POST /api/v1/agents/unclaimed/{id}/claim", a.auth(a.handleClaimAgent))
+	mux.HandleFunc("DELETE /api/v1/agents/unclaimed/{id}", a.auth(a.handleDismissUnclaimedAgent))
+
+	mux.HandleFunc("GET /api/v1/enroll-token", a.auth(a.handleGetEnrollToken))
+	mux.HandleFunc("POST /api/v1/enroll-token", a.auth(a.handleGenerateEnrollToken))
+	mux.HandleFunc("DELETE /api/v1/enroll-token", a.auth(a.handleRevokeEnrollToken))
+
 	mux.HandleFunc("GET /api/v1/results", a.auth(a.handleListResults))
 	mux.HandleFunc("GET /api/v1/oui", a.auth(a.handleOUILookup))
 	mux.HandleFunc("GET /api/v1/wlan-roaming", a.auth(a.handleWlanRoaming))
