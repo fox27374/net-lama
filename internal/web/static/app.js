@@ -1498,7 +1498,7 @@ function buildSeries(results) {
   if (!testId) return null;
 
   const asc = [...results].reverse().filter((r) => !r.error);
-  if (!asc.length) return { series: [], unit: "" };
+  if (!asc.length) return { series: [], unit: "", thresholds: null };
 
   const type = asc[0].testType;
   const groups = new Map();
@@ -1544,7 +1544,16 @@ function buildSeries(results) {
     color: seriesColor(i),
     points: groups.get(name),
   }));
-  return { series, unit };
+
+  // Threshold lines mirror computeResultState in store/overview.go: only
+  // speedtest is lower-is-worse, every other type is higher-is-worse.
+  const test = tests.find((t) => t.id === testId);
+  const th = test && test.thresholds;
+  const thresholds = th && (th.warn > 0 || th.crit > 0)
+    ? { warn: th.warn > 0 ? th.warn : null, crit: th.crit > 0 ? th.crit : null, lowerWorse: type === "speedtest" }
+    : null;
+
+  return { series, unit, thresholds };
 }
 
 function niceMax(v) {
@@ -1580,14 +1589,16 @@ function renderChart(results, windowSec) {
   }
   if (!built.series.length) return;
 
-  const { series, unit } = built;
+  const { series, unit, thresholds } = built;
   const NS = "http://www.w3.org/2000/svg";
   const W = Math.max(area.clientWidth || 600, 320);
   const H = 240;
   const M = { l: 48, r: 16, t: 12, b: 26 };
   const now = Date.now();
   const t0 = now - windowSec * 1000;
-  const maxV = niceMax(Math.max(...series.flatMap((s) => s.points.map((p) => p.v))) * 1.05);
+  const dataMax = Math.max(...series.flatMap((s) => s.points.map((p) => p.v)));
+  const threshMax = thresholds ? Math.max(thresholds.warn || 0, thresholds.crit || 0) : 0;
+  const maxV = niceMax(Math.max(dataMax, threshMax) * 1.05);
   const x = (t) => M.l + ((t - t0) / (now - t0)) * (W - M.l - M.r);
   const y = (v) => M.t + (1 - v / maxV) * (H - M.t - M.b);
 
@@ -1629,6 +1640,23 @@ function renderChart(results, windowSec) {
   // Unit label
   const unitLabel = el("text", { x: M.l - 6, y: M.t - 2, "text-anchor": "end" });
   unitLabel.textContent = unit;
+
+  // Threshold lines (warn/crit), dashed, labelled at the right edge
+  const style = getComputedStyle(document.documentElement);
+  const drawThreshold = (v, cssVar, label) => {
+    if (v === null || v > maxV) return;
+    el("line", {
+      class: "threshold-line", x1: M.l, x2: W - M.r, y1: y(v), y2: y(v),
+      stroke: style.getPropertyValue(cssVar).trim(), "stroke-width": 1, "stroke-dasharray": "4 3",
+    });
+    const t = el("text", { x: W - M.r - 4, y: y(v) - 3, "text-anchor": "end", class: "threshold-label" });
+    t.style.fill = style.getPropertyValue(cssVar).trim();
+    t.textContent = `${label} ${fmt(v)}`;
+  };
+  if (thresholds) {
+    drawThreshold(thresholds.warn, "--warn", "warn");
+    drawThreshold(thresholds.crit, "--bad", "crit");
+  }
 
   // X ticks
   for (let i = 0; i <= 4; i++) {
