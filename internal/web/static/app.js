@@ -1336,7 +1336,7 @@ function fillFilter(sel, items, allLabel) {
 }
 
 ["#flt-window", "#flt-site", "#flt-agent", "#flt-test"].forEach((sel) =>
-  $(sel).addEventListener("change", () => { updateRunNowBtn(); loadResults(); }));
+  $(sel).addEventListener("change", () => { hiddenSeries.clear(); updateRunNowBtn(); loadResults(); }));
 $("#btn-results-refresh").addEventListener("click", loadResults);
 $("#btn-results-run").addEventListener("click", () => {
   runTestNow($("#flt-agent").value, $("#flt-test").value, $("#btn-results-run"), loadResults);
@@ -1485,6 +1485,7 @@ function renderResultsPage() {
 // Line chart per dataviz method: 2px lines, hairline grid, crosshair +
 // one tooltip for all series, legend for >=2 series, table view below.
 let chartState = null; // {results, windowSec} for re-render on resize/theme
+let hiddenSeries = new Set(); // series names toggled off via legend click
 
 function seriesColor(i) {
   const style = getComputedStyle(document.documentElement);
@@ -1595,7 +1596,41 @@ function renderChart(results, windowSec) {
   }
   if (!built.series.length) return;
 
-  const { series, unit, thresholds } = built;
+  const { series: allSeries, unit, thresholds } = built;
+
+  // Legend (only for >= 2 series) — always lists every series, clickable to
+  // toggle it in/out of the chart; hidden ones stay in hiddenSeries across
+  // re-renders (resize, theme change) but reset when filters change.
+  if (allSeries.length >= 2) {
+    const legend = document.createElement("div");
+    legend.className = "chart-legend";
+    for (const s of allSeries) {
+      const item = document.createElement("span");
+      item.className = "legend-item" + (hiddenSeries.has(s.name) ? " hidden-series" : "");
+      const key = document.createElement("span");
+      key.className = "key";
+      key.style.borderTopColor = s.color;
+      item.appendChild(key);
+      item.appendChild(document.createTextNode(s.name));
+      item.addEventListener("click", () => {
+        if (hiddenSeries.has(s.name)) hiddenSeries.delete(s.name);
+        else hiddenSeries.add(s.name);
+        renderChart(chartState.results, chartState.windowSec);
+      });
+      legend.appendChild(item);
+    }
+    area.appendChild(legend);
+  }
+
+  const series = allSeries.filter((s) => !hiddenSeries.has(s.name));
+  if (!series.length) {
+    const hint = document.createElement("p");
+    hint.className = "chart-hint";
+    hint.textContent = "All series hidden — click a legend item to show it.";
+    area.appendChild(hint);
+    return;
+  }
+
   const NS = "http://www.w3.org/2000/svg";
   const W = Math.max(area.clientWidth || 600, 320);
   const H = 240;
@@ -1607,22 +1642,6 @@ function renderChart(results, windowSec) {
   const maxV = niceMax(Math.max(dataMax, threshMax) * 1.05);
   const x = (t) => M.l + ((t - t0) / (now - t0)) * (W - M.l - M.r);
   const y = (v) => M.t + (1 - v / maxV) * (H - M.t - M.b);
-
-  // Legend (only for >= 2 series)
-  if (series.length >= 2) {
-    const legend = document.createElement("div");
-    legend.className = "chart-legend";
-    for (const s of series) {
-      const item = document.createElement("span");
-      const key = document.createElement("span");
-      key.className = "key";
-      key.style.borderTopColor = s.color;
-      item.appendChild(key);
-      item.appendChild(document.createTextNode(s.name));
-      legend.appendChild(item);
-    }
-    area.appendChild(legend);
-  }
 
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);

@@ -969,6 +969,15 @@ button.stat-tile:focus-visible {
   color: var(--muted-solid);
   font-variant-numeric: normal;
 }
+.chart-legend .legend-item {
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-xs);
+}
+.chart-legend .legend-item.hidden-series {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
 .chart-legend .key {
   display: inline-block;
   width: 14px;
