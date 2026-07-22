@@ -1502,39 +1502,45 @@ function buildSeries(results) {
 
   const type = asc[0].testType;
   const groups = new Map();
-  const add = (key, t, v) => {
+  // A test can be assigned to several sites, so results in this window may
+  // come from multiple agents. Keep series separate per agent in that case
+  // (same target, different network paths) or a single line just zigzags
+  // between each agent's real, distinct, otherwise-constant latency.
+  const multiAgent = new Set(asc.map((r) => r.agentName)).size > 1;
+  const add = (key, r, v) => {
     if (v === undefined || v === null) return;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({ t: new Date(t).getTime(), v });
+    const full = multiAgent ? `${key} · ${r.agentName}` : key;
+    if (!groups.has(full)) groups.set(full, []);
+    groups.get(full).push({ t: new Date(r.time).getTime(), v });
   };
 
   let unit = "ms";
   for (const r of asc) {
     const p = r.payload || {};
-    if (type === "ping" && p.ping) add(p.ping.target, r.time, p.ping.avgRttMs);
-    else if (type === "dns" && p.dns) add(`${p.dns.query} @ ${p.dns.server}`, r.time, p.dns.resolveTimeMs);
+    if (type === "ping" && p.ping) add(p.ping.target, r, p.ping.avgRttMs);
+    else if (type === "dns" && p.dns) add(`${p.dns.query} @ ${p.dns.server}`, r, p.dns.resolveTimeMs);
     else if (type === "http" && p.http) {
-      add("Total", r.time, p.http.totalMs);
-      add("TTFB", r.time, p.http.ttfbMs);
+      add("Total", r, p.http.totalMs);
+      add("TTFB", r, p.http.ttfbMs);
     } else if (type === "tcp" && p.tcp) {
-      if (p.tcp.connected) add(p.tcp.target, r.time, p.tcp.connectMs);
+      if (p.tcp.connected) add(p.tcp.target, r, p.tcp.connectMs);
     } else if (type === "traceroute" && p.traceroute) {
-      if (p.traceroute.reached) add("Path RTT", r.time, p.traceroute.rttMs);
+      if (p.traceroute.reached) add("Path RTT", r, p.traceroute.rttMs);
     } else if (type === "speedtest" && p.speedtest) {
       unit = "Mbps";
-      add("Download", r.time, p.speedtest.downloadMbps);
-      add("Upload", r.time, p.speedtest.uploadMbps);
+      add("Download", r, p.speedtest.downloadMbps);
+      add("Upload", r, p.speedtest.uploadMbps);
     } else if (type === "perfmon" && p.perfmon) {
       unit = "Mbps";
       if (p.perfmon.success) {
-        add("Download", r.time, p.perfmon.downloadMbps);
-        add("Upload", r.time, p.perfmon.uploadMbps);
+        add("Download", r, p.perfmon.downloadMbps);
+        add("Upload", r, p.perfmon.uploadMbps);
       }
     } else if (type === "wlan_active" && p.wlanActive) {
       if (p.wlanActive.success) {
-        add("Associate", r.time, p.wlanActive.associateMs);
-        add("Authenticate", r.time, p.wlanActive.authenticateMs);
-        add("DHCP", r.time, p.wlanActive.dhcpMs);
+        add("Associate", r, p.wlanActive.associateMs);
+        add("Authenticate", r, p.wlanActive.authenticateMs);
+        add("DHCP", r, p.wlanActive.dhcpMs);
       }
     }
   }
