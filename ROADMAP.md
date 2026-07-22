@@ -172,7 +172,7 @@ Planned work, roughly grouped. Not ordered by priority yet.
       per-test caps instead of the fixed 5000-results-per-agent limit, which
       is shared across all of an agent's tests (a chatty 1-minute test crowds
       out slower ones)
-- [ ] Path history window selector (e.g. last 48 runs / 24h / 7d) — the
+- [x] Path history window selector (e.g. last 48 runs / 24h / 7d) — the
       results API already supports `since`, so the heatmap can query by time
       instead of a fixed run count
 

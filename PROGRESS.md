@@ -1222,6 +1222,15 @@ What has been done so far, in chronological order. Planned work lives in
   on checkout since `git describe` needs tag history a shallow clone
   doesn't have.
 
+## 2026-07-22 — Path history window selector
+
+- **Path page heatmap can now query by time window** instead of a fixed
+  48-run window: a `<select>` next to "Path history" offers Last 48 runs
+  (the old default, `limit=48`) or Last 24 hours / 7 days / 30 days, which
+  switch the `/api/v1/results` query to `since=<RFC3339>` with `limit=2000`
+  — the same `since` param the Results page timeline already used, no API
+  change needed.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

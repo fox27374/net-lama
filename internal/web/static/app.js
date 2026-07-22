@@ -2598,6 +2598,7 @@ async function loadPath() {
 
 $("#pa-agent").addEventListener("change", renderPath);
 $("#pa-test").addEventListener("change", renderPath);
+$("#pa-window").addEventListener("change", renderPath);
 $("#pa-refresh").addEventListener("click", renderPath);
 $("#pa-run").addEventListener("click", async () => {
   const btn = $("#pa-run");
@@ -2692,10 +2693,14 @@ async function renderPath() {
   const testId = $("#pa-test").value;
   if (!agentId || !testId) return;
 
-  // Fetch latest result and history (last 48)
+  // Fetch latest result and history — either the last 48 runs, or every run
+  // in a time window (pa-window: "0" means run-count mode).
   const tid = tenantParam("");
   const params1 = new URLSearchParams({ agentId, testId, type: "traceroute", limit: "1" });
-  const params2 = new URLSearchParams({ agentId, testId, type: "traceroute", limit: "48" });
+  const windowSec = +$("#pa-window").value;
+  const params2 = windowSec > 0
+    ? new URLSearchParams({ agentId, testId, type: "traceroute", limit: "2000", since: new Date(Date.now() - windowSec * 1000).toISOString() })
+    : new URLSearchParams({ agentId, testId, type: "traceroute", limit: "48" });
   if (tid) {
     params1.set("tenantId", tid.split("=")[1]);
     params2.set("tenantId", tid.split("=")[1]);
