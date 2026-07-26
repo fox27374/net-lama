@@ -370,7 +370,7 @@ main {
   padding: var(--space-4);
   min-width: 340px;
 }
-.card.grow { flex: 1; }
+.grow { flex: 1; }
 .card.table-card { padding: 0; overflow: hidden; }
 .card.table-card table { margin: 0; }
 .empty { text-align: center; padding: var(--space-6) var(--space-4); color: var(--muted-solid); }
