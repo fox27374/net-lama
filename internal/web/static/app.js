@@ -599,7 +599,7 @@ async function loadAgents() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><span class="badge ${a.connected ? "on" : "off"}">${a.connected ? "connected" : "offline"}</span></td>
-      <td><strong>${esc(a.name)}</strong>${a.managementAddr ? ` <span class="muted mono">${esc(a.managementAddr)}</span>` : ""}</td>
+      <td><div><strong>${esc(a.name)}</strong></div>${a.managementAddr ? `<div class="muted mono">${esc(a.managementAddr)}</div>` : ""}</td>
       <td>${esc(a.siteName)}</td>
       <td class="mono muted">${esc(a.version || "—")}</td>
       <td>${caps}</td>
@@ -607,7 +607,7 @@ async function loadAgents() {
       <td class="muted">${memoryText(a.stats)}</td>
       <td class="muted">${diskText(a.stats)}</td>
       <td>${agentHealthBadge(a.health)}</td>
-      <td style="text-align:right">
+      <td class="actions-cell">
         <button class="ghost" data-edit>Edit</button>
         <button class="danger" data-del>Delete</button>
       </td>`;

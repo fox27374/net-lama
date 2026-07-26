@@ -525,6 +525,13 @@ tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
 td.num { text-align: right; }
 th.num { text-align: right; }
+td.actions-cell {
+  text-align: right;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
 .table-scroll { overflow-x: auto; }
 
 .clickable { cursor: pointer; }
