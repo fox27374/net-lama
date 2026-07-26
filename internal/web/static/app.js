@@ -74,7 +74,7 @@ async function showApp() {
   $("#app-view").classList.remove("hidden");
   $("#whoami").textContent = me.username + (me.isAdmin ? " · admin" : "");
   $("#server-version").textContent = me.serverVersion ? "net-lama " + me.serverVersion : "";
-  $("#nav-admin-btn").classList.toggle("hidden", !me.isAdmin);
+  $("#admin-panel").classList.toggle("hidden", !me.isAdmin);
   if (me.isAdmin) {
     tenants = await api("GET", "/api/v1/tenants");
     const sel = $("#tenant-context");
@@ -88,7 +88,7 @@ async function showApp() {
   showSection(sections.includes(initial) ? initial : "dashboard");
 }
 
-const sections = ["dashboard", "agents", "tests", "sites", "results", "wireless", "path", "alerts", "alertcfg", "logs", "apikeys", "admin"];
+const sections = ["dashboard", "agents", "tests", "sites", "results", "wireless", "path", "alerts", "alertcfg", "logs", "access"];
 
 function showSection(name, fromHistory = false) {
   for (const sec of sections) $("#section-" + sec).classList.add("hidden");
@@ -128,8 +128,7 @@ function reloadSection(name) {
   if (name === "alerts") loadAlerts();
   if (name === "alertcfg") loadAlertCfg();
   if (name === "logs") loadLogs();
-  if (name === "apikeys") loadApiKeys();
-  if (name === "admin") loadAdmin();
+  if (name === "access") { loadApiKeys(); if (me.isAdmin) loadAdmin(); }
 }
 
 // Navigation helper with optional filter presets
@@ -4011,7 +4010,7 @@ $("#form-new-tenant").addEventListener("submit", async (e) => {
     await api("POST", "/api/v1/tenants", { name: $("#nt-name").value.trim() });
     $("#dlg-new-tenant").close();
     await showApp();
-    showSection("admin");
+    showSection("access");
   } catch (err) {
     dialogError("#nt-error", err.message);
   }

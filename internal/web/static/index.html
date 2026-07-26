@@ -57,12 +57,7 @@
       <button data-nav="agents" class="nav-item">Agents</button>
       <button data-nav="tests" class="nav-item">Tests</button>
       <button data-nav="alertcfg" class="nav-item">Alert Rules</button>
-    </nav>
-    <div class="sidebar-divider"></div>
-    <nav class="sidebar-nav">
-      <div class="nav-group-label">Manage</div>
-      <button data-nav="admin" class="nav-item" id="nav-admin-btn">Tenants &amp; Users</button>
-      <button data-nav="apikeys" class="nav-item" id="nav-apikeys-btn">API Keys</button>
+      <button data-nav="access" class="nav-item">Access</button>
     </nav>
     <div class="sidebar-footer">
       <select id="tenant-context" class="compact hidden" title="Tenant"></select>
@@ -477,10 +472,14 @@
       </div>
     </section>
 
-    <!-- API Keys -->
-    <section id="section-apikeys" class="hidden">
+    <!-- Access -->
+    <section id="section-access" class="hidden">
       <div class="section-head">
-        <h2>API Keys</h2>
+        <h2>Access</h2>
+      </div>
+
+      <div class="section-head">
+        <h3>API Keys</h3>
         <button id="btn-new-apikey" class="primary">New key</button>
       </div>
       <p class="muted">Keys carry your own privileges (admin or tenant-scoped) and work
@@ -493,30 +492,32 @@
         </table>
         <p id="apikeys-empty" class="empty hidden">No API keys yet. Create one to script against the API.</p>
       </div>
-    </section>
 
-    <!-- Admin -->
-    <section id="section-admin" class="hidden">
-      <div class="columns">
-        <div class="card grow">
-          <div class="section-head">
-            <h3>Tenants</h3>
-            <button id="btn-new-tenant" class="primary">New tenant</button>
-          </div>
-          <table id="tenants-table">
-            <thead><tr><th>Name</th><th>ID</th><th></th></tr></thead>
-            <tbody></tbody>
-          </table>
+      <div id="admin-panel" class="hidden">
+        <div class="section-head">
+          <h3>Tenants &amp; Users</h3>
         </div>
-        <div class="card grow">
-          <div class="section-head">
-            <h3>Users</h3>
-            <button id="btn-new-user" class="primary">New user</button>
+        <div class="columns">
+          <div class="card grow">
+            <div class="section-head">
+              <h3>Tenants</h3>
+              <button id="btn-new-tenant" class="primary">New tenant</button>
+            </div>
+            <table id="tenants-table">
+              <thead><tr><th>Name</th><th>ID</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
           </div>
-          <table id="users-table">
-            <thead><tr><th>Username</th><th>Tenant</th><th>Role</th><th></th></tr></thead>
-            <tbody></tbody>
-          </table>
+          <div class="card grow">
+            <div class="section-head">
+              <h3>Users</h3>
+              <button id="btn-new-user" class="primary">New user</button>
+            </div>
+            <table id="users-table">
+              <thead><tr><th>Username</th><th>Tenant</th><th>Role</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
