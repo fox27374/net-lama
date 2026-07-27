@@ -256,7 +256,13 @@ func (a *Agent) runStream(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	conn, err := grpc.NewClient(a.ServerAddr, grpc.WithTransportCredentials(creds))
+	// Resolved per attempt, not once at startup, so the reconnect loop picks
+	// up a server that moved (or a DNS entry that did not exist yet).
+	addr := a.ServerAddr
+	if addr == "" || addr == DiscoverAddr {
+		addr = discoverServer(ctx, a.Logger)
+	}
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return fmt.Errorf("creating connection: %w", err)
 	}
@@ -304,7 +310,7 @@ func (a *Agent) runStream(ctx context.Context) error {
 		return fmt.Errorf("sending register: %w", err)
 	}
 	a.Logger.Info("Registered with server",
-		slog.String("server", a.ServerAddr),
+		slog.String("server", addr),
 		slog.String("clientId", a.ClientID),
 		slog.Any("capabilities", capabilities),
 	)

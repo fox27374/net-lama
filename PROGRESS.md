@@ -1269,6 +1269,27 @@ What has been done so far, in chronological order. Planned work lives in
   second, provisional-cert PKI flow; out of scope here, documented in the
   README instead.
 
+## 2026-07-27 — DNS server discovery
+
+- The agent's `-server`/`NETLAMA_SERVER` now defaults to `auto`: it looks
+  the server up in DNS the way a Cisco access point finds its controller —
+  SRV `_netlama._tcp` first (host *and* port, resolver-sorted by
+  priority/weight so extra records are free failover), then A `net-lama`
+  on port 50051. Both names are looked up unqualified so `/etc/resolv.conf`
+  search domains apply; the A lookup also picks up an `/etc/hosts` entry.
+- Resolution happens per connection attempt inside the reconnect loop, not
+  once at startup, so an agent that boots before its DNS entry exists finds
+  the server on a later retry, and moving the server is a DNS change only.
+  With nothing in DNS the agent falls back to `localhost:50051`, the old
+  default, so no existing deployment changes behaviour.
+- **Security note**: DNS now decides where the token is sent, so the agent
+  warns at startup when discovery runs with TLS off or `-tls-insecure` set —
+  a spoofed DNS answer could otherwise steer it into a token-harvesting
+  server. It warns rather than refuses, since self-signed setups are the
+  common case and a hard refusal would just get discovery turned off.
+- Half of the "zero-touch enrollment" roadmap item; the WireGuard tunnel
+  part is still open.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

@@ -15,7 +15,7 @@ import (
 var version = buildver.Version
 
 func main() {
-	serverAddr := flag.String("server", envOr("NETLAMA_SERVER", "localhost:50051"), "Address of the net-lama server (host:port)")
+	serverAddr := flag.String("server", envOr("NETLAMA_SERVER", agent.DiscoverAddr), "Address of the net-lama server (host:port), or \"auto\" to find it in DNS (SRV _netlama._tcp, then A net-lama)")
 	clientID := flag.String("id", envOr("NETLAMA_CLIENT_ID", ""), "Client ID for logging (defaults to the hostname)")
 	token := flag.String("token", envOr("NETLAMA_TOKEN", ""), "Agent token issued by the server")
 	useTLS := flag.Bool("tls", envEnabled("NETLAMA_TLS"), "Connect to the server over TLS")
@@ -39,6 +39,15 @@ func main() {
 			os.Exit(1)
 		}
 		*clientID = hostname
+	}
+
+	// DNS decides where the token is sent, so an unverified transport turns a
+	// spoofed DNS answer into a token leak. Warn once at startup rather than
+	// refusing: self-signed setups are the common case and would just turn
+	// discovery back off.
+	if *serverAddr == agent.DiscoverAddr && (!*useTLS || *tlsInsecure) {
+		logger.Warn("Discovering the server via DNS without a verified server certificate, " +
+			"a spoofed DNS answer could capture the agent token, set -tls and -tls-ca to pin the server")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

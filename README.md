@@ -73,7 +73,8 @@ Server flags/env: `-grpc`/`NETLAMA_GRPC_ADDR` (default `:50051`), `-http`/`NETLA
 (default `:9090`), `-db`/`NETLAMA_DB`, `-log-history`/`NETLAMA_LOG_HISTORY` (default `1000`,
 see [Logs](#logs) below). Email alert notifications use `NETLAMA_SMTP_HOST` (required to enable
 email), `NETLAMA_SMTP_PORT` (default `587`), `NETLAMA_SMTP_USER`, `NETLAMA_SMTP_PASS`,
-`NETLAMA_SMTP_FROM`, `NETLAMA_SMTP_STARTTLS` (default enabled). Agent: `-server`/`NETLAMA_SERVER`,
+`NETLAMA_SMTP_FROM`, `NETLAMA_SMTP_STARTTLS` (default enabled). Agent: `-server`/`NETLAMA_SERVER`
+(default `auto`, see [DNS server discovery](#dns-server-discovery)),
 `-token`/`NETLAMA_TOKEN`, `-id`/`NETLAMA_CLIENT_ID` (informational, defaults to hostname).
 Set `DEBUG=1` for debug logging. Cross-compile the agent for a Raspberry Pi with `make pi`.
 
@@ -184,6 +185,46 @@ container; the *host* must also allow it (`sysctl net.ipv4.ping_group_range` —
 open on Debian/RPi OS, needs `0 2147483647` in `/etc/sysctl.d/` on Ubuntu). For
 rootless podman, enable lingering once (`loginctl enable-linger`) so containers
 survive logout.
+
+### DNS server discovery
+
+The agent's `-server`/`NETLAMA_SERVER` defaults to `auto`, which means "find the
+server in DNS" — the same idea as a Cisco access point locating its controller,
+so a new sensor only needs its token baked in, not an address. Two lookups, in
+order:
+
+| Record | Name | Gives |
+| --- | --- | --- |
+| SRV | `_netlama._tcp` | host **and** port; multiple records are failover targets, tried by priority/weight |
+| A/AAAA | `net-lama` | host only, port `50051` |
+
+Both names are looked up unqualified, so the resolver's search domains from
+`/etc/resolv.conf` apply — `net-lama` resolves to `net-lama.<your-domain>`. An
+example zone entry:
+
+```
+_netlama._tcp  IN  SRV  0 0 50051 netlama.corp.local.
+```
+
+With nothing in DNS the agent falls back to `localhost:50051`. The lookup runs on
+every connection attempt, not once at startup, so an agent booted before its DNS
+entry exists picks the server up on a later reconnect, and moving the server only
+needs a DNS change. Setting `-server host:port` explicitly skips discovery
+entirely.
+
+The `net-lama` A-record lookup also matches an `/etc/hosts` entry, which is the
+easiest way to test discovery without touching DNS. Two things to watch: the
+hosts file is matched **exactly** (search domains apply to DNS queries, not to
+`/etc/hosts`), so the line must carry the bare name —
+`10.0.0.5  net-lama  net-lama.corp.local` works, a qualified name alone does
+not. And a containerized agent has its own `/etc/hosts`, so use compose's
+`extra_hosts: ["net-lama:<server-ip>"]` rather than editing the host's file.
+
+> **Security:** DNS decides where the agent sends its token, so a spoofed DNS
+> answer can point an agent at a rogue server that harvests it. Discovery is only
+> as trustworthy as the server certificate the agent checks — pair it with
+> `-tls` plus `-tls-ca` (see [TLS](#tls)). The agent logs a warning at startup
+> when it discovers with TLS off or `-tls-insecure` set.
 
 ### Agent resource statistics
 

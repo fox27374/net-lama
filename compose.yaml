@@ -56,6 +56,8 @@ services:
     init: true
     image: ${NETLAMA_AGENT_IMAGE:-ghcr.io/fox27374/netlama-agent}:${NETLAMA_IMAGE_TAG:-latest}
     environment:
+      # Set to "auto" to find the server in DNS instead: SRV _netlama._tcp,
+      # then A net-lama, both relative to the local search domain.
       NETLAMA_SERVER: ${NETLAMA_SERVER:-server:50051}
       NETLAMA_TOKEN: ${NETLAMA_TOKEN:?create the agent in the UI and put its token into .env}
       # Connect over TLS when the server has it enabled. Verify with

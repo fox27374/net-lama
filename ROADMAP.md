@@ -11,8 +11,10 @@ Planned work, roughly grouped. Not ordered by priority yet.
 
 ## Agent lifecycle & connectivity
 
-- [ ] Zero-touch enrollment: agent automatically finds its server (public DNS
-      discovery) and connects through a WireGuard tunnel
+- [x] DNS server discovery: with `-server auto` (the default) the agent finds
+      its server via SRV `_netlama._tcp`, then A `net-lama`, relative to the
+      local search domain
+- [ ] Zero-touch enrollment: agent connects through a WireGuard tunnel
 - [x] Unclaimed state: a new agent connects without a site and waits until
       someone assigns it to a site in the UI (replaces pre-issued tokens as the
       only flow)

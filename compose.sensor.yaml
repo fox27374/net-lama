@@ -64,6 +64,11 @@ services:
       - NET_ADMIN  # WLAN scanning + monitor-mode sensing via iw
     environment:
       # Host networking → reach the server on the published host port.
+      # Set to "auto" to find the server in DNS instead: SRV _netlama._tcp,
+      # then A net-lama, both relative to the local search domain. The
+      # container has its own /etc/hosts, so for a hosts-file test add
+      # `extra_hosts: ["net-lama:<server-ip>"]` here rather than editing the
+      # host's /etc/hosts.
       NETLAMA_SERVER: ${NETLAMA_SERVER:-127.0.0.1:50051}
       NETLAMA_TOKEN: ${NETLAMA_TOKEN:?create the agent in the UI and put its token into .env}
       # Connect over TLS. Verify with NETLAMA_TLS_CA (a copy of the server
