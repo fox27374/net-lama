@@ -1290,6 +1290,26 @@ What has been done so far, in chronological order. Planned work lives in
 - Half of the "zero-touch enrollment" roadmap item; the WireGuard tunnel
   part is still open.
 
+## 2026-07-27 — Per-test result retention
+
+- The stored-result cap was 5000 rows **per agent**, shared across every test
+  that agent runs, so a frequent test starved the slower ones. Measured on the
+  live deployment before the fix: all three agents sat exactly at the cap, and
+  on rp02-sensor the 1-minute DNS and ping tests held 4181 of the 5000 slots,
+  leaving the hourly speedtest **35 samples** and every agent under ~10 hours
+  of total history — far short of what the 7-day path-history selector and
+  multi-day alert baselines query.
+- The prune in `AddResult` is now scoped to `agent_id` **and** `test_id`, so
+  each test keeps its own 5000 rows and no test can evict another's. Added
+  `idx_results_agent_test` on `(agent_id, test_id, id DESC)` to serve it —
+  this DELETE runs on every single result insert, and it now scans one test's
+  rows instead of all of an agent's.
+- Regression test `TestResultPruneIsPerTest` (verified to fail against the old
+  per-agent query). Existing rows are not backfilled: history already evicted
+  is gone, the fix stops further loss.
+- Follow-up left on the roadmap: time-based retention for a database-size
+  guarantee, since a row cap now scales with the number of tests per agent.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

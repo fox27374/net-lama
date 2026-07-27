@@ -170,10 +170,12 @@ Planned work, roughly grouped. Not ordered by priority yet.
       agent overview listing each agent's version)
 - [x] Semantic versioning: releases tagged vMAJOR.MINOR.PATCH (v0.1.0-v0.6.0
       shipped), server/agents report the tag via `git describe --tags`
-- [ ] Configurable result retention: time-based (e.g. "keep 30 days") and/or
-      per-test caps instead of the fixed 5000-results-per-agent limit, which
-      is shared across all of an agent's tests (a chatty 1-minute test crowds
-      out slower ones)
+- [x] Per-test result retention: the 5000-row cap is scoped to agent *and*
+      test instead of being shared across all of an agent's tests, so a chatty
+      1-minute test can no longer crowd out slower ones
+- [ ] Time-based result retention (e.g. `NETLAMA_RESULT_RETENTION=30d`) on top
+      of the per-test row cap, for a database-size guarantee rather than a
+      per-test one
 - [x] Path history window selector (e.g. last 48 runs / 24h / 7d) — the
       results API already supports `since`, so the heatmap can query by time
       instead of a fixed run count

@@ -140,8 +140,15 @@ type ResultFilter struct {
 	Limit    int
 }
 
-// resultsPerAgent caps stored history per agent; older rows are pruned.
-const resultsPerAgent = 5000
+// resultsPerTest caps stored history per agent *and test*; older rows are
+// pruned. Scoping the cap to the test matters: a shared per-agent cap let a
+// chatty 1-minute test evict the history of slower ones, so an hourly
+// speedtest kept only a handful of runs while ping and DNS filled the quota.
+// ponytail: a plain row cap, so total rows scale with the number of tests an
+// agent runs. Add time-based retention (e.g. NETLAMA_RESULT_RETENTION=30d) on
+// top if the database needs a size guarantee rather than a per-test one.
+// A var, not a const, only so tests can lower it.
+var resultsPerTest = 5000
 
 func (s *Store) CreateAgent(tenantID, siteID, name string) (*Agent, error) {
 	a := &Agent{
@@ -334,11 +341,13 @@ func (s *Store) AddResult(r *Result) error {
 	if err != nil {
 		return err
 	}
-	// Prune old rows to keep the database bounded
+	// Prune old rows to keep the database bounded. Only this agent's rows for
+	// this one test are considered, so a frequent test can never push a slower
+	// test's history out.
 	_, err = s.db.Exec(
-		`DELETE FROM results WHERE agent_id = ? AND id NOT IN
-		 (SELECT id FROM results WHERE agent_id = ? ORDER BY id DESC LIMIT ?)`,
-		r.AgentID, r.AgentID, resultsPerAgent,
+		`DELETE FROM results WHERE agent_id = ? AND test_id = ? AND id NOT IN
+		 (SELECT id FROM results WHERE agent_id = ? AND test_id = ? ORDER BY id DESC LIMIT ?)`,
+		r.AgentID, r.TestID, r.AgentID, r.TestID, resultsPerTest,
 	)
 	return err
 }

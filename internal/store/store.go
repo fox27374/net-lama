@@ -102,6 +102,8 @@ func (s *Store) migrate() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_results_agent_time ON results (agent_id, time DESC);
 	CREATE INDEX IF NOT EXISTS idx_results_test ON results (test_id, time DESC);
+	-- Serves the per-agent-per-test prune that runs on every result insert.
+	CREATE INDEX IF NOT EXISTS idx_results_agent_test ON results (agent_id, test_id, id DESC);
 	CREATE TABLE IF NOT EXISTS alert_rules (
 		id          TEXT PRIMARY KEY,
 		tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
