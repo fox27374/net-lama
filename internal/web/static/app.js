@@ -641,10 +641,21 @@ function agentRunCommand(token) {
     `  netlama-agent`;
 }
 
+// agentPackageCommand is the same bootstrap for a .deb/.rpm install: the
+// package ships /etc/netlama/agent.env with the keys already in it, so
+// enrolling is filling in two of them and starting the unit.
+function agentPackageCommand(token) {
+  return `sudo apt install ./netlama-agent_<version>_arm64.deb\n` +
+    `sudo sed -i 's|^NETLAMA_TOKEN=.*|NETLAMA_TOKEN=${token}|;` +
+    `s|^NETLAMA_SERVER=.*|NETLAMA_SERVER=<server>:50051|' /etc/netlama/agent.env\n` +
+    `sudo systemctl restart netlama-agent`;
+}
+
 function showTokenDialog(title, token) {
   $("#token-dlg-title").textContent = title;
   $("#token-value").textContent = token;
   $("#token-cmd").textContent = agentRunCommand(token);
+  $("#token-pkg-cmd").textContent = agentPackageCommand(token);
   $("#dlg-token").showModal();
 }
 
@@ -797,6 +808,7 @@ function setEnrollTokenView(token) {
   if (has) {
     $("#et-value").textContent = token;
     $("#et-cmd").textContent = agentRunCommand(token);
+    $("#et-pkg-cmd").textContent = agentPackageCommand(token);
   }
 }
 

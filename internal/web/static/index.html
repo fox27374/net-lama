@@ -576,7 +576,10 @@
   <h3 id="token-dlg-title">Agent created</h3>
   <p>Start the agent with this token. It is shown <strong>only once</strong>:</p>
   <pre id="token-value" class="token"></pre>
+  <p class="muted">As a container:</p>
   <pre id="token-cmd"></pre>
+  <p class="muted">Or from the native package (.deb / .rpm, on the releases page):</p>
+  <pre id="token-pkg-cmd"></pre>
   <div class="row end">
     <button class="ghost" id="btn-copy-token">Copy token</button>
     <button class="primary" onclick="this.closest('dialog').close()">Done</button>
@@ -592,7 +595,10 @@
   <p id="et-none" class="empty hidden">No enrollment code generated yet.</p>
   <div id="et-body" class="hidden">
     <pre id="et-value" class="token"></pre>
+    <p class="muted">As a container:</p>
     <pre id="et-cmd"></pre>
+    <p class="muted">Or from the native package (.deb / .rpm, on the releases page):</p>
+    <pre id="et-pkg-cmd"></pre>
   </div>
   <p class="error hidden" id="et-error"></p>
   <div class="row end">
