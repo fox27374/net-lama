@@ -5,7 +5,9 @@ Planned work, roughly grouped. Not ordered by priority yet.
 ## Deployment & packaging
 
 - [ ] Kubernetes deployment for server and agent — probably a Helm chart
-- [ ] Native agent install packages: `.deb` and `.rpm` (systemd unit, config in `/etc/netlama`)
+- [x] Native agent install packages: `.deb` and `.rpm` (systemd unit, config in
+      `/etc/netlama/agent.env`), built for amd64/arm64/armv7 by `make pkg` and
+      attached to every release by CI
 - [ ] Option to change the web UI port independently of the API/metrics port
 - [ ] Option to disable the web UI entirely (API/headless mode)
 

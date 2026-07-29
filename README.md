@@ -149,6 +149,39 @@ History is bounded per scope (the server is one scope, each agent is its own) by
 `NETLAMA_LOG_HISTORY` (default `1000` lines); older rows are pruned automatically,
 the same way results are.
 
+## Installing the agent natively (.deb / .rpm)
+
+For sensors this is the simpler option: the agent needs host networking and raw
+sockets anyway (see [Sensor agents](#sensor-agents-wlan-and-traceroute)), so a
+container buys no isolation, only a container runtime to keep alive. Packages
+for amd64, arm64 and armv7 are attached to every
+[release](https://github.com/fox27374/net-lama/releases) by
+[CI](.github/workflows/packages.yml):
+
+```sh
+# 1. Install (apt pulls in the probe tools: mtr, iw, iproute2, wpa_supplicant)
+sudo apt install ./netlama-agent_<version>_arm64.deb     # or: sudo dnf install ./netlama-agent-<version>.aarch64.rpm
+
+# 2. In the UI: create the agent -> copy the token
+sudo sed -i 's/^NETLAMA_TOKEN=.*/NETLAMA_TOKEN=<agent-token>/' /etc/netlama/agent.env
+
+# 3. Start it (the package enables the unit; an install with a token set
+#    already starts it too)
+sudo systemctl start netlama-agent
+systemctl status netlama-agent
+journalctl -u netlama-agent -f
+```
+
+Configuration is `/etc/netlama/agent.env` (mode 0600, it holds the token) — the
+same `NETLAMA_*` variables as the container, one per line; it is a conffile, so
+upgrades never overwrite it. The service runs as root because the probes drive
+`iw`/`ip`/`wpa_supplicant` and need raw sockets; an agent that only runs
+ping/DNS/HTTP/TCP/speedtest can be dropped to an unprivileged user, see the
+comment in `/usr/lib/systemd/system/netlama-agent.service`.
+
+Build the packages yourself with `make pkg` (writes `dist/`, needs no root and
+no local `nfpm` — the Makefile runs it via `go run`).
+
 ## Running in containers
 
 Multi-arch images (amd64 + arm64, so they run on a Raspberry Pi) are published to
@@ -453,6 +486,8 @@ and `test` (plus `target` for ping, `server`+`query` for DNS):
 
 ```sh
 make build   # build server + agent into bin/
+make pi      # cross-compile the agent for Raspberry Pi (arm64 + armv7)
+make pkg     # build the agent .deb/.rpm packages into dist/
 make proto   # regenerate protobuf/gRPC code (needs protoc + Go plugins)
 make vet     # go vet
 ```

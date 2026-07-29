@@ -1,0 +1,50 @@
+# Native agent packages (.deb / .rpm), built by `make pkg`.
+# ${NETLAMA_*} come from the Makefile, once per architecture. The binary
+# itself cannot come from the environment (nfpm resolves content globs
+# before expanding variables), so the Makefile stages the right one at
+# dist/build/netlama-agent before each run.
+name: netlama-agent
+arch: ${NETLAMA_PKG_ARCH}
+version: ${NETLAMA_PKG_VERSION}
+maintainer: fox27374 <fox27374@users.noreply.github.com>
+description: |
+  Net-Lama monitoring agent.
+  Runs network tests (ping, DNS, HTTP, TCP, speedtest, traceroute, WLAN)
+  and streams the results to a Net-Lama server over one gRPC control stream.
+homepage: https://github.com/fox27374/net-lama
+license: MIT
+section: net
+
+# Weak dependencies: apt and dnf pull them in by default, but an agent that
+# only pings/resolves/fetches works fine without any of them.
+recommends:
+  - mtr-tiny
+  - iw
+  - iproute2
+  - wpasupplicant
+overrides:
+  rpm:
+    recommends:
+      - mtr
+      - iw
+      - iproute
+      - wpa_supplicant
+
+contents:
+  - src: dist/build/netlama-agent
+    dst: /usr/bin/netlama-agent
+  - src: packaging/netlama-agent.service
+    dst: /usr/lib/systemd/system/netlama-agent.service
+  - src: packaging/agent.env
+    dst: /etc/netlama/agent.env
+    type: config|noreplace
+    file_info:
+      mode: 0600
+  - dst: /etc/netlama
+    type: dir
+    file_info:
+      mode: 0700
+
+scripts:
+  postinstall: packaging/postinstall.sh
+  preremove: packaging/preremove.sh

@@ -1310,6 +1310,28 @@ What has been done so far, in chronological order. Planned work lives in
 - Follow-up left on the roadmap: time-based retention for a database-size
   guarantee, since a row cap now scales with the number of tests per agent.
 
+## 2026-07-29 — Native agent packages
+
+- **`.deb` and `.rpm` for the agent**, for amd64, arm64 and armv7. The sensor
+  path already needs host networking and raw sockets, so the container adds a
+  runtime to babysit and no isolation; a package installs the binary to
+  `/usr/bin/netlama-agent`, the config to `/etc/netlama/agent.env` (0600,
+  conffile — upgrades keep it) and a systemd unit, and pulls in `mtr`, `iw`,
+  `iproute2` and `wpa_supplicant` as weak dependencies.
+- Built by `make pkg` via [nfpm](https://github.com/goreleaser/nfpm) run
+  through `go run`, so no local install and no root. Config in
+  `packaging/nfpm.yaml`; the binary path cannot be an environment variable
+  there (nfpm resolves content globs before expanding them), so the Makefile
+  stages each architecture at `dist/build/netlama-agent`.
+- `postinstall` enables the unit and starts it only once a token is present,
+  restarting instead on an upgrade; `preremove` stops/disables it only on a
+  real removal, not on an upgrade.
+- New workflow `.github/workflows/packages.yml` builds them on every push and
+  attaches them to the GitHub release on a `v*` tag.
+- Verified in containers: `dpkg -i`/`dpkg -r` on Debian 12 and `rpm -i`/`rpm -e`
+  on Fedora 41 (correct layout, agent binary runs), plus `systemd-analyze
+  verify` clean on the installed unit.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
