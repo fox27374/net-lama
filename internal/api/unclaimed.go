@@ -11,9 +11,10 @@ import (
 // shape as handleListAgents: admins may pass ?tenantId= or omit it for all
 // tenants, other users are pinned to their own.
 func (a *API) handleListUnclaimedAgents(w http.ResponseWriter, r *http.Request, user *store.User) {
-	tenantID := user.TenantID
-	if user.IsAdmin {
-		tenantID = r.URL.Query().Get("tenantId")
+	tenantID, ok := tenantFilter(user, r.URL.Query().Get("tenantId"))
+	if !ok {
+		writeError(w, http.StatusForbidden, "no access to this tenant")
+		return
 	}
 
 	agents, err := a.Store.ListUnclaimedAgents(tenantID)
@@ -24,20 +25,6 @@ func (a *API) handleListUnclaimedAgents(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, http.StatusOK, agents)
 }
 
-// getScopedUnclaimedAgent loads a pending enrollment and enforces tenant access.
-func (a *API) getScopedUnclaimedAgent(w http.ResponseWriter, r *http.Request, user *store.User) *store.UnclaimedAgent {
-	agent, err := a.Store.GetUnclaimedAgent(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "unclaimed agent not found")
-		return nil
-	}
-	if !user.IsAdmin && user.TenantID != agent.TenantID {
-		writeError(w, http.StatusForbidden, "no access to this agent")
-		return nil
-	}
-	return agent
-}
-
 // handleClaimAgent turns a pending enrollment into a real agent: creates
 // it exactly like handleCreateAgent (fresh random token), carries over the
 // capabilities/interfaces/version already reported while unclaimed, and
@@ -45,8 +32,8 @@ func (a *API) getScopedUnclaimedAgent(w http.ResponseWriter, r *http.Request, us
 // handleCreateAgent's, so the frontend's "copy token, start the agent"
 // dialog is reused unchanged for both flows.
 func (a *API) handleClaimAgent(w http.ResponseWriter, r *http.Request, user *store.User) {
-	unclaimed := a.getScopedUnclaimedAgent(w, r, user)
-	if unclaimed == nil {
+	unclaimed, ok := scoped(w, user, "unclaimed agent", r.PathValue("id"), a.Store.GetUnclaimedAgent)
+	if !ok {
 		return
 	}
 
@@ -63,9 +50,8 @@ func (a *API) handleClaimAgent(w http.ResponseWriter, r *http.Request, user *sto
 		return
 	}
 
-	site, err := a.Store.GetSite(req.SiteID)
-	if err != nil || site.TenantID != unclaimed.TenantID {
-		writeError(w, http.StatusBadRequest, "unknown site")
+	site, ok := inTenant(w, unclaimed.TenantID, "site", req.SiteID, a.Store.GetSite)
+	if !ok {
 		return
 	}
 
@@ -105,8 +91,8 @@ func (a *API) handleClaimAgent(w http.ResponseWriter, r *http.Request, user *sto
 // claiming it. If the device is still retrying, it simply reappears on its
 // next reconnect attempt — this isn't a hard block, just "not now".
 func (a *API) handleDismissUnclaimedAgent(w http.ResponseWriter, r *http.Request, user *store.User) {
-	unclaimed := a.getScopedUnclaimedAgent(w, r, user)
-	if unclaimed == nil {
+	unclaimed, ok := scoped(w, user, "unclaimed agent", r.PathValue("id"), a.Store.GetUnclaimedAgent)
+	if !ok {
 		return
 	}
 	if err := a.Store.DeleteUnclaimedAgent(unclaimed.ID); err != nil {

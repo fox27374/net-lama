@@ -132,11 +132,6 @@ func (a *API) admin(next authedHandler) authedHandler {
 	}
 }
 
-// canAccessAgent checks tenant scoping for a specific agent.
-func canAccessAgent(user *store.User, agent *store.Agent) bool {
-	return user.IsAdmin || user.TenantID == agent.TenantID
-}
-
 // --- helpers ---
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

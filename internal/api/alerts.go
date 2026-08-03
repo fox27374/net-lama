@@ -49,9 +49,7 @@ func (a *API) handleCreateAlertRule(w http.ResponseWriter, r *http.Request, user
 	}
 
 	// The test must exist and belong to the tenant.
-	test, err := a.Store.GetTest(req.TestID)
-	if err != nil || test.TenantID != tenantID {
-		writeError(w, http.StatusBadRequest, "unknown test")
+	if _, ok := inTenant(w, tenantID, "test", req.TestID, a.Store.GetTest); !ok {
 		return
 	}
 	if !validMetrics[req.Metric] {
@@ -81,13 +79,9 @@ func (a *API) handleCreateAlertRule(w http.ResponseWriter, r *http.Request, user
 	}
 
 	// Validate targetIds exist in the same tenant
-	if len(req.TargetIds) > 0 {
-		for _, tid := range req.TargetIds {
-			target, err := a.Store.GetAlertTarget(tid)
-			if err != nil || target.TenantID != tenantID {
-				writeError(w, http.StatusBadRequest, "unknown or unauthorized alert target: "+tid)
-				return
-			}
+	for _, tid := range req.TargetIds {
+		if _, ok := inTenant(w, tenantID, "alert target", tid, a.Store.GetAlertTarget); !ok {
+			return
 		}
 	}
 
@@ -100,13 +94,8 @@ func (a *API) handleCreateAlertRule(w http.ResponseWriter, r *http.Request, user
 }
 
 func (a *API) handleDeleteAlertRule(w http.ResponseWriter, r *http.Request, user *store.User) {
-	rule, err := a.Store.GetAlertRule(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "rule not found")
-		return
-	}
-	if !user.IsAdmin && user.TenantID != rule.TenantID {
-		writeError(w, http.StatusForbidden, "no access to this rule")
+	rule, ok := scoped(w, user, "rule", r.PathValue("id"), a.Store.GetAlertRule)
+	if !ok {
 		return
 	}
 	if err := a.Store.DeleteAlertRule(rule.ID); err != nil {
@@ -117,13 +106,8 @@ func (a *API) handleDeleteAlertRule(w http.ResponseWriter, r *http.Request, user
 }
 
 func (a *API) handleUpdateAlertRule(w http.ResponseWriter, r *http.Request, user *store.User) {
-	rule, err := a.Store.GetAlertRule(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "rule not found")
-		return
-	}
-	if !user.IsAdmin && user.TenantID != rule.TenantID {
-		writeError(w, http.StatusForbidden, "no access to this rule")
+	rule, ok := scoped(w, user, "rule", r.PathValue("id"), a.Store.GetAlertRule)
+	if !ok {
 		return
 	}
 
@@ -173,13 +157,9 @@ func (a *API) handleUpdateAlertRule(w http.ResponseWriter, r *http.Request, user
 	rule.ClearThreshold = req.ClearThreshold
 
 	// Validate targetIds exist in the same tenant
-	if len(req.TargetIds) > 0 {
-		for _, tid := range req.TargetIds {
-			target, err := a.Store.GetAlertTarget(tid)
-			if err != nil || target.TenantID != rule.TenantID {
-				writeError(w, http.StatusBadRequest, "unknown or unauthorized alert target: "+tid)
-				return
-			}
+	for _, tid := range req.TargetIds {
+		if _, ok := inTenant(w, rule.TenantID, "alert target", tid, a.Store.GetAlertTarget); !ok {
+			return
 		}
 	}
 	rule.TargetIds = req.TargetIds
@@ -255,13 +235,8 @@ func (a *API) handleCreateAlertTarget(w http.ResponseWriter, r *http.Request, us
 }
 
 func (a *API) handleUpdateAlertTarget(w http.ResponseWriter, r *http.Request, user *store.User) {
-	target, err := a.Store.GetAlertTarget(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "target not found")
-		return
-	}
-	if !user.IsAdmin && user.TenantID != target.TenantID {
-		writeError(w, http.StatusForbidden, "no access to this target")
+	target, ok := scoped(w, user, "target", r.PathValue("id"), a.Store.GetAlertTarget)
+	if !ok {
 		return
 	}
 
@@ -306,13 +281,8 @@ func (a *API) handleUpdateAlertTarget(w http.ResponseWriter, r *http.Request, us
 }
 
 func (a *API) handleDeleteAlertTarget(w http.ResponseWriter, r *http.Request, user *store.User) {
-	target, err := a.Store.GetAlertTarget(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "target not found")
-		return
-	}
-	if !user.IsAdmin && user.TenantID != target.TenantID {
-		writeError(w, http.StatusForbidden, "no access to this target")
+	target, ok := scoped(w, user, "target", r.PathValue("id"), a.Store.GetAlertTarget)
+	if !ok {
 		return
 	}
 	if err := a.Store.DeleteAlertTarget(target.ID); err != nil {

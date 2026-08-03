@@ -31,18 +31,6 @@ func validatePerfmonSource(st *store.Store, tenantID, testType string, params js
 	return nil
 }
 
-// tenantScope resolves the tenant a request operates on: admins may pick
-// any tenant via ?tenantId= (or body field), users are fixed to their own.
-func tenantScope(user *store.User, requested string) (string, bool) {
-	if user.IsAdmin {
-		return requested, requested != ""
-	}
-	if requested != "" && requested != user.TenantID {
-		return "", false
-	}
-	return user.TenantID, true
-}
-
 // handleOverview returns the tenant dashboard: counts and per-test health.
 // Optional siteId parameter filters to a specific site.
 func (a *API) handleOverview(w http.ResponseWriter, r *http.Request, user *store.User) {
@@ -53,11 +41,8 @@ func (a *API) handleOverview(w http.ResponseWriter, r *http.Request, user *store
 	}
 
 	siteID := r.URL.Query().Get("siteId")
-	// If siteId is provided, validate it belongs to the tenant
 	if siteID != "" {
-		site, err := a.Store.GetSite(siteID)
-		if err != nil || site.TenantID != tenantID {
-			writeError(w, http.StatusBadRequest, "invalid siteId")
+		if _, ok := inTenant(w, tenantID, "site", siteID, a.Store.GetSite); !ok {
 			return
 		}
 	}
@@ -127,22 +112,9 @@ func (a *API) handleCreateSite(w http.ResponseWriter, r *http.Request, user *sto
 	writeJSON(w, http.StatusCreated, site)
 }
 
-func (a *API) getScopedSite(w http.ResponseWriter, r *http.Request, user *store.User) *store.Site {
-	site, err := a.Store.GetSite(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "site not found")
-		return nil
-	}
-	if !user.IsAdmin && user.TenantID != site.TenantID {
-		writeError(w, http.StatusForbidden, "no access to this site")
-		return nil
-	}
-	return site
-}
-
 func (a *API) handleDeleteSite(w http.ResponseWriter, r *http.Request, user *store.User) {
-	site := a.getScopedSite(w, r, user)
-	if site == nil {
+	site, ok := scoped(w, user, "site", r.PathValue("id"), a.Store.GetSite)
+	if !ok {
 		return
 	}
 	if site.Agents > 0 {
@@ -159,8 +131,8 @@ func (a *API) handleDeleteSite(w http.ResponseWriter, r *http.Request, user *sto
 // handleSetSiteTests replaces the tests assigned to a site and pushes
 // the resulting config to all connected agents of the site.
 func (a *API) handleSetSiteTests(w http.ResponseWriter, r *http.Request, user *store.User) {
-	site := a.getScopedSite(w, r, user)
-	if site == nil {
+	site, ok := scoped(w, user, "site", r.PathValue("id"), a.Store.GetSite)
+	if !ok {
 		return
 	}
 
@@ -173,9 +145,7 @@ func (a *API) handleSetSiteTests(w http.ResponseWriter, r *http.Request, user *s
 
 	// All tests must exist and belong to the site's tenant
 	for _, testID := range req.TestIDs {
-		test, err := a.Store.GetTest(testID)
-		if err != nil || test.TenantID != site.TenantID {
-			writeError(w, http.StatusBadRequest, "unknown test: "+testID)
+		if _, ok := inTenant(w, site.TenantID, "test", testID, a.Store.GetTest); !ok {
 			return
 		}
 	}
@@ -243,22 +213,9 @@ func (a *API) handleCreateTest(w http.ResponseWriter, r *http.Request, user *sto
 	writeJSON(w, http.StatusCreated, test)
 }
 
-func (a *API) getScopedTest(w http.ResponseWriter, r *http.Request, user *store.User) *store.TestDef {
-	test, err := a.Store.GetTest(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "test not found")
-		return nil
-	}
-	if !user.IsAdmin && user.TenantID != test.TenantID {
-		writeError(w, http.StatusForbidden, "no access to this test")
-		return nil
-	}
-	return test
-}
-
 func (a *API) handleUpdateTest(w http.ResponseWriter, r *http.Request, user *store.User) {
-	test := a.getScopedTest(w, r, user)
-	if test == nil {
+	test, ok := scoped(w, user, "test", r.PathValue("id"), a.Store.GetTest)
+	if !ok {
 		return
 	}
 
@@ -294,8 +251,8 @@ func (a *API) handleUpdateTest(w http.ResponseWriter, r *http.Request, user *sto
 }
 
 func (a *API) handleDeleteTest(w http.ResponseWriter, r *http.Request, user *store.User) {
-	test := a.getScopedTest(w, r, user)
-	if test == nil {
+	test, ok := scoped(w, user, "test", r.PathValue("id"), a.Store.GetTest)
+	if !ok {
 		return
 	}
 

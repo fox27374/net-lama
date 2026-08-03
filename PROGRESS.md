@@ -1332,6 +1332,34 @@ What has been done so far, in chronological order. Planned work lives in
   on Fedora 41 (correct layout, agent binary runs), plus `systemd-analyze
   verify` clean on the installed unit.
 
+## 2026-08-03 — Tenant scoping as a seam, not a habit
+
+- **One place now decides tenant access** (`internal/api/scope.go`). Handlers
+  used to fetch a row by ID and then compare `TenantID` themselves — three
+  different idioms across ~20 call sites, each an independent chance to forget.
+  Two generic helpers replace all of them: `scoped()` for the resource a route
+  addresses (a path `{id}`), `inTenant()` for IDs referenced from a request
+  body (`siteId`, `testId`, `targetIds`). `store.Tenanted` (`TenantOf()`) is
+  what makes them generic over agents, sites, tests, rules, targets and
+  unclaimed agents.
+- **Cross-tenant IDs now return `404`, not `403`.** A `403` confirms the ID
+  exists, letting one tenant probe for another's agents and tests. This is the
+  rule `DELETE /api/v1/apikeys/{id}` already followed; the tenant-scoped routes
+  now match it. `doc/API.md` updated.
+- **First tests in `internal/api`** (the package had none):
+  `TestCrossTenantIDsAreNotFound` drives every `{id}` route with another
+  tenant's row through the real mux, with `TestOwnTenantIDsAreReachable` as the
+  positive control so it can't pass vacuously, plus body-referenced IDs, list
+  scoping, and unit tests for `tenantScope`/`tenantFilter`.
+- **`TestEveryIDRouteIsScoped` keeps the seam from eroding**: it reads the route
+  table in `api.go` and fails when a route takes an `{id}` without a
+  cross-tenant case in the table.
+- `handleListAgents` and `handleListUnclaimedAgents` had a third, hand-rolled
+  scoping idiom; both now use the named `tenantFilter` (admin + no `tenantId` =
+  all tenants), leaving `tenantScope` for routes that need exactly one tenant.
+- No behaviour change for the UI, which only ever checks `res.ok`. Dead
+  `canAccessAgent` removed.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

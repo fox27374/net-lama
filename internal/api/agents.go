@@ -44,9 +44,10 @@ func newAgentView(agent *store.Agent, connected bool, health *Health) *agentView
 }
 
 func (a *API) handleListAgents(w http.ResponseWriter, r *http.Request, user *store.User) {
-	tenantID := user.TenantID
-	if user.IsAdmin {
-		tenantID = r.URL.Query().Get("tenantId") // empty = all tenants
+	tenantID, ok := tenantFilter(user, r.URL.Query().Get("tenantId"))
+	if !ok {
+		writeError(w, http.StatusForbidden, "no access to this tenant")
+		return
 	}
 
 	agents, err := a.Store.ListAgents(tenantID)
@@ -89,13 +90,8 @@ func (a *API) handleCreateAgent(w http.ResponseWriter, r *http.Request, user *st
 		return
 	}
 
-	site, err := a.Store.GetSite(req.SiteID)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "unknown site")
-		return
-	}
-	if !user.IsAdmin && user.TenantID != site.TenantID {
-		writeError(w, http.StatusForbidden, "no access to this site")
+	site, ok := scoped(w, user, "site", req.SiteID, a.Store.GetSite)
+	if !ok {
 		return
 	}
 
@@ -110,27 +106,13 @@ func (a *API) handleCreateAgent(w http.ResponseWriter, r *http.Request, user *st
 	writeJSON(w, http.StatusCreated, newAgentView(agent, false, nil))
 }
 
-// getScopedAgent loads an agent and enforces tenant access.
-func (a *API) getScopedAgent(w http.ResponseWriter, r *http.Request, user *store.User) *store.Agent {
-	agent, err := a.Store.GetAgent(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "agent not found")
-		return nil
-	}
-	if !user.IsAdmin && user.TenantID != agent.TenantID {
-		writeError(w, http.StatusForbidden, "no access to this agent")
-		return nil
-	}
-	return agent
-}
-
 // handleUpdateAgent renames an agent, moves it to another site of the same
 // tenant, and sets its WLAN-sensor/perfmon-reflector interface picks; the
 // resulting config (reflector state, WLAN sensor override) is pushed live —
 // no restart needed to pick up any of these changes.
 func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *store.User) {
-	agent := a.getScopedAgent(w, r, user)
-	if agent == nil {
+	agent, ok := scoped(w, user, "agent", r.PathValue("id"), a.Store.GetAgent)
+	if !ok {
 		return
 	}
 
@@ -160,9 +142,8 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 		return
 	}
 
-	site, err := a.Store.GetSite(req.SiteID)
-	if err != nil || site.TenantID != agent.TenantID {
-		writeError(w, http.StatusBadRequest, "unknown site")
+	site, ok := inTenant(w, agent.TenantID, "site", req.SiteID, a.Store.GetSite)
+	if !ok {
 		return
 	}
 
@@ -189,8 +170,8 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request, user *st
 
 // handleRunTest triggers an immediate run of one of the agent's tests.
 func (a *API) handleRunTest(w http.ResponseWriter, r *http.Request, user *store.User) {
-	agent := a.getScopedAgent(w, r, user)
-	if agent == nil {
+	agent, ok := scoped(w, user, "agent", r.PathValue("id"), a.Store.GetAgent)
+	if !ok {
 		return
 	}
 	var req struct {
@@ -231,8 +212,8 @@ func (a *API) handleRunTest(w http.ResponseWriter, r *http.Request, user *store.
 }
 
 func (a *API) handleDeleteAgent(w http.ResponseWriter, r *http.Request, user *store.User) {
-	agent := a.getScopedAgent(w, r, user)
-	if agent == nil {
+	agent, ok := scoped(w, user, "agent", r.PathValue("id"), a.Store.GetAgent)
+	if !ok {
 		return
 	}
 	if err := a.Store.DeleteAgent(agent.ID); err != nil {

@@ -70,11 +70,18 @@ Every non-2xx response has the same shape:
 ```
 
 Common status codes: `400` invalid input, `401` not authenticated,
-`403` authenticated but not permitted (e.g. non-admin hitting an admin
-route, or a tenant user asking for another tenant's data), `404` not found
-(or, for `DELETE /api/v1/apikeys/{id}`, not *yours*), `409` conflict
-(duplicate name), `500` internal error. Successful writes return `200`/`201`
-with the created/updated resource, or `204` with an empty body for deletes.
+`403` authenticated but not permitted (non-admin hitting an admin route),
+`404` not found, `409` conflict (duplicate name), `500` internal error.
+Successful writes return `200`/`201` with the created/updated resource, or
+`204` with an empty body for deletes.
+
+A resource that exists but belongs to another tenant is reported as `404`,
+never `403` — a `403` would confirm the ID exists and let one tenant probe
+for another's agents, sites, tests and alert rules. The same rule applies
+per user to `DELETE /api/v1/apikeys/{id}`. IDs referenced from a request
+body (a `siteId`, `testId` or `targetIds` entry) are the exception: those
+are input rather than the addressed resource, so a cross-tenant reference
+is `400`.
 
 ---
 
@@ -219,7 +226,7 @@ name within the tenant. Returns the created `Site`.
 
 ### `DELETE /api/v1/sites/{id}`
 
-`409` if the site still has agents (move or delete them first). `403` if
+`409` if the site still has agents (move or delete them first). `404` if
 the site isn't yours (tenant users). `204`.
 
 ### `PUT /api/v1/sites/{id}/tests`
@@ -704,11 +711,11 @@ Returns the created `AlertTarget`. Tenant users can only create webhook and emai
 ### `PUT /api/v1/alert-targets/{id}`
 
 Update an alert target. Same `config` validation as POST. Script targets require
-admin access. `403` if not in your tenant (tenant users).
+admin access. `404` if not in your tenant (tenant users).
 
 ### `DELETE /api/v1/alert-targets/{id}`
 
-`403` if not in your tenant. `204`.
+`404` if not in your tenant. `204`.
 
 ---
 
@@ -756,12 +763,12 @@ regardless of targets. Returns the created `AlertRule`.
 
 ### `PUT /api/v1/alert-rules/{id}`
 
-Update an alert rule with the same fields as POST. `403` if the rule isn't in
+Update an alert rule with the same fields as POST. `404` if the rule isn't in
 your tenant. Returns the updated `AlertRule`.
 
 ### `DELETE /api/v1/alert-rules/{id}`
 
-`403` if the rule isn't in your tenant. `204`.
+`404` if the rule isn't in your tenant. `204`.
 
 ---
 
