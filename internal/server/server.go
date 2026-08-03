@@ -10,9 +10,9 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/fox27374/net-lama/internal/store"
+	"github.com/fox27374/net-lama/internal/testtype"
 	pb "github.com/fox27374/net-lama/proto"
 )
 
@@ -61,15 +61,14 @@ func New(st *store.Store, metrics *Metrics, logger *slog.Logger) *Server {
 	}
 }
 
-// requiredCapability maps a test type to its required capability.
-// Most types map to themselves; some aliases map to a base capability.
+// requiredCapability maps a test type to its required capability. An
+// unregistered type maps to itself, so an agent that reports a capability
+// the server doesn't know about can still be sent matching tests.
 func requiredCapability(testType string) string {
-	switch testType {
-	case "wlan_passive":
-		return "wlan"
-	default:
-		return testType
+	if s := testtype.Get(testType); s != nil {
+		return s.Capability
 	}
+	return testType
 }
 
 // isPerfmonSource reports whether agentID is the pinned source agent for a
@@ -529,41 +528,12 @@ func (s *Server) handleAgentLog(logger *slog.Logger, conn *connectedAgent, log *
 	}
 }
 
-// resultTestType maps a result's payload oneof to its stored test-type
-// string. Keep every TestResult_* variant covered — an omission stores
-// "unknown", which then fails the `?type=` filter the UI queries by.
-func resultTestType(result *pb.TestResult) string {
-	switch result.Result.(type) {
-	case *pb.TestResult_Speedtest:
-		return "speedtest"
-	case *pb.TestResult_Ping:
-		return "ping"
-	case *pb.TestResult_Dns:
-		return "dns"
-	case *pb.TestResult_Http:
-		return "http"
-	case *pb.TestResult_Tcp:
-		return "tcp"
-	case *pb.TestResult_WlanPassive:
-		return "wlan_passive"
-	case *pb.TestResult_WlanActive:
-		return "wlan_active"
-	case *pb.TestResult_Perfmon:
-		return "perfmon"
-	case *pb.TestResult_Traceroute:
-		return "traceroute"
-	}
-	return "unknown"
-}
-
 func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result *pb.TestResult) {
 	s.Metrics.Record(conn.tenant, conn.agent.SiteName, conn.agent.Name, result)
 
-	testType := resultTestType(result)
+	testType := testtype.TypeOf(result)
 
-	// Persist the result. EmitDefaultValues keeps zero-valued fields
-	// (reached=false, loss=0, ...) in the JSON so the UI can rely on them.
-	payload, err := protojson.MarshalOptions{EmitDefaultValues: true}.Marshal(result)
+	payload, err := testtype.EncodeResult(result)
 	if err != nil {
 		logger.Error("Marshalling result failed", slog.Any("error", err))
 		return

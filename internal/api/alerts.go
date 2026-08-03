@@ -6,12 +6,19 @@ import (
 	"strings"
 
 	"github.com/fox27374/net-lama/internal/store"
+	"github.com/fox27374/net-lama/internal/testtype"
 )
 
-var validMetrics = map[string]bool{
-	"unhealthy": true, "state": true, "latency_ms": true, "loss_percent": true,
-	"download_mbps": true, "upload_mbps": true,
-}
+// validMetrics is derived from the test-type registry so a metric added to
+// a Spec is accepted here without a second list to keep in sync.
+// "unhealthy" and "state" are type-independent and have no Spec entry.
+var validMetrics = func() map[string]bool {
+	m := map[string]bool{"unhealthy": true, "state": true}
+	for _, name := range testtype.AlertMetrics() {
+		m[name] = true
+	}
+	return m
+}()
 var validOperators = map[string]bool{">": true, ">=": true, "<": true, "<=": true, "==": true}
 var validTargetTypes = map[string]bool{
 	"webhook": true, "email": true, "script": true, "snmp": true,

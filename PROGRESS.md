@@ -1360,6 +1360,55 @@ What has been done so far, in chronological order. Planned work lives in
 - No behaviour change for the UI, which only ever checks `res.ok`. Dead
   `canAccessAgent` removed.
 
+## 2026-08-03 — A test type is a module, not a string
+
+- **New `internal/testtype` registry.** "Test type" was the most load-bearing
+  concept in the system and had no home: eleven `switch` statements across five
+  Go files plus six spots in `app.js` each re-stated what a type means. One
+  `Spec` per type now holds its capability, unit, threshold direction, primary
+  metric, alert metrics and per-target alert subject. Adding a type is an entry
+  in `specs.go` plus its proto message and probe.
+- **Fixed: the two copies had drifted.** The alert engine scored a
+  `wlan_passive` run by *how many networks it heard*
+  (`len(WlanPassive.Networks)`) while the dashboard plotted *max channel
+  utilization* — so one `%` threshold meant two different things and nothing
+  failed. Utilization is now the single answer.
+- **Fixed: `perfmon` and `wlan_active` were missing** from the alert engine's
+  metric extraction, so `state` rules on those tests were permanently green.
+  Both are registered.
+- **Fixed: the UI's `METRIC_APPLICABILITY` map** was a fourth copy and out of
+  date — it hid `perfmon` and `wlan_active` alert rules from the rule picker,
+  and `wlan_passive`'s utilization metric wasn't selectable at all. The
+  condition dropdown is now filled from the registry.
+- **The store no longer parses results as `map[string]interface{}`.** Results
+  were written as protojson and read back by groping for field names by string
+  (~150 lines of nine near-identical `extract*Metric` helpers, and an in-repo
+  admission that it was a placeholder). `testtype.EncodeResult`/`DecodeResult`
+  own both directions, so a proto field rename is a compile error instead of a
+  silently blank sparkline.
+- **New `GET /api/v1/test-types`** serves the registry; the browser drives its
+  unit labels, capability warnings, threshold-band direction and alert-metric
+  dropdown from it instead of its own hardcoded maps. The API's `validMetrics`
+  is derived from the registry too.
+- **Tests**: `TestEveryResultVariantIsRegistered` walks the `TestResult` oneof
+  by proto reflection, so adding a result variant without registering its type
+  fails there rather than storing results as `"unknown"`; plus spec
+  completeness, the pinned primary metric per type, the wlan_passive drift
+  regression, metric applicability, and an encode/decode round trip.
+- Deliberately left alone: `resultOK` and the Prometheus `Metrics.Record`
+  switch (one switch each, no duplication to concentrate), and
+  `ValidateTestDef`/`TestSpec` in `internal/server/config.go` (they work on
+  `store.TestDef`, and the registry stays store-free so `internal/store` can
+  import it).
+- **Known wrinkle:** `perfmon` measures throughput like `speedtest` and
+  arguably wants `lowerIsWorse` too, but it has always been evaluated
+  higher-is-worse. Flipping it would silently invert every existing perfmon
+  threshold, so it stays as-is with a note in `specs.go` until someone decides
+  to migrate them.
+- Verified end to end against a local server: registry endpoint, results stored
+  with the right type, dashboard series/unit/current, and a `state` rule firing
+  off the registry's primary metric.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

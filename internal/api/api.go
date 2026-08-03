@@ -61,6 +61,8 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/enroll-token", a.auth(a.handleGenerateEnrollToken))
 	mux.HandleFunc("DELETE /api/v1/enroll-token", a.auth(a.handleRevokeEnrollToken))
 
+	mux.HandleFunc("GET /api/v1/test-types", a.auth(a.handleListTestTypes))
+
 	mux.HandleFunc("GET /api/v1/results", a.auth(a.handleListResults))
 	mux.HandleFunc("GET /api/v1/oui", a.auth(a.handleOUILookup))
 	mux.HandleFunc("GET /api/v1/wlan-roaming", a.auth(a.handleWlanRoaming))

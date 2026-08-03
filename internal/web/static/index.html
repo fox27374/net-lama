@@ -833,14 +833,9 @@
     <label>Name <input type="text" id="ar-name" placeholder="High latency to gateway" required></label>
     <label>Test <select id="ar-test"></select></label>
     <label>Condition
-      <select id="ar-metric">
-        <option value="unhealthy">Test is unhealthy (fails)</option>
-        <option value="state">State is at least</option>
-        <option value="latency_ms">Latency (ms)</option>
-        <option value="loss_percent">Packet loss (%)</option>
-        <option value="download_mbps">Download (Mbps)</option>
-        <option value="upload_mbps">Upload (Mbps)</option>
-      </select>
+      <!-- Options are filled from the test-type registry by
+           populateMetricSelect(); see GET /api/v1/test-types. -->
+      <select id="ar-metric"></select>
     </label>
     <div id="ar-threshold-wrap" class="grid2 hidden">
       <label>Operator

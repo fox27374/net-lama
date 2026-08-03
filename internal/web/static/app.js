@@ -11,6 +11,20 @@ let alertRules = [];
 let editingTest = null;
 let pendingTestForRule = null; // set when jumping to alertcfg with a test preselected
 
+// testTypes is the server's test-type registry, keyed by type name:
+// {type, capability, unit, lowerIsWorse, metrics}. The UI used to carry its
+// own copies of these facts (a unit map, a capability function, a
+// "lower is worse" check) which could disagree with the server's without
+// anything failing. Loaded once at sign-in; see loadTestTypes().
+let testTypes = {};
+
+// testTypeOf returns a type's registry entry, or an empty object so a type
+// the server doesn't know about degrades to blank labels rather than
+// throwing mid-render.
+function testTypeOf(type) {
+  return testTypes[type] || {};
+}
+
 // --- Theme ---
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -75,6 +89,7 @@ async function showApp() {
   $("#whoami").textContent = me.username + (me.isAdmin ? " · admin" : "");
   $("#server-version").textContent = me.serverVersion ? "net-lama " + me.serverVersion : "";
   $("#admin-panel").classList.toggle("hidden", !me.isAdmin);
+  await loadTestTypes();
   if (me.isAdmin) {
     tenants = await api("GET", "/api/v1/tenants");
     const sel = $("#tenant-context");
@@ -475,6 +490,13 @@ async function renderDashboardWireless(siteId) {
 }
 
 // --- Data helpers ---
+// loadTestTypes fills the testTypes registry. It is the same for every
+// tenant, so it is fetched once at sign-in rather than per section.
+async function loadTestTypes() {
+  const list = await api("GET", "/api/v1/test-types");
+  testTypes = Object.fromEntries(list.map((t) => [t.type, t]));
+}
+
 async function fetchSites() {
   sites = await api("GET", "/api/v1/sites" + tenantParam());
   return sites;
@@ -974,7 +996,6 @@ function populateAlertRuleSelect(testType) {
 // Backed by the same {warn, crit} model: warn is the green|orange boundary,
 // crit the orange|red one. For speedtest lower is worse, so the band order
 // flips (green on top) and warn > crit.
-const BAND_UNIT = { ping: "ms", dns: "ms", http: "ms", tcp: "ms", speedtest: "Mbps", traceroute: "hops", wlan_passive: "%", wlan_active: "ms", perfmon: "Mbps" };
 // null = band absent, "" = band added but value not typed yet, "40" = value
 let bandTh = { warn: null, crit: null };
 let bandType = "ping";
@@ -989,7 +1010,7 @@ function initThresholdBands(type, th) {
 // bandRows returns the rows to draw, highest boundary first. Each row:
 // {color, field (editable boundary; null for the catch-all band), text}.
 function bandRows() {
-  const lw = bandType === "speedtest"; // lower is worse
+  const lw = !!testTypeOf(bandType).lowerIsWorse;
   const hasW = bandTh.warn !== null, hasC = bandTh.crit !== null;
   const w = bandTh.warn || "…", c = bandTh.crit || "…";
   if (hasW && hasC) {
@@ -1019,7 +1040,7 @@ function bandRows() {
 }
 
 function renderBands() {
-  const unit = BAND_UNIT[bandType] || "";
+  const unit = testTypeOf(bandType).unit || "";
   $("#t-band-unit").textContent = unit ? `(${unit}, optional)` : "(optional)";
   const box = $("#t-bands");
   box.innerHTML = "";
@@ -1376,10 +1397,10 @@ let assigningSite = null;
 // capabilityWarnings lists, for the given site's agents, every selected
 // test whose type is missing from an agent's non-empty capability list.
 // Maps test type to required capability (e.g., wlan_passive → wlan).
+// An unregistered type maps to itself, matching the server's fallback in
+// internal/server/server.go.
 function requiredCapability(testType) {
-  if (testType === "wlan_passive") return "wlan";
-  if (testType === "wlan_active") return "wlan_active";
-  return testType;
+  return testTypeOf(testType).capability || testType;
 }
 
 // Agents with an empty list (old versions that never reported
@@ -3518,29 +3539,49 @@ function lossCell(loss) {
 }
 
 // --- Alerts ---
+// Display names only. Which metrics exist, and which test type each one
+// applies to, comes from the server's registry (see metricApplies) — this
+// map used to also encode applicability and had fallen out of date, hiding
+// perfmon and wlan_active rules from the UI entirely.
 const METRIC_LABEL = {
-  unhealthy: "unhealthy", latency_ms: "latency (ms)", loss_percent: "loss (%)",
-  download_mbps: "download (Mbps)", upload_mbps: "upload (Mbps)",
+  unhealthy: "Test is unhealthy (fails)", state: "State is at least",
+  latency_ms: "latency (ms)",
+  loss_percent: "loss (%)", download_mbps: "download (Mbps)",
+  upload_mbps: "upload (Mbps)", utilization_pct: "channel utilization (%)",
 };
 
-// Metric applicability map: which test types can use which metrics
-const METRIC_APPLICABILITY = {
-  unhealthy: ["ping", "dns", "http", "tcp", "traceroute", "wlan_passive", "speedtest"],
-  latency_ms: ["ping", "dns", "http", "tcp", "traceroute", "speedtest"],
-  loss_percent: ["ping"],
-  download_mbps: ["speedtest"],
-  upload_mbps: ["speedtest"],
-};
+function metricLabel(metric) {
+  return METRIC_LABEL[metric] || metric;
+}
+
+// "unhealthy" and "state" are evaluated the same way for every test type
+// and so have no per-type entry in the registry.
+const TYPE_INDEPENDENT_METRICS = ["unhealthy", "state"];
+
+function metricApplies(metric, testType) {
+  if (TYPE_INDEPENDENT_METRICS.includes(metric)) return true;
+  return (testTypeOf(testType).metrics || []).includes(metric);
+}
 
 // Get rules applicable to a test type
 function getApplicableRules(testType) {
   if (!testType) return [];
-  return alertRules.filter((r) => {
-    const applicableMetrics = Object.entries(METRIC_APPLICABILITY)
-      .filter(([_, types]) => types.includes(testType))
-      .map(([metric, _]) => metric);
-    return applicableMetrics.includes(r.metric);
-  });
+  return alertRules.filter((r) => metricApplies(r.metric, testType));
+}
+
+// populateMetricSelect fills the alert-rule condition dropdown from the
+// registry, so a metric added server-side becomes selectable without
+// editing index.html.
+function populateMetricSelect(selected) {
+  const metrics = new Set(TYPE_INDEPENDENT_METRICS);
+  for (const t of Object.values(testTypes)) {
+    for (const m of t.metrics || []) metrics.add(m);
+  }
+  const select = $("#ar-metric");
+  select.innerHTML = [...metrics]
+    .map((m) => `<option value="${m}">${esc(metricLabel(m))}</option>`)
+    .join("");
+  if (selected) select.value = selected;
 }
 
 function updateAlertBadge(count) {
@@ -3588,6 +3629,7 @@ $("#btn-new-rule").addEventListener("click", async () => {
   ]);
   if (!tests.length) { alert("Create a test first."); return; }
   $("#dlg-rule-title").textContent = "New alert rule";
+  populateMetricSelect();
   $("#ar-name").value = "";
   $("#ar-test").innerHTML = tests.map((t) => `<option value="${t.id}">${esc(t.name)} (${t.type})</option>`).join("");
   // Preselect the pending test if available
@@ -3733,6 +3775,7 @@ async function editAlertRule(rule, targets) {
   editingRuleId = rule.id;
   const tests = await api("GET", "/api/v1/tests" + tenantParam());
   $("#dlg-rule-title").textContent = "Edit alert rule";
+  populateMetricSelect(rule.metric);
   $("#ar-name").value = rule.name;
   $("#ar-test").innerHTML = tests.map((t) => `<option value="${t.id}" ${t.id === rule.testId ? "selected" : ""}>${esc(t.name)} (${t.type})</option>`).join("");
   $("#ar-metric").value = rule.metric;

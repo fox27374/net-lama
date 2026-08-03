@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/fox27374/net-lama/internal/store"
+	"github.com/fox27374/net-lama/internal/testtype"
 	pb "github.com/fox27374/net-lama/proto"
 )
 
@@ -31,7 +32,7 @@ func (s *Server) evaluateAlerts(conn *connectedAgent, result *pb.TestResult) {
 	// Some tests emit several results per run (one per target/query); the
 	// subject keeps a separate alert per target so a healthy target doesn't
 	// resolve an alert raised by a failing one.
-	subject := resultSubject(result)
+	subject := testtype.SubjectOf(result)
 
 	for _, rule := range rules {
 		breach, value, applicable := evalRule(rule, result, test)
@@ -137,24 +138,6 @@ func (s *Server) resolveAlert(rule *store.AlertRule, conn *connectedAgent, subje
 	s.notifyTargets(rule, conn, active, "resolved", active.Value)
 }
 
-// resultSubject identifies the specific target within a result, so
-// multi-target tests get one alert per target.
-func resultSubject(result *pb.TestResult) string {
-	switch r := result.Result.(type) {
-	case *pb.TestResult_Ping:
-		return r.Ping.Target
-	case *pb.TestResult_Dns:
-		return r.Dns.Query + "@" + r.Dns.Server
-	case *pb.TestResult_Http:
-		return r.Http.Url
-	case *pb.TestResult_Tcp:
-		return r.Tcp.Target
-	case *pb.TestResult_Traceroute:
-		return r.Traceroute.Target
-	}
-	return ""
-}
-
 // evalRule computes whether a result breaches a rule. applicable is false
 // when the metric does not apply to this result's type (rule is skipped).
 func evalRule(rule *store.AlertRule, result *pb.TestResult, test *store.TestDef) (breach bool, value float64, applicable bool) {
@@ -174,7 +157,7 @@ func evalRule(rule *store.AlertRule, result *pb.TestResult, test *store.TestDef)
 		return false, 0, false
 	}
 
-	v, ok := metricValue(rule.Metric, result)
+	v, ok := testtype.MetricValue(rule.Metric, result)
 	if !ok {
 		return false, 0, false
 	}
@@ -205,109 +188,31 @@ func resultState(result *pb.TestResult, test *store.TestDef) float64 {
 		return 0
 	}
 
-	// Extract the metric value from the result
-	val := extractResultMetric(test.Type, result)
-	if val == nil {
+	spec := testtype.Get(test.Type)
+	if spec == nil {
+		return 0
+	}
+	val, ok := spec.Primary(result)
+	if !ok {
 		return 0
 	}
 
-	// Compute state based on test type direction
-	isSpeedtest := test.Type == "speedtest"
-	if isSpeedtest {
-		// Lower is worse
-		if thresholds.Crit > 0 && *val < thresholds.Crit {
+	if spec.LowerIsWorse {
+		if thresholds.Crit > 0 && val < thresholds.Crit {
 			return 2
 		}
-		if thresholds.Warn > 0 && *val < thresholds.Warn {
+		if thresholds.Warn > 0 && val < thresholds.Warn {
 			return 1
 		}
 	} else {
-		// Higher is worse
-		if thresholds.Crit > 0 && *val > thresholds.Crit {
+		if thresholds.Crit > 0 && val > thresholds.Crit {
 			return 2
 		}
-		if thresholds.Warn > 0 && *val > thresholds.Warn {
+		if thresholds.Warn > 0 && val > thresholds.Warn {
 			return 1
 		}
 	}
 	return 0
-}
-
-// extractResultMetric extracts the primary metric from a TestResult's oneof.
-func extractResultMetric(testType string, result *pb.TestResult) *float64 {
-	var val float64
-	switch r := result.Result.(type) {
-	case *pb.TestResult_Ping:
-		if r.Ping != nil {
-			val = r.Ping.AvgRttMs
-		}
-	case *pb.TestResult_Dns:
-		if r.Dns != nil {
-			val = r.Dns.ResolveTimeMs
-		}
-	case *pb.TestResult_Http:
-		if r.Http != nil {
-			val = r.Http.TotalMs
-		}
-	case *pb.TestResult_Tcp:
-		if r.Tcp != nil {
-			val = r.Tcp.ConnectMs
-		}
-	case *pb.TestResult_Speedtest:
-		if r.Speedtest != nil {
-			val = r.Speedtest.DownloadMbps
-		}
-	case *pb.TestResult_Traceroute:
-		if r.Traceroute != nil {
-			val = float64(len(r.Traceroute.Hops))
-		}
-	case *pb.TestResult_WlanPassive:
-		if r.WlanPassive != nil {
-			val = float64(len(r.WlanPassive.Networks))
-		}
-	}
-	if val > 0 {
-		return &val
-	}
-	return nil
-}
-
-func metricValue(metric string, result *pb.TestResult) (float64, bool) {
-	switch r := result.Result.(type) {
-	case *pb.TestResult_Ping:
-		switch metric {
-		case "latency_ms":
-			return r.Ping.AvgRttMs, true
-		case "loss_percent":
-			return r.Ping.LossPercent, true
-		}
-	case *pb.TestResult_Dns:
-		if metric == "latency_ms" {
-			return r.Dns.ResolveTimeMs, true
-		}
-	case *pb.TestResult_Http:
-		if metric == "latency_ms" {
-			return r.Http.TotalMs, true
-		}
-	case *pb.TestResult_Tcp:
-		if metric == "latency_ms" {
-			return r.Tcp.ConnectMs, true
-		}
-	case *pb.TestResult_Traceroute:
-		if metric == "latency_ms" {
-			return r.Traceroute.RttMs, true
-		}
-	case *pb.TestResult_Speedtest:
-		switch metric {
-		case "latency_ms":
-			return r.Speedtest.LatencyMs, true
-		case "download_mbps":
-			return r.Speedtest.DownloadMbps, true
-		case "upload_mbps":
-			return r.Speedtest.UploadMbps, true
-		}
-	}
-	return 0, false
 }
 
 func compare(v float64, op string, threshold float64) bool {

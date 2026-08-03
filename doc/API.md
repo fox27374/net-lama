@@ -244,6 +244,39 @@ site's tenant (`400` otherwise). Response:
 Named, reusable test definitions within a tenant; a test only actually runs
 once assigned to a site (`PUT /api/v1/sites/{id}/tests`).
 
+### `GET /api/v1/test-types`
+
+The server's test-type registry: what test types exist and what each one
+means. Identical for every tenant (it describes the software, not anyone's
+data), so it takes no `tenantId`. The web UI loads it once at sign-in and
+drives its unit labels, capability warnings, threshold-band direction and
+alert-metric dropdown from it.
+
+```json
+[{
+  "type": "wlan_passive",
+  "capability": "wlan",
+  "unit": "%",
+  "lowerIsWorse": false,
+  "metrics": ["utilization_pct"]
+}]
+```
+
+- `capability` — what an agent must report before the server will push
+  tests of this type to it. Usually the type's own name; `wlan_passive`
+  needs the generic `wlan` (monitor-mode) capability.
+- `unit` — the unit of the type's *primary metric*: the one number that
+  represents a run, plotted on the dashboard sparkline and compared against
+  a test's `warn`/`crit` thresholds.
+- `lowerIsWorse` — flips those threshold comparisons. Throughput degrades
+  by falling (`warn` > `crit`), latency by rising.
+- `metrics` — the named values an alert rule may watch for this type, on
+  top of the type-independent `unhealthy` and `state`.
+
+A type the client doesn't recognise should degrade gracefully rather than
+being special-cased; the registry is the source of truth for all of the
+above, on the server and in the browser.
+
 ### `GET /api/v1/tests`
 
 Query: `tenantId` (same admin/tenant-user rules as Sites). Returns
@@ -744,8 +777,15 @@ Body: `{"name": "...", "testId": "...", "metric": "...", "operator": "...",
 "targetIds": [], "tenantId": "..."}`.
 
 `tenantId` required for admins. `name` required. `testId` must reference an
-existing test in the tenant. `metric` must be one of `unhealthy`, `state`,
-`latency_ms`, `loss_percent`, `download_mbps`, `upload_mbps`. 
+existing test in the tenant. `metric` must be `unhealthy`, `state`, or one of
+the names any test type exposes in `GET /api/v1/test-types` — the accepted
+set is derived from that registry, so it grows with it rather than being a
+separate list here.
+
+A rule whose metric doesn't apply to the type of result being evaluated is
+skipped rather than counted as a pass, so a `download_mbps` rule on a ping
+test simply never fires.
+
 
 For `unhealthy` metric, `operator` is ignored (always fired on failure).
 For `state` metric, `operator` is always `>=` and `threshold` must be 1 (orange)
