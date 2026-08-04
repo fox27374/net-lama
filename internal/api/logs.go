@@ -8,11 +8,11 @@ import (
 )
 
 // handleListLogs returns recent server/agent log lines, newest first.
-// Tenant users are implicitly scoped to their own tenant (never seeing
-// server logs, which carry no tenant) and may not request source=server.
-// Admins see everything by default and may filter with ?tenantId=; a
-// tenantId filter is ignored for source=server since server logs have no
-// tenant to match.
+// Scoping goes through tenantFilter like every other listing: tenant users
+// see their own tenant, admins see everything unless they name a tenant.
+// Server logs are the one wrinkle — they carry no tenant, so a tenant
+// filter would match nothing and is dropped, and tenant users may not ask
+// for them at all.
 func (a *API) handleListLogs(w http.ResponseWriter, r *http.Request, user *store.User) {
 	q := r.URL.Query()
 	source := q.Get("source")
@@ -29,12 +29,14 @@ func (a *API) handleListLogs(w http.ResponseWriter, r *http.Request, user *store
 		Level:   q.Get("level"),
 		Limit:   limit,
 	}
-	if user.IsAdmin {
-		if source != "server" {
-			filter.TenantID = q.Get("tenantId") // empty = all tenants
-		}
-	} else {
-		filter.TenantID = user.TenantID
+	tenantID, ok := tenantFilter(user, q.Get("tenantId"))
+	if !ok {
+		writeError(w, http.StatusForbidden, "not your tenant")
+		return
+	}
+	if source != "server" {
+		// Server logs carry no tenant, so any filter would match nothing.
+		filter.TenantID = tenantID
 	}
 
 	logs, err := a.Store.ListLogs(filter)

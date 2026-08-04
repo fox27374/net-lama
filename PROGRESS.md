@@ -1489,6 +1489,43 @@ cross, and the tests that had been *simulating* them now drive the real code.
   got its config, a `latency_ms > 0` rule fired on the first result, and
   raising the rule's threshold resolved it on the next one.
 
+## 2026-08-04 — A test type is one entry in the browser too
+
+- **`UI_TYPES` in `app.js`** is the browser's half of the test-type registry:
+  per type, its result payload key, params summary, form write/read, result
+  detail line, and the numbers its timeline plots. The same nine types had been
+  listed in six separate functions (`paramsSummary`, `updateTestParamFields`,
+  the `openTestDialog` field population, the test-form submit handler,
+  `resultDetails`, `buildSeries`) — miss one when adding a type and the UI
+  renders blanks rather than failing.
+- All six now look the type up: `updateTestParamFields` toggles the
+  `#t-params-*` groups by iterating the table, `openTestDialog` calls every
+  type's `write()` (the edited type with its stored params, the rest with
+  `{}`, so a hidden field can't carry another type's leftovers), the submit
+  handler is one `read()`, `resultDetails` matches on the payload key, and
+  `buildSeries` asks the type for its points and unit.
+- **`TestEveryTestTypeHasUIEntry`** (`internal/web`) reads the table out of
+  `app.js` and fails if a registered type has no entry, or an entry names a
+  type the server doesn't register — the same guard idea as
+  `TestEveryResultVariantIsRegistered` and `TestEveryIDRouteIsScoped`.
+- **`handleListLogs` no longer hand-rolls tenant scoping.** It had its own
+  admin/non-admin if-else beside `scope.go` — the one file that is supposed to
+  decide this — because server logs carry no tenant. It calls `tenantFilter`
+  now and drops the filter only for `source=server`. A tenant user asking for
+  another tenant's logs gets 403 instead of being silently rescoped.
+- **`TestLogScoping`** covers all six combinations (tenant user's own logs,
+  another tenant refused, server logs refused, admin sees all, admin filters to
+  one tenant, admin gets server logs despite a tenant filter), and `/api/v1/logs`
+  joined `TestListEndpointsAreTenantScoped`.
+- Verified against a local server seeded with all nine test types and a
+  demo-mode agent: every type's stored params round-trip through its
+  `write()`/`read()`, and every stored result renders a detail line and its
+  expected series points.
+- Deliberately left alone: the Wireless and Path pages naming `wlan_passive`
+  and `traceroute` in their result filters (that is what those pages are), and
+  the agent list's `baselineCaps` (a curated "which capabilities are worth a
+  badge" judgement, not a copy of the type list).
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

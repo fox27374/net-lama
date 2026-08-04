@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -289,7 +290,7 @@ func TestBodyReferencedIDsAreTenantChecked(t *testing.T) {
 func TestListEndpointsAreTenantScoped(t *testing.T) {
 	h := newHarness(t)
 
-	for _, path := range []string{"/api/v1/sites", "/api/v1/tests", "/api/v1/agents", "/api/v1/alert-rules", "/api/v1/alert-targets", "/api/v1/agents/unclaimed"} {
+	for _, path := range []string{"/api/v1/sites", "/api/v1/tests", "/api/v1/agents", "/api/v1/alert-rules", "/api/v1/alert-targets", "/api/v1/agents/unclaimed", "/api/v1/logs"} {
 		t.Run(path, func(t *testing.T) {
 			// Without a tenantId, and with another tenant's tenantId asked
 			// for explicitly, a tenant user sees only its own rows.
@@ -301,6 +302,65 @@ func TestListEndpointsAreTenantScoped(t *testing.T) {
 					}
 				} else if query == "" {
 					t.Fatalf("%s: status = %d, want 2xx (body: %s)", path, w.Code, w.Body.String())
+				}
+			}
+		})
+	}
+}
+
+// TestLogScoping covers the listing that used to hand-roll its own scoping
+// rule instead of calling tenantFilter. Logs are the awkward case: agent
+// lines carry a tenant, server lines carry none, and only an admin may ask
+// for the ones that carry none.
+func TestLogScoping(t *testing.T) {
+	h := newHarness(t)
+
+	for _, e := range []*store.LogEntry{
+		{Time: time.Now(), TenantID: h.a.tenant.ID, AgentID: h.a.agent.ID, Source: "agent", Level: "INFO", Message: "line-for-a"},
+		{Time: time.Now(), TenantID: h.b.tenant.ID, AgentID: h.b.agent.ID, Source: "agent", Level: "INFO", Message: "line-for-b"},
+		{Time: time.Now(), Source: "server", Level: "INFO", Message: "line-for-server"},
+	} {
+		if err := h.st.InsertLog(e); err != nil {
+			t.Fatalf("insert log: %v", err)
+		}
+	}
+
+	cases := []struct {
+		name    string
+		as      *tenantFixture
+		query   string
+		want    int
+		present []string
+		absent  []string
+	}{
+		{"tenant user sees only its own", h.a, "", http.StatusOK,
+			[]string{"line-for-a"}, []string{"line-for-b", "line-for-server"}},
+		{"tenant user naming another tenant is refused", h.a, "?tenantId=" + h.b.tenant.ID, http.StatusForbidden,
+			nil, []string{"line-for-b"}},
+		{"tenant user may not ask for server logs", h.a, "?source=server", http.StatusForbidden,
+			nil, []string{"line-for-server"}},
+		{"admin sees every tenant", h.admin, "", http.StatusOK,
+			[]string{"line-for-a", "line-for-b"}, nil},
+		{"admin may filter to one tenant", h.admin, "?tenantId=" + h.a.tenant.ID, http.StatusOK,
+			[]string{"line-for-a"}, []string{"line-for-b"}},
+		{"admin gets server logs despite a tenant filter", h.admin, "?source=server&tenantId=" + h.a.tenant.ID, http.StatusOK,
+			[]string{"line-for-server"}, []string{"line-for-a"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := h.do(t, c.as, "GET", "/api/v1/logs"+c.query, "")
+			if w.Code != c.want {
+				t.Fatalf("status = %d, want %d (body: %s)", w.Code, c.want, w.Body.String())
+			}
+			for _, want := range c.present {
+				if !strings.Contains(w.Body.String(), want) {
+					t.Errorf("missing %q in %s", want, w.Body.String())
+				}
+			}
+			for _, unwanted := range c.absent {
+				if strings.Contains(w.Body.String(), unwanted) {
+					t.Errorf("leaked %q in %s", unwanted, w.Body.String())
 				}
 			}
 		})

@@ -876,28 +876,244 @@ $("#btn-copy-enroll").addEventListener("click", () => {
 });
 
 // --- Tests ---
+
+// UI_TYPES is the browser's half of the test-type registry. The server's
+// /api/v1/test-types serves the facts every side needs (unit, capability,
+// threshold direction); this holds the behaviour only a browser has —
+// which form fields a type owns, how its params read and write, how one of
+// its results reads, and which of its numbers a timeline plots.
+//
+// It replaces the same nine types being listed in six separate functions,
+// where forgetting one rendered blanks rather than failing. Adding a type
+// is an entry here.
+//
+//   payload  key of this type's result in a stored payload
+//   summary  one-line params description for the tests table
+//   write    fill the dialog's fields from stored params ({} = a new test)
+//   read     build params from the dialog; undefined = it showed an error
+//   details  one-line description of a result, as HTML
+//   series   push a run's plottable numbers via add(name, value)
+//   unit     y-axis unit of those numbers, "ms" unless said otherwise
+const UI_TYPES = {
+  ping: {
+    payload: "ping",
+    summary: (p) => `${(p.targets || []).join(", ")} · ${p.count || 5}x`,
+    write: (p) => {
+      $("#t-ping-count").value = p.count || 5;
+      $("#t-ping-targets").value = (p.targets || []).join("\n");
+    },
+    read: () => ({ targets: lines($("#t-ping-targets").value), count: +$("#t-ping-count").value }),
+    details: (g) =>
+      `${esc(g.target)} · avg ${fmt(g.avgRttMs)} ms (${fmt(g.minRttMs)}–${fmt(g.maxRttMs)}) · loss ${fmt(g.lossPercent, 0)}%`,
+    series: (g, add) => add(g.target, g.avgRttMs),
+  },
+
+  dns: {
+    payload: "dns",
+    summary: (p) => `${(p.queries || []).join(", ")} @ ${(p.servers || []).join(", ")}`,
+    write: (p) => {
+      $("#t-dns-queries").value = (p.queries || []).join("\n");
+      $("#t-dns-servers").value = (p.servers || []).join("\n");
+    },
+    read: () => ({ queries: lines($("#t-dns-queries").value), servers: lines($("#t-dns-servers").value) }),
+    details: (d) =>
+      `${esc(d.query)} @ ${esc(d.server)} · ${fmt(d.resolveTimeMs)} ms · ${d.success ? "✓" : '<span class="error">✗</span>'}`,
+    series: (d, add) => add(`${d.query} @ ${d.server}`, d.resolveTimeMs),
+  },
+
+  http: {
+    payload: "http",
+    summary: (p) => p.url || "",
+    write: (p) => {
+      $("#t-http-url").value = p.url || "";
+      $("#t-http-timeout").value = p.timeoutSeconds || 10;
+      $("#t-http-skiptls").checked = !!p.skipTlsVerify;
+    },
+    read: () => ({
+      url: $("#t-http-url").value.trim(),
+      timeoutSeconds: +$("#t-http-timeout").value,
+      skipTlsVerify: $("#t-http-skiptls").checked,
+    }),
+    details: (h) => {
+      const cert = h.certExpiryDays >= 0 ? ` · cert ${fmt(h.certExpiryDays, 0)}d` : "";
+      return `HTTP ${h.statusCode} · ${fmt(h.totalMs)} ms (ttfb ${fmt(h.ttfbMs)})${cert}`;
+    },
+    series: (h, add) => {
+      add("Total", h.totalMs);
+      add("TTFB", h.ttfbMs);
+    },
+  },
+
+  tcp: {
+    payload: "tcp",
+    summary: (p) => (p.targets || []).join(", "),
+    write: (p) => {
+      $("#t-tcp-targets").value = (p.targets || []).join("\n");
+      $("#t-tcp-timeout").value = p.timeoutSeconds || 5;
+    },
+    read: () => ({ targets: lines($("#t-tcp-targets").value), timeoutSeconds: +$("#t-tcp-timeout").value }),
+    details: (t) =>
+      t.connected
+        ? `${esc(t.target)} · connect ${fmt(t.connectMs)} ms`
+        : `${esc(t.target)} · <span class="error">refused</span>`,
+    series: (t, add) => {
+      if (t.connected) add(t.target, t.connectMs);
+    },
+  },
+
+  speedtest: {
+    payload: "speedtest",
+    unit: "Mbps",
+    summary: (p) => speedtestProviderLabel(p.provider),
+    write: (p) => { $("#t-st-provider").value = p.provider || "ookla"; },
+    read: () => ({ provider: $("#t-st-provider").value }),
+    details: (s) =>
+      `↓ ${fmt(s.downloadMbps)} Mbps · ↑ ${fmt(s.uploadMbps)} Mbps · ${fmt(s.latencyMs, 0)} ms · ${esc(s.serverName || "")} · <span class="muted">${esc(speedtestProviderLabel(s.provider))}</span>`,
+    series: (s, add) => {
+      add("Download", s.downloadMbps);
+      add("Upload", s.uploadMbps);
+    },
+  },
+
+  perfmon: {
+    payload: "perfmon",
+    unit: "Mbps",
+    summary: (p) => {
+      const src = agents.find((a) => a.id === p.sourceAgentId);
+      return `${src ? src.name : p.sourceAgentId || "?"} → ${p.target || "?"} · ${p.durationSeconds || 5}s/direction`;
+    },
+    write: (p) => {
+      const dest = agents.find((a) => a.perfmonAddr && a.perfmonAddr === p.target);
+      populatePerfmonAgentSelects(p.sourceAgentId, dest ? dest.id : "");
+      $("#t-pm-duration").value = p.durationSeconds || 5;
+    },
+    read: () => {
+      const sourceAgentId = $("#t-pm-source").value;
+      const destAgentId = $("#t-pm-dest").value;
+      if (!sourceAgentId || !destAgentId) {
+        dialogError("#t-error", "Pick a source and destination agent");
+        return undefined;
+      }
+      if (sourceAgentId === destAgentId) {
+        dialogError("#t-error", "Source and destination must be different agents");
+        return undefined;
+      }
+      return {
+        sourceAgentId,
+        target: agents.find((a) => a.id === destAgentId).perfmonAddr,
+        durationSeconds: +$("#t-pm-duration").value,
+      };
+    },
+    details: (pm) =>
+      pm.success
+        ? `${esc(pm.target)} · ${fmt(pm.downloadMbps)} Mbps down / ${fmt(pm.uploadMbps)} Mbps up · ${fmt(pm.latencyMs)} ms`
+        : `${esc(pm.target)} · <span class="error">${esc(pm.failedStep || "failed")}</span>`,
+    series: (pm, add) => {
+      if (!pm.success) return;
+      add("Download", pm.downloadMbps);
+      add("Upload", pm.uploadMbps);
+    },
+  },
+
+  traceroute: {
+    payload: "traceroute",
+    summary: (p) => {
+      const proto = (p.protocol || "tcp").toUpperCase();
+      const port = p.protocol === "icmp" ? "" : `:${p.port || 443}`;
+      return `${p.target || ""} · ${proto}${port}`;
+    },
+    write: (p) => {
+      $("#t-tr-target").value = p.target || "";
+      $("#t-tr-protocol").value = p.protocol || "tcp";
+      $("#t-tr-port").value = p.port || 443;
+      $("#t-tr-maxhops").value = p.maxHops || 30;
+      $("#t-tr-probes").value = p.probesPerHop || 5;
+    },
+    read: () => ({
+      target: $("#t-tr-target").value.trim(),
+      protocol: $("#t-tr-protocol").value,
+      port: +$("#t-tr-port").value,
+      maxHops: +$("#t-tr-maxhops").value,
+      probesPerHop: +$("#t-tr-probes").value,
+    }),
+    details: (t) => {
+      const hops = (t.hops || []).length;
+      return t.reached
+        ? `${esc(t.target)} · reached in ${hops} hops · ${fmt(t.rttMs)} ms`
+        : `${esc(t.target)} · <span class="error">stalled at hop ${t.failureHop || "?"}</span> of ${hops}`;
+    },
+    // Hop count is the type's primary metric, but the timeline plots the
+    // path's round trip: a route that slows down without changing length.
+    series: (t, add) => {
+      if (t.reached) add("Path RTT", t.rttMs);
+    },
+  },
+
+  wlan_passive: {
+    payload: "wlanPassive",
+    summary: () => "passive monitor-mode sweep",
+    write: () => {},
+    read: () => ({}),
+    details: (w) => {
+      const n = (w.networks || []).length;
+      const m = (w.stations || []).length;
+      return `${n} network${n === 1 ? "" : "s"}, ${m} client${m === 1 ? "" : "s"}`;
+    },
+    // No timeline: a sweep is a picture of the air, not one number over
+    // time — the Wireless page renders it instead.
+  },
+
+  wlan_active: {
+    payload: "wlanActive",
+    summary: (p) => {
+      const sec = p.security === "eap-peap" ? "802.1X" : p.security === "open" ? "open" : "PSK";
+      return `connect to ${p.ssid || "?"} · ${sec}${p.throughputUrl ? " · throughput" : ""}`;
+    },
+    write: (p) => {
+      $("#t-wa-ssid").value = p.ssid || "";
+      $("#t-wa-security").value = p.security || "psk";
+      $("#t-wa-password").value = p.password || "";
+      $("#t-wa-identity").value = p.identity || "";
+      $("#t-wa-cacert").value = p.caCertPem || "";
+      $("#t-wa-insecure").checked = !!p.insecureSkipVerify;
+      $("#t-wa-tpurl").value = p.throughputUrl || "";
+      $("#t-wa-macmode").value = p.macMode || "permanent";
+      $("#t-wa-mac-warn").classList.toggle("hidden", $("#t-wa-macmode").value !== "random");
+    },
+    read: () => ({
+      ssid: $("#t-wa-ssid").value.trim(),
+      security: $("#t-wa-security").value,
+      password: $("#t-wa-password").value,
+      identity: $("#t-wa-identity").value.trim(),
+      caCertPem: $("#t-wa-cacert").value.trim(),
+      insecureSkipVerify: $("#t-wa-insecure").checked,
+      throughputUrl: $("#t-wa-tpurl").value.trim(),
+      macMode: $("#t-wa-macmode").value,
+    }),
+    details: (w) => {
+      if (!w.success) {
+        return `${esc(w.ssid)} · <span class="error">${esc(w.failedStep || "failed")}</span>` +
+          (w.associateMs ? ` · assoc ${fmt(w.associateMs)} ms` : "");
+      }
+      const ip = w.ip ? esc(w.ip) + (w.netmask ? "/" + netmaskToPrefix(w.netmask) : "") : "?";
+      let out = `${esc(w.ssid)} · assoc ${fmt(w.associateMs)} ms · auth ${fmt(w.authenticateMs)} ms · dhcp ${fmt(w.dhcpMs)} ms · ${ip}`;
+      if (w.gateway) out += ` gw ${esc(w.gateway)}`;
+      if (w.gatewayPingRttMs) out += ` · ping ${fmt(w.gatewayPingLossPct)}% loss/${fmt(w.gatewayPingRttMs)} ms`;
+      if (w.throughputMbps) out += ` · ${fmt(w.throughputMbps)} Mbps`;
+      return out;
+    },
+    series: (w, add) => {
+      if (!w.success) return;
+      add("Associate", w.associateMs);
+      add("Authenticate", w.authenticateMs);
+      add("DHCP", w.dhcpMs);
+    },
+  },
+};
+
 function paramsSummary(t) {
-  const p = t.params || {};
-  if (t.type === "ping") return `${(p.targets || []).join(", ")} · ${p.count || 5}x`;
-  if (t.type === "dns") return `${(p.queries || []).join(", ")} @ ${(p.servers || []).join(", ")}`;
-  if (t.type === "http") return p.url || "";
-  if (t.type === "tcp") return (p.targets || []).join(", ");
-  if (t.type === "wlan_passive") return "passive monitor-mode sweep";
-  if (t.type === "wlan_active") {
-    const sec = p.security === "eap-peap" ? "802.1X" : p.security === "open" ? "open" : "PSK";
-    return `connect to ${p.ssid || "?"} · ${sec}${p.throughputUrl ? " · throughput" : ""}`;
-  }
-  if (t.type === "traceroute") {
-    const proto = (p.protocol || "tcp").toUpperCase();
-    const port = (p.protocol === "icmp") ? "" : `:${p.port || 443}`;
-    return `${p.target || ""} · ${proto}${port}`;
-  }
-  if (t.type === "perfmon") {
-    const src = agents.find((a) => a.id === p.sourceAgentId);
-    return `${src ? src.name : p.sourceAgentId || "?"} → ${p.target || "?"} · ${p.durationSeconds || 5}s/direction`;
-  }
-  if (t.type === "speedtest") return speedtestProviderLabel(p.provider);
-  return "nearest server";
+  const spec = UI_TYPES[t.type];
+  return spec ? spec.summary(t.params || {}) : "";
 }
 
 function speedtestProviderLabel(provider) {
@@ -941,16 +1157,10 @@ async function loadTests() {
 
 function updateTestParamFields() {
   const type = $("#t-type").value;
-  $("#t-params-ping").classList.toggle("hidden", type !== "ping");
-  $("#t-params-dns").classList.toggle("hidden", type !== "dns");
-  $("#t-params-http").classList.toggle("hidden", type !== "http");
-  $("#t-params-tcp").classList.toggle("hidden", type !== "tcp");
-  $("#t-params-wlan_passive").classList.toggle("hidden", type !== "wlan_passive");
-  $("#t-params-wlan_active").classList.toggle("hidden", type !== "wlan_active");
+  for (const name of Object.keys(UI_TYPES)) {
+    $(`#t-params-${name}`).classList.toggle("hidden", name !== type);
+  }
   updateWlanActiveSecurityFields();
-  $("#t-params-traceroute").classList.toggle("hidden", type !== "traceroute");
-  $("#t-params-perfmon").classList.toggle("hidden", type !== "perfmon");
-  $("#t-params-speedtest").classList.toggle("hidden", type !== "speedtest");
   // Re-filter alert rules when test type changes
   populateAlertRuleSelect(type);
 }
@@ -1149,36 +1359,13 @@ function openTestDialog(test) {
   const testType = test ? test.type : "ping";
   $("#t-type").value = testType;
   $("#t-interval").value = test ? test.intervalSeconds : 60;
+  // Every type's fields are filled: the edited type from its stored
+  // params, the rest from their defaults, so a hidden field never carries
+  // another type's leftovers.
   const p = (test && test.params) || {};
-  $("#t-ping-count").value = p.count || 5;
-  $("#t-ping-targets").value = (p.targets || []).join("\n");
-  $("#t-dns-queries").value = (p.queries || []).join("\n");
-  $("#t-dns-servers").value = (p.servers || []).join("\n");
-  $("#t-http-url").value = p.url || "";
-  $("#t-http-timeout").value = p.timeoutSeconds || 10;
-  $("#t-http-skiptls").checked = !!p.skipTlsVerify;
-  $("#t-tcp-timeout").value = (test && test.type === "tcp" && p.timeoutSeconds) || 5;
-  $("#t-tcp-targets").value = (test && test.type === "tcp" ? (p.targets || []) : []).join("\n");
-  $("#t-tr-target").value = (test && test.type === "traceroute" && p.target) || "";
-  $("#t-tr-protocol").value = (test && test.type === "traceroute" && p.protocol) || "tcp";
-  $("#t-tr-port").value = (test && test.type === "traceroute" && p.port) || 443;
-  $("#t-tr-maxhops").value = (test && test.type === "traceroute" && p.maxHops) || 30;
-  $("#t-tr-probes").value = (test && test.type === "traceroute" && p.probesPerHop) || 5;
-  $("#t-st-provider").value = (test && test.type === "speedtest" && p.provider) || "ookla";
-  const wa = (test && test.type === "wlan_active") ? p : {};
-  $("#t-wa-ssid").value = wa.ssid || "";
-  $("#t-wa-security").value = wa.security || "psk";
-  $("#t-wa-password").value = wa.password || "";
-  $("#t-wa-identity").value = wa.identity || "";
-  $("#t-wa-cacert").value = wa.caCertPem || "";
-  $("#t-wa-insecure").checked = !!wa.insecureSkipVerify;
-  $("#t-wa-tpurl").value = wa.throughputUrl || "";
-  $("#t-wa-macmode").value = wa.macMode || "permanent";
-  $("#t-wa-mac-warn").classList.toggle("hidden", ($("#t-wa-macmode").value) !== "random");
-  const pm = (test && test.type === "perfmon") ? p : {};
-  const pmDest = agents.find((a) => a.perfmonAddr && a.perfmonAddr === pm.target);
-  populatePerfmonAgentSelects(pm.sourceAgentId, pmDest ? pmDest.id : "");
-  $("#t-pm-duration").value = pm.durationSeconds || 5;
+  for (const [name, spec] of Object.entries(UI_TYPES)) {
+    spec.write(name === testType ? p : {});
+  }
   updateTestParamFields();
 
   // State thresholds band editor
@@ -1216,56 +1403,9 @@ function lines(v) {
 $("#form-test").addEventListener("submit", async (e) => {
   e.preventDefault();
   const type = $("#t-type").value;
-  let params = {};
-  if (type === "ping") {
-    params = { targets: lines($("#t-ping-targets").value), count: +$("#t-ping-count").value };
-  } else if (type === "dns") {
-    params = { queries: lines($("#t-dns-queries").value), servers: lines($("#t-dns-servers").value) };
-  } else if (type === "http") {
-    params = { url: $("#t-http-url").value.trim(), timeoutSeconds: +$("#t-http-timeout").value, skipTlsVerify: $("#t-http-skiptls").checked };
-  } else if (type === "tcp") {
-    params = { targets: lines($("#t-tcp-targets").value), timeoutSeconds: +$("#t-tcp-timeout").value };
-  } else if (type === "traceroute") {
-    params = {
-      target: $("#t-tr-target").value.trim(),
-      protocol: $("#t-tr-protocol").value,
-      port: +$("#t-tr-port").value,
-      maxHops: +$("#t-tr-maxhops").value,
-      probesPerHop: +$("#t-tr-probes").value,
-    };
-  } else if (type === "speedtest") {
-    params = { provider: $("#t-st-provider").value };
-  } else if (type === "wlan_passive") {
-    params = {};
-  } else if (type === "wlan_active") {
-    params = {
-      ssid: $("#t-wa-ssid").value.trim(),
-      security: $("#t-wa-security").value,
-      password: $("#t-wa-password").value,
-      identity: $("#t-wa-identity").value.trim(),
-      caCertPem: $("#t-wa-cacert").value.trim(),
-      insecureSkipVerify: $("#t-wa-insecure").checked,
-      throughputUrl: $("#t-wa-tpurl").value.trim(),
-      macMode: $("#t-wa-macmode").value,
-    };
-  } else if (type === "perfmon") {
-    const sourceAgentId = $("#t-pm-source").value;
-    const destAgentId = $("#t-pm-dest").value;
-    if (!sourceAgentId || !destAgentId) {
-      dialogError("#t-error", "Pick a source and destination agent");
-      return;
-    }
-    if (sourceAgentId === destAgentId) {
-      dialogError("#t-error", "Source and destination must be different agents");
-      return;
-    }
-    const dest = agents.find((a) => a.id === destAgentId);
-    params = {
-      sourceAgentId,
-      target: dest.perfmonAddr,
-      durationSeconds: +$("#t-pm-duration").value,
-    };
-  }
+  // undefined means the type's read() already showed a validation error.
+  const params = UI_TYPES[type].read();
+  if (params === undefined) return;
   // Build thresholds from the band editor (undefined => validation error)
   const thresholds = readThresholdBands();
   if (thresholds === undefined) return;
@@ -1505,63 +1645,10 @@ const fmt = (v, digits = 1) =>
   v === undefined || v === null ? "–" : Number(v).toFixed(digits);
 
 function resultDetails(r) {
-  const p = r.payload || {};
   if (r.error) return `<span class="error">${esc(r.error)}</span>`;
-  if (p.speedtest) {
-    const s = p.speedtest;
-    const provider = speedtestProviderLabel(s.provider);
-    return `↓ ${fmt(s.downloadMbps)} Mbps · ↑ ${fmt(s.uploadMbps)} Mbps · ${fmt(s.latencyMs, 0)} ms · ${esc(s.serverName || "")} · <span class="muted">${esc(provider)}</span>`;
-  }
-  if (p.ping) {
-    const g = p.ping;
-    return `${esc(g.target)} · avg ${fmt(g.avgRttMs)} ms (${fmt(g.minRttMs)}–${fmt(g.maxRttMs)}) · loss ${fmt(g.lossPercent, 0)}%`;
-  }
-  if (p.dns) {
-    const d = p.dns;
-    return `${esc(d.query)} @ ${esc(d.server)} · ${fmt(d.resolveTimeMs)} ms · ${d.success ? "✓" : '<span class="error">✗</span>'}`;
-  }
-  if (p.http) {
-    const h = p.http;
-    const cert = h.certExpiryDays >= 0 ? ` · cert ${fmt(h.certExpiryDays, 0)}d` : "";
-    return `HTTP ${h.statusCode} · ${fmt(h.totalMs)} ms (ttfb ${fmt(h.ttfbMs)})${cert}`;
-  }
-  if (p.tcp) {
-    const t = p.tcp;
-    return t.connected
-      ? `${esc(t.target)} · connect ${fmt(t.connectMs)} ms`
-      : `${esc(t.target)} · <span class="error">refused</span>`;
-  }
-  if (p.wlanPassive) {
-    const n = (p.wlanPassive.networks || []).length;
-    const m = (p.wlanPassive.stations || []).length;
-    return `${n} network${n === 1 ? "" : "s"}, ${m} client${m === 1 ? "" : "s"}`;
-  }
-  if (p.wlanActive) {
-    const w = p.wlanActive;
-    if (!w.success) {
-      return `${esc(w.ssid)} · <span class="error">${esc(w.failedStep || "failed")}</span>` +
-        (w.associateMs ? ` · assoc ${fmt(w.associateMs)} ms` : "");
-    }
-    const ip = w.ip ? esc(w.ip) + (w.netmask ? "/" + netmaskToPrefix(w.netmask) : "") : "?";
-    let out = `${esc(w.ssid)} · assoc ${fmt(w.associateMs)} ms · auth ${fmt(w.authenticateMs)} ms · dhcp ${fmt(w.dhcpMs)} ms · ${ip}`;
-    if (w.gateway) out += ` gw ${esc(w.gateway)}`;
-    if (w.gatewayPingRttMs) out += ` · ping ${fmt(w.gatewayPingLossPct)}% loss/${fmt(w.gatewayPingRttMs)} ms`;
-    if (w.throughputMbps) out += ` · ${fmt(w.throughputMbps)} Mbps`;
-    return out;
-  }
-  if (p.traceroute) {
-    const t = p.traceroute;
-    const hops = (t.hops || []).length;
-    return t.reached
-      ? `${esc(t.target)} · reached in ${hops} hops · ${fmt(t.rttMs)} ms`
-      : `${esc(t.target)} · <span class="error">stalled at hop ${t.failureHop || "?"}</span> of ${hops}`;
-  }
-  if (p.perfmon) {
-    const pm = p.perfmon;
-    if (!pm.success) {
-      return `${esc(pm.target)} · <span class="error">${esc(pm.failedStep || "failed")}</span>`;
-    }
-    return `${esc(pm.target)} · ${fmt(pm.downloadMbps)} Mbps down / ${fmt(pm.uploadMbps)} Mbps up · ${fmt(pm.latencyMs)} ms`;
+  const p = r.payload || {};
+  for (const spec of Object.values(UI_TYPES)) {
+    if (p[spec.payload]) return spec.details(p[spec.payload]);
   }
   return "";
 }
@@ -1669,34 +1756,12 @@ function buildSeries(results) {
     groups.get(full).push({ t: new Date(r.time).getTime(), v });
   };
 
-  let unit = "ms";
-  for (const r of asc) {
-    const p = r.payload || {};
-    if (type === "ping" && p.ping) add(p.ping.target, r, p.ping.avgRttMs);
-    else if (type === "dns" && p.dns) add(`${p.dns.query} @ ${p.dns.server}`, r, p.dns.resolveTimeMs);
-    else if (type === "http" && p.http) {
-      add("Total", r, p.http.totalMs);
-      add("TTFB", r, p.http.ttfbMs);
-    } else if (type === "tcp" && p.tcp) {
-      if (p.tcp.connected) add(p.tcp.target, r, p.tcp.connectMs);
-    } else if (type === "traceroute" && p.traceroute) {
-      if (p.traceroute.reached) add("Path RTT", r, p.traceroute.rttMs);
-    } else if (type === "speedtest" && p.speedtest) {
-      unit = "Mbps";
-      add("Download", r, p.speedtest.downloadMbps);
-      add("Upload", r, p.speedtest.uploadMbps);
-    } else if (type === "perfmon" && p.perfmon) {
-      unit = "Mbps";
-      if (p.perfmon.success) {
-        add("Download", r, p.perfmon.downloadMbps);
-        add("Upload", r, p.perfmon.uploadMbps);
-      }
-    } else if (type === "wlan_active" && p.wlanActive) {
-      if (p.wlanActive.success) {
-        add("Associate", r, p.wlanActive.associateMs);
-        add("Authenticate", r, p.wlanActive.authenticateMs);
-        add("DHCP", r, p.wlanActive.dhcpMs);
-      }
+  const spec = UI_TYPES[type];
+  const unit = (spec && spec.unit) || "ms";
+  if (spec && spec.series) {
+    for (const r of asc) {
+      const payload = (r.payload || {})[spec.payload];
+      if (payload) spec.series(payload, (key, v) => add(key, r, v));
     }
   }
 
