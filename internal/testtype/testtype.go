@@ -10,13 +10,16 @@
 // adding an entry (plus the proto message and the probe that fills it),
 // not editing every switch that mentions the old ones.
 //
-// The registry deliberately knows nothing about store.TestDef: parameter
-// validation and TestSpec building stay in internal/server/config.go,
-// which is free to import this package. Keeping the dependency one-way is
-// what lets internal/store use the registry too.
+// The registry deliberately knows nothing about store.TestDef: it owns the
+// parameter payload (Params, in params.go) but not the row it is stored in,
+// so internal/server/config.go keeps the store-shaped shell around it.
+// Keeping the dependency one-way is what lets internal/store use the
+// registry too.
 package testtype
 
 import (
+	"encoding/json"
+	"fmt"
 	"sort"
 
 	pb "github.com/fox27374/net-lama/proto"
@@ -27,6 +30,18 @@ import (
 // carries no usable value for it — a failed run, the wrong result type, or
 // a zero where zero means "not measured".
 type Metric func(*pb.TestResult) (value float64, ok bool)
+
+// Params is one test type's stored parameter payload: the JSON in
+// tests.params. It checks itself and turns itself into the proto oneof
+// pushed to an agent, which is what keeps both jobs off a type switch.
+type Params interface {
+	// Validate reports whether the payload is usable and fills in
+	// defaults in place. The normalized form is what gets stored.
+	Validate() error
+
+	// Apply sets this type's oneof on a spec bound for an agent.
+	Apply(*pb.TestSpec)
+}
 
 // Spec is everything the rest of the system needs to know about one test
 // type without switching on its name.
@@ -59,6 +74,30 @@ type Spec struct {
 	// one result per target gets one alert per target rather than a single
 	// alert flapping between them. Empty for single-result types.
 	Subject func(*pb.TestResult) string
+
+	// NewParams returns an empty parameter payload for this type, to
+	// unmarshal a stored test's params into. Every type has one, even
+	// the parameterless ones.
+	NewParams func() Params
+
+	// MinIntervalSeconds is the shortest schedule this type may run on:
+	// a floor for the expensive types (a speedtest saturates the link, a
+	// wlan_active run takes the radio away from passive sweeps).
+	// Defaults to the global 5s floor.
+	MinIntervalSeconds uint32
+}
+
+// DecodeParams unmarshals a stored params payload for this type. An empty
+// payload decodes to the zero value rather than an error, so a type whose
+// params are all optional needs no stored JSON at all.
+func (s *Spec) DecodeParams(raw []byte) (Params, error) {
+	p := s.NewParams()
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, p); err != nil {
+			return nil, fmt.Errorf("invalid %s parameters: %w", s.Type, err)
+		}
+	}
+	return p, nil
 }
 
 // specs is the registry. Order is not significant; All() sorts by name.
@@ -68,8 +107,14 @@ func register(s *Spec) {
 	if s.Primary == nil {
 		panic("testtype: " + s.Type + " has no Primary metric")
 	}
+	if s.NewParams == nil {
+		panic("testtype: " + s.Type + " has no NewParams")
+	}
 	if s.Capability == "" {
 		s.Capability = s.Type
+	}
+	if s.MinIntervalSeconds == 0 {
+		s.MinIntervalSeconds = 5
 	}
 	specs[s.Type] = s
 }

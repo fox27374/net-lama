@@ -222,3 +222,52 @@ func TestDecodeToleratesUnknownFields(t *testing.T) {
 		t.Fatalf("decode with an unknown field failed: %v", err)
 	}
 }
+
+// TestEveryTypeParamsRoundTrip drives every registered type down the path
+// ValidateTestDef and TestSpec take: decode the stored JSON, validate it,
+// re-encode the normalized form, and turn it into the oneof pushed to an
+// agent. A type whose Apply forgets to set the oneof would ship a spec the
+// agent's dispatch switch silently drops.
+func TestEveryTypeParamsRoundTrip(t *testing.T) {
+	// One valid stored payload per type. A new type fails here until it
+	// gets an entry, which is the reminder to check its params work.
+	valid := map[string]string{
+		"ping":         `{"targets":["8.8.8.8"]}`,
+		"dns":          `{"queries":["example.com"],"servers":["1.1.1.1"]}`,
+		"http":         `{"url":"https://example.com"}`,
+		"tcp":          `{"targets":["example.com:443"]}`,
+		"speedtest":    `{"provider":"ndt7"}`,
+		"perfmon":      `{"sourceAgentId":"a1","target":"10.0.0.2:5201"}`,
+		"traceroute":   `{"target":"1.1.1.1"}`,
+		"wlan_passive": `{}`,
+		"wlan_active":  `{"ssid":"corp","security":"psk","password":"hunter2"}`,
+	}
+
+	for _, spec := range All() {
+		t.Run(spec.Type, func(t *testing.T) {
+			raw, ok := valid[spec.Type]
+			if !ok {
+				t.Fatalf("no valid params payload for %q — add one", spec.Type)
+			}
+			params, err := spec.DecodeParams([]byte(raw))
+			if err != nil {
+				t.Fatalf("DecodeParams: %v", err)
+			}
+			if err := params.Validate(); err != nil {
+				t.Fatalf("Validate rejected a valid payload: %v", err)
+			}
+
+			out := &pb.TestSpec{}
+			params.Apply(out)
+			if out.Params == nil {
+				t.Fatal("Apply set no params oneof — the agent would run nothing")
+			}
+
+			// Empty stored params must decode, so a type whose params are
+			// all optional needs no JSON at all.
+			if _, err := spec.DecodeParams(nil); err != nil {
+				t.Fatalf("DecodeParams(nil): %v", err)
+			}
+		})
+	}
+}

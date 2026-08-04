@@ -1409,6 +1409,43 @@ What has been done so far, in chronological order. Planned work lives in
   with the right type, dashboard series/unit/current, and a `state` rule firing
   off the registry's primary metric.
 
+## 2026-08-04 — Test parameters belong to the test type
+
+- **The two switches left in `internal/server/config.go` are gone.**
+  `ValidateTestDef` and `TestSpec` each had one case per type — ~220 lines
+  restating which parameters a type takes, what it defaults to, how rare it
+  must run, and which proto oneof it becomes. Both are now generic: look the
+  type up in the registry, decode its params, validate, apply. `config.go` went
+  from 388 lines to 89.
+- **New `testtype.Params`** (`internal/testtype/params.go`): each type's stored
+  parameter payload validates itself (`Validate()`) and turns itself into the
+  spec pushed to an agent (`Apply(*pb.TestSpec)`). `Spec` gained `NewParams`
+  and `MinIntervalSeconds`; `register()` panics on a type that forgets the
+  former and defaults the latter to the global 5s floor. The per-type interval
+  minimums (speedtest/perfmon/wlan_passive 60s, traceroute 30s, wlan_active
+  300s) are data next to the type now, not `if`s in the validator.
+- The registry still knows nothing about `store.TestDef` — it owns the payload,
+  not the row it is stored in — so `internal/store` can keep importing it.
+- **Fixed: three hardcoded copies of "speedtest is the lower-is-worse type"**
+  (`config.go`'s threshold check, `readThresholdBands()` and `buildSeries()` in
+  `app.js`) that all bypassed the registry both sides already read this fact
+  from. Adding a second lower-is-worse type would have had threshold
+  validation, the band editor and the chart disagreeing with
+  `computeResultState`. All three now read `LowerIsWorse`/`lowerIsWorse`.
+- **Tests**: `TestEveryTypeParamsRoundTrip` drives every registered type
+  through decode → validate → re-encode → apply and fails if `Apply` sets no
+  oneof (which would push an agent a spec its dispatch silently drops); a new
+  type fails there until it gets a payload in the table.
+- Deliberately left alone: the Prometheus `Metrics.Record` switch (driving it
+  from the registry means either `internal/store` pulling in Prometheus, or
+  renaming every exported series) and `probe.DetectCapabilities` (environment
+  detection — `mtr`, monitor mode, `wpa_supplicant` — not a copy of the type
+  list).
+- Verified end to end against a local server: every validation rule still
+  accepts and rejects as before (including the direction-dependent thresholds
+  and per-type interval floors), params store normalized, and an agent
+  connected over TLS received its config and ran the pushed tests.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

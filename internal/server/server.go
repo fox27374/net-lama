@@ -76,7 +76,7 @@ func requiredCapability(testType string) string {
 // test will also fail ordinary validation, so it's a normal degraded case,
 // not a special one to distinguish here.
 func isPerfmonSource(t *store.TestDef, agentID string) bool {
-	var p PerfmonParams
+	var p testtype.PerfmonParams
 	if err := json.Unmarshal(t.Params, &p); err != nil {
 		return false
 	}

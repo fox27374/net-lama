@@ -8,9 +8,10 @@ import pb "github.com/fox27374/net-lama/proto"
 
 func init() {
 	register(&Spec{
-		Type:    "ping",
-		Unit:    "ms",
-		Primary: func(r *pb.TestResult) (float64, bool) { return positive(r.GetPing().GetAvgRttMs()) },
+		Type:      "ping",
+		Unit:      "ms",
+		NewParams: func() Params { return &PingParams{} },
+		Primary:   func(r *pb.TestResult) (float64, bool) { return positive(r.GetPing().GetAvgRttMs()) },
 		Metrics: map[string]Metric{
 			"latency_ms":   func(r *pb.TestResult) (float64, bool) { return r.GetPing().GetAvgRttMs(), true },
 			"loss_percent": func(r *pb.TestResult) (float64, bool) { return r.GetPing().GetLossPercent(), true },
@@ -19,9 +20,10 @@ func init() {
 	})
 
 	register(&Spec{
-		Type:    "dns",
-		Unit:    "ms",
-		Primary: func(r *pb.TestResult) (float64, bool) { return positive(r.GetDns().GetResolveTimeMs()) },
+		Type:      "dns",
+		Unit:      "ms",
+		NewParams: func() Params { return &DNSParams{} },
+		Primary:   func(r *pb.TestResult) (float64, bool) { return positive(r.GetDns().GetResolveTimeMs()) },
 		Metrics: map[string]Metric{
 			"latency_ms": func(r *pb.TestResult) (float64, bool) { return r.GetDns().GetResolveTimeMs(), true },
 		},
@@ -31,9 +33,10 @@ func init() {
 	})
 
 	register(&Spec{
-		Type:    "http",
-		Unit:    "ms",
-		Primary: func(r *pb.TestResult) (float64, bool) { return positive(r.GetHttp().GetTotalMs()) },
+		Type:      "http",
+		Unit:      "ms",
+		NewParams: func() Params { return &HTTPParams{} },
+		Primary:   func(r *pb.TestResult) (float64, bool) { return positive(r.GetHttp().GetTotalMs()) },
 		Metrics: map[string]Metric{
 			"latency_ms": func(r *pb.TestResult) (float64, bool) { return r.GetHttp().GetTotalMs(), true },
 		},
@@ -41,9 +44,10 @@ func init() {
 	})
 
 	register(&Spec{
-		Type:    "tcp",
-		Unit:    "ms",
-		Primary: func(r *pb.TestResult) (float64, bool) { return positive(r.GetTcp().GetConnectMs()) },
+		Type:      "tcp",
+		Unit:      "ms",
+		NewParams: func() Params { return &TCPParams{} },
+		Primary:   func(r *pb.TestResult) (float64, bool) { return positive(r.GetTcp().GetConnectMs()) },
 		Metrics: map[string]Metric{
 			"latency_ms": func(r *pb.TestResult) (float64, bool) { return r.GetTcp().GetConnectMs(), true },
 		},
@@ -51,8 +55,10 @@ func init() {
 	})
 
 	register(&Spec{
-		Type: "speedtest",
-		Unit: "Mbps",
+		Type:               "speedtest",
+		Unit:               "Mbps",
+		NewParams:          func() Params { return &SpeedtestParams{} },
+		MinIntervalSeconds: 60,
 		// Throughput degrades by falling, so warn > crit for this type.
 		LowerIsWorse: true,
 		Primary:      func(r *pb.TestResult) (float64, bool) { return positive(r.GetSpeedtest().GetDownloadMbps()) },
@@ -64,8 +70,12 @@ func init() {
 	})
 
 	register(&Spec{
-		Type: "perfmon",
-		Unit: "Mbps",
+		Type:      "perfmon",
+		Unit:      "Mbps",
+		NewParams: func() Params { return &PerfmonParams{} },
+		// Each direction takes durationSeconds; keep the test rare
+		// enough that it stays a small fraction of the schedule.
+		MinIntervalSeconds: 60,
 		// NOTE: perfmon measures throughput like speedtest and arguably
 		// wants LowerIsWorse too, but it has always been evaluated
 		// higher-is-worse. Flipping it here would silently invert every
@@ -81,8 +91,10 @@ func init() {
 	})
 
 	register(&Spec{
-		Type: "traceroute",
-		Unit: "hops",
+		Type:               "traceroute",
+		Unit:               "hops",
+		NewParams:          func() Params { return &TracerouteParams{} },
+		MinIntervalSeconds: 30,
 		// Path length is the primary signal: a route that grows has changed.
 		Primary: func(r *pb.TestResult) (float64, bool) {
 			return positive(float64(len(r.GetTraceroute().GetHops())))
@@ -97,8 +109,10 @@ func init() {
 		Type: "wlan_passive",
 		// Passive scanning needs monitor mode, which agents report as the
 		// generic "wlan" capability rather than under this type's name.
-		Capability: "wlan",
-		Unit:       "%",
+		Capability:         "wlan",
+		Unit:               "%",
+		NewParams:          func() Params { return &WlanPassiveParams{} },
+		MinIntervalSeconds: 60,
 		// Busiest channel in the sweep. The alert engine used to read the
 		// number of networks heard instead, so a wlan_passive threshold
 		// meant one thing on the dashboard and another to alerting.
@@ -109,8 +123,11 @@ func init() {
 	})
 
 	register(&Spec{
-		Type: "wlan_active",
-		Unit: "ms",
+		Type:      "wlan_active",
+		Unit:      "ms",
+		NewParams: func() Params { return &WlanActiveParams{} },
+		// The test takes the radio away from passive sweeps; keep it rare.
+		MinIntervalSeconds: 300,
 		// Time to a usable connection: associate + authenticate + DHCP.
 		// Scan time is excluded — SSID discovery is harness-internal and
 		// its variance would drown the signal.

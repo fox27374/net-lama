@@ -1102,7 +1102,7 @@ function readThresholdBands() {
   if (w !== null) th.warn = +w;
   if (c !== null) th.crit = +c;
   if (th.warn != null && th.crit != null) {
-    const lw = bandType === "speedtest";
+    const lw = !!testTypeOf(bandType).lowerIsWorse;
     if (lw ? th.warn <= th.crit : th.warn >= th.crit) {
       dialogError("#t-error", "State boundaries overlap — adjust the band values");
       return undefined;
@@ -1706,12 +1706,16 @@ function buildSeries(results) {
     points: groups.get(name),
   }));
 
-  // Threshold lines mirror computeResultState in store/overview.go: only
-  // speedtest is lower-is-worse, every other type is higher-is-worse.
+  // Threshold lines mirror computeResultState in store/overview.go, which
+  // reads the same lowerIsWorse flag off the test-type registry.
   const test = tests.find((t) => t.id === testId);
   const th = test && test.thresholds;
   const thresholds = th && (th.warn > 0 || th.crit > 0)
-    ? { warn: th.warn > 0 ? th.warn : null, crit: th.crit > 0 ? th.crit : null, lowerWorse: type === "speedtest" }
+    ? {
+        warn: th.warn > 0 ? th.warn : null,
+        crit: th.crit > 0 ? th.crit : null,
+        lowerWorse: !!testTypeOf(type).lowerIsWorse,
+      }
     : null;
 
   return { series, unit, thresholds };

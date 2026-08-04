@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/fox27374/net-lama/internal/store"
+	"github.com/fox27374/net-lama/internal/testtype"
 	pb "github.com/fox27374/net-lama/proto"
 )
 
@@ -176,28 +177,28 @@ func TestWlanSenseValidation(t *testing.T) {
 			name:        "valid wlan_passive",
 			typ:         "wlan_passive",
 			interval:    60,
-			params:      WlanPassiveParams{},
+			params:      testtype.WlanPassiveParams{},
 			expectError: false,
 		},
 		{
 			name:        "valid wlan_passive large interval",
 			typ:         "wlan_passive",
 			interval:    300,
-			params:      WlanPassiveParams{},
+			params:      testtype.WlanPassiveParams{},
 			expectError: false,
 		},
 		{
 			name:        "interval too low (< 60)",
 			typ:         "wlan_passive",
 			interval:    59,
-			params:      WlanPassiveParams{},
+			params:      testtype.WlanPassiveParams{},
 			expectError: true,
 		},
 		{
 			name:        "interval too low (30)",
 			typ:         "wlan_passive",
 			interval:    30,
-			params:      WlanPassiveParams{},
+			params:      testtype.WlanPassiveParams{},
 			expectError: true,
 		},
 	}
