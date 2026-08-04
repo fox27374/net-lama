@@ -2,12 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/fox27374/net-lama/internal/store"
+	pb "github.com/fox27374/net-lama/proto"
 )
 
 func TestConfigForAgent_FilteringByCapability(t *testing.T) {
@@ -179,77 +181,177 @@ func TestIsLegacyCapabilities(t *testing.T) {
 	}
 }
 
-func TestControlStream_LegacyCapabilitiesNotStored(t *testing.T) {
-	// Simulates the server-first upgrade path: an agent row already has
-	// (or has no) stored capabilities, and an old binary re-registers with
-	// the hardcoded legacy list. The legacy list must NOT overwrite the
-	// store: SetAgentCapabilities is skipped, so filtering keeps behaving
-	// as before the reconnect.
+// newRegisterHarness builds a server on a real store with one tenant, one
+// site and one claimed agent, which is what registerAgent needs to do
+// anything at all.
+func newRegisterHarness(t *testing.T) (*Server, *store.Agent, *store.Tenant) {
+	t.Helper()
+
 	tmpfile, err := os.CreateTemp("", "netlama-test-*.db")
 	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
+		t.Fatalf("temp file: %v", err)
 	}
 	tmpfile.Close()
-	defer os.Remove(tmpfile.Name())
+	t.Cleanup(func() { os.Remove(tmpfile.Name()) })
 
-	s, err := store.Open(tmpfile.Name())
+	st, err := store.Open(tmpfile.Name())
 	if err != nil {
-		t.Fatalf("Failed to create store: %v", err)
+		t.Fatalf("opening store: %v", err)
 	}
-	defer s.Close()
+	t.Cleanup(func() { st.Close() })
 
-	tenant, err := s.CreateTenant("test-tenant")
+	tenant, err := st.CreateTenant("test-tenant")
 	if err != nil {
-		t.Fatalf("Failed to create tenant: %v", err)
+		t.Fatalf("creating tenant: %v", err)
 	}
-	site, err := s.CreateSite(tenant.ID, "test-site")
+	site, err := st.CreateSite(tenant.ID, "test-site")
 	if err != nil {
-		t.Fatalf("Failed to create site: %v", err)
+		t.Fatalf("creating site: %v", err)
 	}
-	agent, err := s.CreateAgent(tenant.ID, site.ID, "legacy-agent")
+	agent, err := st.CreateAgent(tenant.ID, site.ID, "agent-one")
 	if err != nil {
-		t.Fatalf("Failed to create agent: %v", err)
+		t.Fatalf("creating agent: %v", err)
 	}
 
-	// Mirror the ControlStream registration logic for capabilities.
-	record := func(caps []string) {
-		if len(caps) > 0 && !isLegacyCapabilities(caps) {
-			data, _ := json.Marshal(caps)
-			if err := s.SetAgentCapabilities(agent.ID, data); err != nil {
-				t.Fatalf("SetAgentCapabilities failed: %v", err)
-			}
+	srv := &Server{
+		Store:  st,
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	return srv, agent, tenant
+}
+
+// TestRegisterAgentAuth covers who gets in: the token check, the "first
+// message must be a register" rule, and the per-agent mTLS bind (a valid
+// token plus the wrong client certificate is still a rejection).
+func TestRegisterAgentAuth(t *testing.T) {
+	srv, agent, _ := newRegisterHarness(t)
+
+	t.Run("no register message", func(t *testing.T) {
+		if _, err := srv.registerAgent(nil, ""); err == nil {
+			t.Error("expected an error for a missing register message")
 		}
+	})
+
+	t.Run("empty token", func(t *testing.T) {
+		if _, err := srv.registerAgent(&pb.Register{ClientId: "c"}, ""); err == nil {
+			t.Error("expected an error for an empty token")
+		}
+	})
+
+	t.Run("unknown token", func(t *testing.T) {
+		if _, err := srv.registerAgent(&pb.Register{Token: "nope"}, ""); err == nil {
+			t.Error("expected an error for an unknown token")
+		}
+	})
+
+	t.Run("valid token", func(t *testing.T) {
+		session, err := srv.registerAgent(&pb.Register{Token: agent.Token}, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session.agent.ID != agent.ID {
+			t.Errorf("session agent = %q, want %q", session.agent.ID, agent.ID)
+		}
+		if session.tenant != "test-tenant" {
+			t.Errorf("session tenant = %q, want the tenant name", session.tenant)
+		}
+	})
+
+	t.Run("mTLS with a certificate for another agent", func(t *testing.T) {
+		srv.MTLS = true
+		defer func() { srv.MTLS = false }()
+
+		if _, err := srv.registerAgent(&pb.Register{Token: agent.Token}, "someone-else"); err == nil {
+			t.Error("expected a valid token with the wrong cert CN to be rejected")
+		}
+		if _, err := srv.registerAgent(&pb.Register{Token: agent.Token}, agent.Name); err != nil {
+			t.Errorf("cert CN matching the agent name must be accepted, got %v", err)
+		}
+	})
+}
+
+// TestRegisterAgentEnrollToken checks the self-enrollment fallback: a
+// tenant enroll token is not an agent token, so the stream ends with an
+// error, but the device must be recorded as waiting to be claimed.
+func TestRegisterAgentEnrollToken(t *testing.T) {
+	srv, _, tenant := newRegisterHarness(t)
+
+	token, err := srv.Store.SetTenantEnrollToken(tenant.ID)
+	if err != nil {
+		t.Fatalf("setting enroll token: %v", err)
+	}
+
+	if _, err := srv.registerAgent(&pb.Register{Token: token, ClientId: "pi-1"}, ""); err == nil {
+		t.Fatal("an enroll token must not open a control stream")
+	}
+
+	pending, err := srv.Store.ListUnclaimedAgents(tenant.ID)
+	if err != nil {
+		t.Fatalf("listing unclaimed agents: %v", err)
+	}
+	if len(pending) != 1 || pending[0].ClientID != "pi-1" {
+		t.Fatalf("expected pi-1 recorded as unclaimed, got %+v", pending)
+	}
+}
+
+// TestRegisterAgentStoresSelfReport covers what the agent tells us about
+// itself. The legacy capability list is the interesting case: an old binary
+// claims a fixed list regardless of what it can run, so it must not
+// overwrite what the store already knows — otherwise upgrading the server
+// before the agents silently drops traceroute tests from sensor agents.
+func TestRegisterAgentStoresSelfReport(t *testing.T) {
+	srv, agent, _ := newRegisterHarness(t)
+
+	capsOf := func() string {
+		t.Helper()
+		got, err := srv.Store.GetAgent(agent.ID)
+		if err != nil {
+			t.Fatalf("GetAgent: %v", err)
+		}
+		return string(got.Capabilities)
 	}
 
 	// 1. Old binary registers with the legacy hardcoded list: nothing stored.
-	record([]string{"speedtest", "ping", "dns", "http", "tcp", "wlan"})
-	got, err := s.GetAgent(agent.ID)
-	if err != nil {
-		t.Fatalf("GetAgent failed: %v", err)
+	if _, err := srv.registerAgent(&pb.Register{
+		Token:        agent.Token,
+		Capabilities: legacyCapabilities,
+	}, ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if string(got.Capabilities) != "[]" {
-		t.Errorf("Legacy list must not be stored, got %s", got.Capabilities)
+	if got := capsOf(); got != "[]" {
+		t.Errorf("legacy list must not be stored, got %s", got)
 	}
 
-	// 2. New binary registers with detected capabilities: stored.
-	record([]string{"ping", "dns", "http", "tcp", "speedtest", "traceroute"})
-	got, err = s.GetAgent(agent.ID)
-	if err != nil {
-		t.Fatalf("GetAgent failed: %v", err)
-	}
+	// 2. New binary registers with detected capabilities and a version.
+	detected := []string{"ping", "dns", "http", "tcp", "speedtest", "traceroute"}
 	want := `["ping","dns","http","tcp","speedtest","traceroute"]`
-	if string(got.Capabilities) != want {
-		t.Errorf("Detected capabilities not stored: got %s, want %s", got.Capabilities, want)
+	if _, err := srv.registerAgent(&pb.Register{
+		Token:        agent.Token,
+		Capabilities: detected,
+		Version:      "v1.2.3",
+	}, ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := capsOf(); got != want {
+		t.Errorf("detected capabilities not stored: got %s, want %s", got, want)
+	}
+	stored, err := srv.Store.GetAgent(agent.ID)
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	if stored.Version != "v1.2.3" {
+		t.Errorf("version = %q, want v1.2.3", stored.Version)
 	}
 
 	// 3. Old binary reconnects with the legacy list: stored value is kept.
-	record([]string{"speedtest", "ping", "dns", "http", "tcp", "wlan"})
-	got, err = s.GetAgent(agent.ID)
-	if err != nil {
-		t.Fatalf("GetAgent failed: %v", err)
+	if _, err := srv.registerAgent(&pb.Register{
+		Token:        agent.Token,
+		Capabilities: legacyCapabilities,
+	}, ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if string(got.Capabilities) != want {
-		t.Errorf("Legacy re-register must keep stored capabilities: got %s, want %s", got.Capabilities, want)
+	if got := capsOf(); got != want {
+		t.Errorf("legacy re-register must keep stored capabilities: got %s, want %s", got, want)
 	}
 }
 

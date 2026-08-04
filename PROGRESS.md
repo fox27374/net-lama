@@ -1446,6 +1446,49 @@ What has been done so far, in chronological order. Planned work lives in
   and per-type interval floors), params store normalized, and an agent
   connected over TLS received its config and ran the pushed tests.
 
+## 2026-08-04 — The parts of the server no test could reach
+
+Two pieces of `internal/server` were only reachable through a live gRPC
+stream, so neither had a test that called them. Both got a seam a test can
+cross, and the tests that had been *simulating* them now drive the real code.
+
+- **`registerAgent` split out of `ControlStream`.** The 180-line stream
+  handler opened with the security-relevant half of the server — token check,
+  self-enrollment fallback, the per-agent mTLS bind (cert CN must equal the
+  agent name), and three writes recording what the agent claims about itself.
+  That is now `registerAgent(register, peerCN) (*agentSession, error)`: no
+  stream, so a test can drive it against a real store. `ControlStream` keeps
+  the registry, metrics, config push and select loop.
+- **`TestRegisterAgentAuth`, `TestRegisterAgentEnrollToken` and
+  `TestRegisterAgentStoresSelfReport`** are the first tests of any of it:
+  missing/empty/unknown token, a valid token with another agent's certificate
+  CN, an enroll token recording an unclaimed device instead of opening a
+  stream, and the legacy capability list not overwriting the store.
+  `TestControlStream_LegacyCapabilitiesNotStored` had a `record := func(...)`
+  closure copying the condition out of `ControlStream` — deleted, the real
+  function is called now.
+- **The alert hysteresis is a pure function.** `decideAlert(state, rule,
+  breach, value) (state, action)` holds the whole fire/dead-band/clear
+  sequence with no locks, no store and no notifications;
+  `evaluateAlerts` reads the state, calls it, writes the state back, and does
+  the I/O the action asks for. `checkClearCondition` lost its unused `*Server`
+  receiver.
+- **`TestHysteresisStateMachine` was asserting against its own copy** of the
+  counter logic — and the copy had already drifted from the real function
+  (it only cleared the breach counter on resolve, while `evaluateAlerts`
+  clears it on any non-breaching sample). It now drives `decideAlert` through
+  the sequence, plus two new cases: a resolve must leave the zero state (which
+  is what lets `evaluateAlerts` delete the key instead of growing one entry per
+  rule|agent|subject forever) and a rule with no clear threshold.
+- The two hysteresis maps (`breachCount`/`goodCount`, one mutex between them)
+  collapsed into one `alertStates map[string]alertState`.
+- Both new tests were checked by mutation: breaking the dead-band reset fails
+  `TestHysteresisStateMachine`, and disabling the mTLS CN check fails
+  `TestRegisterAgentAuth`.
+- Verified end to end against a local server: an agent registered over TLS and
+  got its config, a `latency_ms > 0` rule fired on the first result, and
+  raising the rule's threshold resolved it on the next one.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

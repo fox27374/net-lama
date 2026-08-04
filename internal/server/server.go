@@ -39,9 +39,8 @@ type Server struct {
 	mu        sync.Mutex
 	connected map[string]*connectedAgent // keyed by agent ID
 
-	breachMu    sync.Mutex
-	breachCount map[string]int // consecutive alert-rule breaches, keyed by rule|agent|subject
-	goodCount   map[string]int // consecutive non-breach samples (for hysteresis), keyed by rule|agent|subject
+	alertMu     sync.Mutex
+	alertStates map[string]alertState // hysteresis counters, keyed by rule|agent|subject
 
 	reconnectMu    sync.Mutex
 	reconnectCount map[string]int         // count of "connected" transitions in 15m window, keyed by agent ID
@@ -54,8 +53,7 @@ func New(st *store.Store, metrics *Metrics, logger *slog.Logger) *Server {
 		Metrics:        metrics,
 		Logger:         logger,
 		connected:      make(map[string]*connectedAgent),
-		breachCount:    make(map[string]int),
-		goodCount:      make(map[string]int),
+		alertStates:    make(map[string]alertState),
 		reconnectCount: make(map[string]int),
 		reconnectTimes: make(map[string][]time.Time),
 	}
@@ -213,16 +211,26 @@ func isLegacyCapabilities(caps []string) bool {
 	return true
 }
 
-// ControlStream handles one connected agent for the lifetime of its stream.
-func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) error {
-	// The first message must be a registration with a valid token
-	first, err := stream.Recv()
-	if err != nil {
-		return fmt.Errorf("receiving registration: %w", err)
-	}
-	register := first.GetRegister()
+// agentSession is what the stream loop needs once a register message has
+// been accepted: the agent row as the store now has it, and the tenant's
+// display name for logs and metrics.
+type agentSession struct {
+	agent  *store.Agent
+	tenant string
+}
+
+// registerAgent authenticates an agent's register message and records what
+// the agent reported about itself. peerCN is the client certificate's
+// common name, empty when the connection carries no verified cert.
+//
+// It takes no stream on purpose: token rejection, the per-agent mTLS bind
+// and the three self-report writes are the security-relevant half of
+// ControlStream, and this way a test can drive them against a real store.
+// A device presenting a tenant enrollment token instead of an agent token
+// is recorded as unclaimed here, and its error is what ends the stream.
+func (s *Server) registerAgent(register *pb.Register, peerCN string) (*agentSession, error) {
 	if register == nil || register.Token == "" {
-		return status.Error(codes.Unauthenticated, "first message must be a register message with a token")
+		return nil, status.Error(codes.Unauthenticated, "first message must be a register message with a token")
 	}
 
 	agent, err := s.Store.GetAgentByToken(register.Token)
@@ -233,23 +241,21 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 		// the TLS handshake, before this code ever runs anyway).
 		if err == store.ErrNotFound && !s.MTLS {
 			if tenant, tErr := s.Store.GetTenantByEnrollToken(register.Token); tErr == nil {
-				return s.handleUnclaimedRegister(tenant, register)
+				return nil, s.handleUnclaimedRegister(tenant, register)
 			}
 		}
 		s.Logger.Warn("Agent with invalid token rejected", slog.String("clientId", register.ClientId))
-		return status.Error(codes.Unauthenticated, "invalid agent token")
+		return nil, status.Error(codes.Unauthenticated, "invalid agent token")
 	}
 
 	// Per-agent mTLS: a valid token is not enough, the client certificate
 	// must also be issued to this agent (CN = agent name).
-	if s.MTLS {
-		if cn := PeerCertCN(stream.Context()); cn != agent.Name {
-			s.Logger.Warn("Agent client certificate rejected",
-				slog.String("clientId", register.ClientId),
-				slog.String("certCN", cn),
-				slog.String("agent", agent.Name))
-			return status.Error(codes.Unauthenticated, "client certificate does not match agent")
-		}
+	if s.MTLS && peerCN != agent.Name {
+		s.Logger.Warn("Agent client certificate rejected",
+			slog.String("clientId", register.ClientId),
+			slog.String("certCN", peerCN),
+			slog.String("agent", agent.Name))
+		return nil, status.Error(codes.Unauthenticated, "client certificate does not match agent")
 	}
 
 	// Record the network interfaces the agent reported, so the UI can
@@ -282,15 +288,37 @@ func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) err
 		agent.Version = v
 	}
 
-	tenantName := agent.TenantID
-	if tenants, err := s.Store.ListTenants(); err == nil {
-		for _, t := range tenants {
-			if t.ID == agent.TenantID {
-				tenantName = t.Name
-				break
-			}
+	return &agentSession{agent: agent, tenant: s.tenantName(agent.TenantID)}, nil
+}
+
+// tenantName resolves a tenant's display name, falling back to its ID so a
+// lookup failure costs a nice log line, not the connection.
+func (s *Server) tenantName(tenantID string) string {
+	tenants, err := s.Store.ListTenants()
+	if err != nil {
+		return tenantID
+	}
+	for _, t := range tenants {
+		if t.ID == tenantID {
+			return t.Name
 		}
 	}
+	return tenantID
+}
+
+// ControlStream handles one connected agent for the lifetime of its stream.
+func (s *Server) ControlStream(stream pb.ControlService_ControlStreamServer) error {
+	// The first message must be a registration with a valid token.
+	first, err := stream.Recv()
+	if err != nil {
+		return fmt.Errorf("receiving registration: %w", err)
+	}
+	session, err := s.registerAgent(first.GetRegister(), PeerCertCN(stream.Context()))
+	if err != nil {
+		return err
+	}
+	agent, tenantName := session.agent, session.tenant
+	register := first.GetRegister()
 
 	conn := &connectedAgent{
 		agent:  agent,

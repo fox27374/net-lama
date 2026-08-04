@@ -41,52 +41,78 @@ func (s *Server) evaluateAlerts(conn *connectedAgent, result *pb.TestResult) {
 		}
 		key := rule.ID + "|" + conn.agent.ID + "|" + subject
 
-		if breach {
-			// Increment breach counter and reset good counter
-			s.breachMu.Lock()
-			s.breachCount[key]++
-			n := s.breachCount[key]
-			delete(s.goodCount, key)
-			s.breachMu.Unlock()
-
-			if n >= rule.ForCount {
-				s.fireAlert(rule, conn, subject, value)
-			}
+		s.alertMu.Lock()
+		next, action := decideAlert(s.alertStates[key], rule, breach, value)
+		if next == (alertState{}) {
+			delete(s.alertStates, key)
 		} else {
-			// Any non-breaching sample breaks the consecutive-breach streak
-			// toward firing ("N times in a row").
-			s.breachMu.Lock()
-			delete(s.breachCount, key)
-			s.breachMu.Unlock()
+			s.alertStates[key] = next
+		}
+		s.alertMu.Unlock()
 
-			clearOk := s.checkClearCondition(rule, value)
-			if clearOk {
-				// Good sample; increment clear counter
-				s.breachMu.Lock()
-				s.goodCount[key]++
-				goodN := s.goodCount[key]
-				s.breachMu.Unlock()
-
-				if goodN >= rule.ClearCount {
-					s.resolveAlert(rule, conn, subject)
-					s.breachMu.Lock()
-					delete(s.goodCount, key)
-					s.breachMu.Unlock()
-				}
-			} else {
-				// Sample in dead band; reset clear progress but keep firing
-				s.breachMu.Lock()
-				delete(s.goodCount, key)
-				s.breachMu.Unlock()
-			}
+		switch action {
+		case alertFire:
+			s.fireAlert(rule, conn, subject, value)
+		case alertResolve:
+			s.resolveAlert(rule, conn, subject)
 		}
 	}
 }
 
-// checkClearCondition determines if a non-breach sample satisfies the clear condition.
+// alertState is the hysteresis progress of one rule against one agent and
+// subject: how many samples in a row have breached, and how many in a row
+// have satisfied the clear condition since.
+type alertState struct {
+	breaches int
+	goods    int
+}
+
+// alertAction is what a sample calls for. Firing and resolving are
+// idempotent downstream (both check for an active alert first), so a
+// sustained breach asks to fire on every sample past ForCount.
+type alertAction int
+
+const (
+	alertNone alertAction = iota
+	alertFire
+	alertResolve
+)
+
+// decideAlert advances the hysteresis state machine by one sample and says
+// what it calls for. It is pure — no locks, no store, no notifications —
+// so the fire/clear sequence can be tested as the sequence it is.
+func decideAlert(st alertState, rule *store.AlertRule, breach bool, value float64) (alertState, alertAction) {
+	if breach {
+		// A breach resets clear progress: "N good samples in a row".
+		st = alertState{breaches: st.breaches + 1}
+		if st.breaches >= rule.ForCount {
+			return st, alertFire
+		}
+		return st, alertNone
+	}
+
+	// Any non-breaching sample breaks the consecutive-breach streak
+	// toward firing ("N times in a row").
+	st.breaches = 0
+
+	if !clearCondition(rule, value) {
+		// Sample in the dead band: too good to breach, not good enough to
+		// clear. Reset clear progress, leave a firing alert firing.
+		st.goods = 0
+		return st, alertNone
+	}
+
+	st.goods++
+	if st.goods >= rule.ClearCount {
+		return alertState{}, alertResolve
+	}
+	return st, alertNone
+}
+
+// clearCondition determines if a non-breach sample satisfies the clear condition.
 // If clear_threshold is set, the value must satisfy the inverse condition.
 // Otherwise, non-breach is sufficient.
-func (s *Server) checkClearCondition(rule *store.AlertRule, value float64) bool {
+func clearCondition(rule *store.AlertRule, value float64) bool {
 	if rule.ClearThreshold == nil {
 		return true // Non-breach is sufficient for clear
 	}
