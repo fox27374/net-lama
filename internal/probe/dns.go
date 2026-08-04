@@ -15,9 +15,13 @@ type DNSResult struct {
 }
 
 // DNSQuery resolves query against a specific DNS server and measures the
-// time the lookup takes. A failed lookup is returned as a result with
-// Success=false, not as an error, so it can be reported as a measurement.
-func DNSQuery(ctx context.Context, query, server string) *DNSResult {
+// time the lookup takes.
+//
+// A failed lookup is a result with Success=false, not an error — that is
+// the measurement. The error return is for the run being abandoned
+// (ctx cancelled: the agent is shutting down or its config changed), where
+// there is no measurement to report at all.
+func DNSQuery(ctx context.Context, query, server string) (*DNSResult, error) {
 	resolver := &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -33,6 +37,10 @@ func DNSQuery(ctx context.Context, query, server string) *DNSResult {
 	addrs, err := resolver.LookupHost(lookupCtx, query)
 	elapsed := time.Since(start)
 
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	result := &DNSResult{
 		Query:         query,
 		Server:        server,
@@ -42,5 +50,5 @@ func DNSQuery(ctx context.Context, query, server string) *DNSResult {
 		result.Success = true
 		result.Addresses = addrs
 	}
-	return result
+	return result, nil
 }

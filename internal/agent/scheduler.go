@@ -213,9 +213,9 @@ func (a *Agent) runPings(ctx context.Context, spec *pb.TestSpec, params *pb.Ping
 func (a *Agent) runDNS(ctx context.Context, spec *pb.TestSpec, params *pb.DnsParams, results chan<- *pb.TestResult) {
 	for _, server := range params.Servers {
 		for _, query := range params.Queries {
-			res := probe.DNSQuery(ctx, query, server)
-			if ctx.Err() != nil {
-				return
+			res, err := probe.DNSQuery(ctx, query, server)
+			if err != nil {
+				return // only returned when the run was abandoned
 			}
 
 			result := newResult(spec)
@@ -353,7 +353,7 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 			slog.Int("channelCount", len(channels)))
 	}
 
-	usedIface, stations, channelStats, networks, sweepMs, err := probe.Sense(ctx, iface, channels, 400)
+	sweep, err := probe.Sense(ctx, iface, channels, 400)
 	if err != nil {
 		a.wlanMu.Unlock()
 		if ctx.Err() != nil {
@@ -373,8 +373,7 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 	if fullSweep {
 		state.LastFullSweep = time.Now()
 	}
-	var roams []probe.WlanRoamEvent
-	networks, stations, roams = mergeWlanRetained(state, networks, stations, time.Now())
+	networks, stations, roams := mergeWlanRetained(state, sweep.Networks, sweep.Stations, time.Now())
 
 	// Update interesting channels from the retained sightings, so channels of
 	// recently-faded APs stay watched until retention expires.
@@ -392,10 +391,10 @@ func (a *Agent) runWlanPassive(ctx context.Context, spec *pb.TestSpec, results c
 	a.wlanMu.Unlock()
 
 	a.Logger.Info("WLAN passive done",
-		slog.String("test", spec.Name), slog.String("interface", usedIface),
+		slog.String("test", spec.Name), slog.String("interface", sweep.Interface),
 		slog.Int("stations", len(stations)), slog.Int("networks", len(networks)),
-		slog.Uint64("sweepMs", uint64(sweepMs)))
-	result.Result = wlanPassiveResult(usedIface, stations, channelStats, networks, roams, sweepMs)
+		slog.Uint64("sweepMs", uint64(sweep.SweepMs)))
+	result.Result = wlanPassiveResult(sweep, stations, networks, roams)
 	sendResult(ctx, results, result)
 }
 
@@ -596,7 +595,10 @@ func extractInterestingChannels(networks []probe.WlanNetwork, stations []probe.W
 }
 
 // wlanPassiveResult converts probe results into the protobuf WlanPassiveResult payload.
-func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats []probe.WlanChannelStat, networks []probe.WlanNetwork, roams []probe.WlanRoamEvent, sweepMs uint32) *pb.TestResult_WlanPassive {
+// wlanPassiveResult converts a sweep to the proto result. Stations and
+// networks come separately from the sweep: retention merges what faded
+// this round back in, so they are not the raw ones the probe returned.
+func wlanPassiveResult(sweep *probe.SenseResult, stations []probe.WlanStation, networks []probe.WlanNetwork, roams []probe.WlanRoamEvent) *pb.TestResult_WlanPassive {
 	pbStations := make([]*pb.WlanStation, 0, len(stations))
 	for _, st := range stations {
 		pbStations = append(pbStations, &pb.WlanStation{
@@ -613,8 +615,8 @@ func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats 
 		})
 	}
 
-	pbChannels := make([]*pb.WlanChannelStat, 0, len(channelStats))
-	for _, ch := range channelStats {
+	pbChannels := make([]*pb.WlanChannelStat, 0, len(sweep.Channels))
+	for _, ch := range sweep.Channels {
 		pbChannels = append(pbChannels, &pb.WlanChannelStat{
 			Channel:        ch.Channel,
 			FreqMhz:        ch.FreqMHz,
@@ -671,11 +673,11 @@ func wlanPassiveResult(iface string, stations []probe.WlanStation, channelStats 
 	}
 
 	return &pb.TestResult_WlanPassive{WlanPassive: &pb.WlanPassiveResult{
-		Interface:  iface,
+		Interface:  sweep.Interface,
 		Stations:   pbStations,
 		Channels:   pbChannels,
 		Networks:   pbNetworks,
-		SweepMs:    sweepMs,
+		SweepMs:    sweep.SweepMs,
 		Demo:       probe.DemoMode(),
 		RoamEvents: pbRoams,
 	}}

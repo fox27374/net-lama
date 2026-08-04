@@ -16,7 +16,7 @@ import (
 
 // senseImpl performs a monitor-mode sweep on Linux using afpacket + gopacket
 // for frame capture and parsing (stations, rates, RSSI) via RadioTap + Dot11.
-func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uint32) (string, []WlanStation, []WlanChannelStat, []WlanNetwork, uint32, error) {
+func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uint32) (*SenseResult, error) {
 	if dwellMs == 0 {
 		dwellMs = 400
 	}
@@ -24,13 +24,13 @@ func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uin
 	// Get the interface's current type so we can restore it
 	originalType, err := getInterfaceType(ctx, iface)
 	if err != nil {
-		return iface, nil, nil, nil, 0, fmt.Errorf("failed to detect interface type: %w", err)
+		return nil, fmt.Errorf("failed to detect interface type: %w", err)
 	}
 
 	// Set to monitor mode
 	if originalType != "monitor" {
 		if err := setInterfaceType(ctx, iface, "monitor"); err != nil {
-			return iface, nil, nil, nil, 0, fmt.Errorf("failed to set monitor mode: %w", err)
+			return nil, fmt.Errorf("failed to set monitor mode: %w", err)
 		}
 	}
 
@@ -71,7 +71,7 @@ func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uin
 	for _, ch := range channels {
 		select {
 		case <-ctx.Done():
-			return iface, nil, nil, nil, 0, ctx.Err()
+			return nil, ctx.Err()
 		default:
 		}
 
@@ -190,7 +190,13 @@ func senseImpl(ctx context.Context, iface string, channels []uint32, dwellMs uin
 	}
 
 	sweepTime := uint32(time.Since(startTime).Milliseconds())
-	return iface, stationList, channelList, networkList, sweepTime, nil
+	return &SenseResult{
+		Interface: iface,
+		Stations:  stationList,
+		Channels:  channelList,
+		Networks:  networkList,
+		SweepMs:   sweepTime,
+	}, nil
 }
 
 // captureOnChannel captures frames on the current channel for a given duration

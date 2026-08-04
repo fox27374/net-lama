@@ -1526,6 +1526,29 @@ cross, and the tests that had been *simulating* them now drive the real code.
   the agent list's `baselineCaps` (a curated "which capabilities are worth a
   badge" judgement, not a copy of the type list).
 
+## 2026-08-04 — One shape for a probe
+
+- **`probe.Sense` returns a `*SenseResult`**, not six positional values
+  (`(string, []WlanStation, []WlanChannelStat, []WlanNetwork, uint32, error)`)
+  — the widest interface in the package, where every caller and every one of
+  the three implementations (Linux, non-Linux stub, demo) had to agree on the
+  order, and every early error return spelled out `nil, nil, nil, 0`.
+  `wlanPassiveResult` takes the sweep too, so its parameter list drops from six
+  to four.
+- **`probe.DNSQuery` returns an error like its siblings** — but a real one, not
+  a nil placeholder: a failed lookup is still a measurement (`Success=false`),
+  while an abandoned run (ctx cancelled — agent shutting down, or its config
+  changed) has no measurement to report. The scheduler's `if ctx.Err() != nil`
+  after the call becomes an ordinary `if err != nil`.
+- Deleted `WlanSenseDemo`, a struct nothing used and a near-duplicate of what
+  `SenseResult` now is.
+- **Tests**: `TestDNSQueryAbandonedRun` pins the one thing `DNSQuery` reports
+  as an error (`internal/probe/dns.go` had no test file before);
+  `TestWlanSenseDemoMode` now reads the sweep through the struct.
+- Verified: builds for darwin and linux, and against a local server an agent in
+  WLAN demo mode reported a sweep (5 networks, 8 stations, interface off the
+  result) and DNS results with real resolve times.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

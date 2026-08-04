@@ -17,7 +17,7 @@ func demoRoamBSSID() string {
 	return "c0:25:5c:ec:bb:40"
 }
 
-func demoSense(iface string) (string, []WlanStation, []WlanChannelStat, []WlanNetwork, uint32, error) {
+func demoSense(iface string) (*SenseResult, error) {
 	now := time.Now().UnixMilli()
 
 	// Realistic synthetic stations: ~8-15 across 2-4 BSSs
@@ -197,5 +197,11 @@ func demoSense(iface string) (string, []WlanStation, []WlanChannelStat, []WlanNe
 	}
 
 	sweepMs := uint32(400 * len(channels)) // dwell per channel + small overhead
-	return iface, stations, channels, networks, sweepMs, nil
+	return &SenseResult{
+		Interface: iface,
+		Stations:  stations,
+		Channels:  channels,
+		Networks:  networks,
+		SweepMs:   sweepMs,
+	}, nil
 }

@@ -10,11 +10,15 @@ import (
 	"github.com/gopacket/gopacket/layers"
 )
 
-// WlanSenseDemo holds synthetic WLAN monitor-mode sensing data for testing.
-type WlanSenseDemo struct {
+// SenseResult is one monitor-mode sweep: everything heard on the air
+// while it ran.
+type SenseResult struct {
+	// Interface actually swept. The caller may pass an empty name and let
+	// the probe pick, so this is not always what went in.
 	Interface string
 	Stations  []WlanStation
 	Channels  []WlanChannelStat
+	Networks  []WlanNetwork
 	SweepMs   uint32
 }
 
@@ -86,10 +90,10 @@ type WlanNetwork struct {
 }
 
 // Sense performs a monitor-mode sweep, capturing stations, per-channel
-// utilization, and the networks (APs) heard from beacons. Returns interface
-// name, stations, channel stats, networks, total sweep time, and error.
-// Requires monitor-capable interface, NET_ADMIN + NET_RAW.
-func Sense(ctx context.Context, iface string, channels []uint32, dwellMs uint32) (string, []WlanStation, []WlanChannelStat, []WlanNetwork, uint32, error) {
+// utilization, and the networks (APs) heard from beacons. channels nil
+// means the whole spectrum; dwellMs 0 takes the probe's default.
+// Requires a monitor-capable interface, NET_ADMIN + NET_RAW.
+func Sense(ctx context.Context, iface string, channels []uint32, dwellMs uint32) (*SenseResult, error) {
 	if wlanDemo() {
 		return demoSense(iface)
 	}

@@ -12,11 +12,12 @@ func TestWlanSenseDemoMode(t *testing.T) {
 	defer os.Unsetenv("NETLAMA_WLAN_DEMO")
 
 	ctx := context.Background()
-	iface, stations, channels, networks, sweepMs, err := Sense(ctx, "wlan0", nil, 0)
+	sweep, err := Sense(ctx, "wlan0", nil, 0)
 
 	if err != nil {
 		t.Fatalf("Sense failed: %v", err)
 	}
+	iface, stations, channels, networks, sweepMs := sweep.Interface, sweep.Stations, sweep.Channels, sweep.Networks, sweep.SweepMs
 
 	if iface != "wlan0" {
 		t.Errorf("expected interface wlan0, got %s", iface)
