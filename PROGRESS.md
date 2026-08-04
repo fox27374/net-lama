@@ -1549,6 +1549,60 @@ cross, and the tests that had been *simulating* them now drive the real code.
   WLAN demo mode reported a sweep (5 networks, 8 stations, interface off the
   result) and DNS results with real resolve times.
 
+## 2026-08-04 — SaaS / cloud service tests
+
+- **New `saas` test type**: one test row is one online service. Eight
+  services ship in the catalog (`internal/saas`): Microsoft Teams, Microsoft
+  365, Webex, Zoom, Google Workspace, AWS, Azure, Google Cloud. Design and
+  the decisions behind it are in [doc/plan-saas-tests.md](doc/plan-saas-tests.md).
+- **The catalog lives on the server**, not the agent: the stored test carries
+  only `{"service": "ms-teams"}`, and `SaasParams.Apply` expands it into the
+  pushed `TestSpec` on every config push. Adding or fixing a service is a
+  server release — no fleet rollout, the pain the wlan_passive rebuild
+  caused. Service ids are permanent (stored tests reference them);
+  `TestKnownServiceIDsSurvive` makes deleting one a deliberate act.
+- **Endpoint kind is a correctness decision, not a style one.** `resultOK`
+  counts an HTTP result OK only on 2xx/3xx, and cloud API front doors answer
+  401/403/400 to an unauthenticated GET *correctly* — as `https` entries they
+  would have been red forever. So: `https` for user-facing front doors,
+  `tcp` for machine APIs (`portal.azure.com:443`, `management.azure.com:443`,
+  `storage.googleapis.com:443`, `ec2.amazonaws.com:443`). Every endpoint was
+  verified live and against the vendor's own docs — Microsoft's
+  machine-readable endpoint feed, Webex's network requirements, Zoom's
+  firewall article, Google Workspace's firewall settings.
+- **A result's test type now comes from its test definition**, not from the
+  payload shape (`testtype.TypeOf` is the fallback for orphaned results).
+  saas reuses `HttpResult`/`TcpResult` rather than duplicating their fields,
+  so the old rule would have filed every saas result as http and hidden it
+  from `?type=saas`. See
+  [docs/adr/0001-test-type-from-definition.md](docs/adr/0001-test-type-from-definition.md).
+  `handleResult` does the one lookup and hands the definition to
+  `evaluateAlerts`, which was querying it again anyway.
+- Agent: `runSaas` walks the endpoints sequentially, reusing `runHTTP` and
+  `runTCP` — no new probe code. New `saas` capability, reported by every
+  agent (needs nothing beyond outbound TCP), so **agents must be updated once**
+  before saas tests reach them; after that the catalog is server-only.
+  60s interval floor, matching speedtest.
+- UI: Service dropdown on the test dialog listing what the service checks,
+  fed by the new `GET /api/v1/saas-services`. Results land on the existing
+  Results page; the chart series builder learned to read two payload keys
+  for the one type that emits both.
+- Not built: UDP/STUN media checks (Microsoft publishes Teams media as IP
+  ranges with no hostnames, so there is nothing to name — a green saas
+  result means sign-in and signalling work, not that a call will),
+  per-service rollup verdicts, operator-editable endpoints, vendor feed
+  refresh.
+- **Tests**: `internal/saas` catalog well-formedness + id permanence;
+  `TestHandleResultTypeFromDefinition` pins the type-origin rule including
+  the orphaned-result fallback; the registry round-trip test covers the new
+  params.
+- Verified end to end against a local self-signed server: catalog served,
+  test created, a 10s interval and an unknown service both rejected, an agent
+  reporting the `saas` capability ran ms-teams (3 https results with real
+  timings and cert expiry) and azure (1 https + 2 tcp results), all stored
+  under `testType: "saas"` and all OK — including the API hosts that would
+  have failed as https. "Run now" triggers a saas run.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

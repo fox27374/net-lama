@@ -112,9 +112,18 @@ Planned work, roughly grouped. Not ordered by priority yet.
       and expand to all APs listed underneath
 - [x] Traceroute / path analysis Phase 1: mtr-based path test (TCP/ICMP/UDP),
       per-hop RTT and loss, failure localization, hop-chain Path visualization
-- [ ] SaaS / cloud service tests: reachability and quality checks for online
-      services (MS Teams, Webex, social networks) and cloud platforms
-      (AWS, Azure, GCP) — curated endpoint sets per service
+- [x] SaaS / cloud service tests: new `saas` test type checks one online
+      service per test against a curated endpoint set — Teams, M365, Webex,
+      Zoom, Google Workspace, AWS, Azure, GCP. The catalog lives on the
+      server and is expanded into the pushed spec, so services are added or
+      corrected by a server release alone; stored tests carry only the
+      permanent service id. Endpoints are `https` (full HTTP timing + cert
+      expiry) or `tcp` (connect only, for cloud APIs that answer 4xx
+      unauthenticated and would otherwise read as outages); results are
+      ordinary http/tcp payloads, one per endpoint, stored under the saas
+      type. Not covered: Teams/Webex media (UDP 3478-3481, published as IP
+      ranges with no hostnames) and per-service rollup verdicts. Social
+      networks were dropped as a different question (guest-wifi filtering).
 - [ ] Host logs from the agent: fetch/tail selected log files or journald
       from the sensor host, viewable on the server
 - [ ] Packet capture (wireshark-style) on the agent: start a filtered

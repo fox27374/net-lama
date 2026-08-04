@@ -1,8 +1,8 @@
 # Net-Lama
 
 Net-Lama places small compute units (e.g. a Raspberry Pi) anywhere in a network to run
-network measurements: speedtest, ping, DNS, HTTP(S), TCP connect, traceroute path
-analysis and WLAN AP scanning. All configuration lives on a central server with a
+network measurements: speedtest, ping, DNS, HTTP(S), TCP connect, SaaS/cloud service
+checks, traceroute path analysis and WLAN AP scanning. All configuration lives on a central server with a
 multi-tenant web UI; the sensors dial out, authenticate with a token, receive their
 configuration and stream results back.
 
@@ -85,7 +85,18 @@ The UI (login with username/password, dark/light theme) has a fixed left sidebar
 * **Dashboard** — the tenant landing page with a site filter; shows stat tiles (sites,
   agents, tests, active alerts), a sites table, active & recent alerts, tests with
   inline sparklines showing metric trends, and the latest wireless scans
-* **Tests** — define named tests (ping/dns/http/tcp/traceroute/wlan_passive/wlan_active/perfmon/speedtest) with interval and parameters
+* **Tests** — define named tests (ping/dns/http/tcp/saas/traceroute/wlan_passive/wlan_active/perfmon/speedtest) with interval and parameters
+  * `saas` tests check one **online service** — Microsoft Teams, Microsoft 365,
+    Webex, Zoom, Google Workspace, AWS, Azure or Google Cloud — by measuring the
+    handful of endpoints that service depends on (sign-in, web front door, API
+    hosts). Pick the service from a dropdown; the endpoint list ships with the
+    server, so services are added and corrected by upgrading the server alone,
+    without touching the agents. Each endpoint produces its own result, so a
+    single failing sign-in host is visible rather than averaged away. Endpoints
+    that answer 401/403 to an unauthenticated request (cloud APIs) are checked
+    with a TCP connect instead of an HTTP request, so a healthy API is never
+    recorded as an outage. Teams/Webex **media** paths (UDP) are not checked:
+    a green result means sign-in and signalling work, not that a call will.
   * `speedtest` tests pick a **provider**: `ookla` (default, speedtest.net via the
     unofficial `showwin/speedtest-go` client against volunteer-run servers — the
     most widely available but occasionally untrustworthy, so results are
@@ -295,7 +306,7 @@ exported as the Prometheus gauge `netlama_agent_health` (values: 0=healthy, 1=de
 ### Agent capabilities and test dispatch
 
 Agents report which test types they can run: the slim agent (distroless) can run
-all built-in tests (ping, DNS, HTTP, TCP, speedtest); the sensor agent additionally
+all built-in tests (ping, DNS, HTTP, TCP, saas, speedtest); the sensor agent additionally
 supports WLAN scanning and traceroute if `iw` and `mtr` are available in the container
 or if their demo modes are enabled. The server uses this capability reporting to
 avoid pushing unsupported tests to agents—**an old agent that never re-registered

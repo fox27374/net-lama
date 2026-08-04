@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/fox27374/net-lama/internal/saas"
 	pb "github.com/fox27374/net-lama/proto"
 )
 
@@ -221,6 +222,41 @@ func (p *PerfmonParams) Validate() error {
 func (p *PerfmonParams) Apply(spec *pb.TestSpec) {
 	spec.Params = &pb.TestSpec_Perfmon{Perfmon: &pb.PerfmonParams{
 		Target: p.Target, DurationSeconds: p.DurationSeconds,
+	}}
+}
+
+type SaasParams struct {
+	// Service is a catalog id (internal/saas). It is the only thing
+	// stored: the endpoint list is expanded from the catalog on every
+	// push, so a catalog fix reaches existing tests without editing them.
+	Service string `json:"service"`
+}
+
+func (p *SaasParams) Validate() error {
+	p.Service = strings.TrimSpace(p.Service)
+	if p.Service == "" {
+		return fmt.Errorf("saas requires a service")
+	}
+	if _, ok := saas.Get(p.Service); !ok {
+		return fmt.Errorf("unknown saas service %q", p.Service)
+	}
+	return nil
+}
+
+func (p *SaasParams) Apply(spec *pb.TestSpec) {
+	svc, ok := saas.Get(p.Service)
+	if !ok {
+		// Validate runs before every Apply (both on the way in and on the
+		// way out, in internal/server/config.go), so this is unreachable
+		// short of a catalog change between the two calls.
+		return
+	}
+	endpoints := make([]*pb.SaasEndpoint, 0, len(svc.Endpoints))
+	for _, ep := range svc.Endpoints {
+		endpoints = append(endpoints, &pb.SaasEndpoint{Kind: ep.Kind, Target: ep.Target})
+	}
+	spec.Params = &pb.TestSpec_Saas{Saas: &pb.SaasParams{
+		Service: p.Service, Endpoints: endpoints,
 	}}
 }
 

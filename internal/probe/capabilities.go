@@ -16,7 +16,9 @@ func DetectCapabilities(hasWireless bool, wifaces []WirelessInterface) []string 
 	// perfmon (agent-to-agent throughput, client role) needs nothing beyond
 	// outbound TCP, always available. perfmon_reflector (listener role) is
 	// agent-specific opt-in config, added by the caller if enabled.
-	caps := []string{"ping", "dns", "http", "tcp", "speedtest", "perfmon"}
+	// saas is http/tcp checks against a server-supplied endpoint list, so
+	// it needs nothing this agent does not already have.
+	caps := []string{"ping", "dns", "http", "tcp", "speedtest", "perfmon", "saas"}
 
 	// traceroute: needs mtr in PATH or demo mode enabled
 	if _, err := exec.LookPath("mtr"); err == nil || tracerouteDemo() {

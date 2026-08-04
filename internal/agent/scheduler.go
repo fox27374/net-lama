@@ -110,6 +110,8 @@ func (a *Agent) runTest(ctx context.Context, spec *pb.TestSpec, results chan<- *
 		a.runPerfmon(ctx, spec, params.Perfmon, results)
 	case *pb.TestSpec_Traceroute:
 		a.runTraceroute(ctx, spec, params.Traceroute, results)
+	case *pb.TestSpec_Saas:
+		a.runSaas(ctx, spec, params.Saas, results)
 	}
 }
 
@@ -279,6 +281,31 @@ func (a *Agent) runTCP(ctx context.Context, spec *pb.TestSpec, params *pb.TcpPar
 			result.Error = err.Error()
 		}
 		sendResult(ctx, results, result)
+	}
+}
+
+// runSaas checks one curated service, endpoint by endpoint. The endpoint
+// list comes expanded from the server (see internal/saas): the agent holds
+// no catalog of its own, so services are added and fixed by a server
+// release alone. Results are the ordinary http and tcp ones — nothing here
+// knows it is running a service test beyond the log line.
+func (a *Agent) runSaas(ctx context.Context, spec *pb.TestSpec, params *pb.SaasParams, results chan<- *pb.TestResult) {
+	for _, ep := range params.Endpoints {
+		switch ep.Kind {
+		case "https":
+			a.runHTTP(ctx, spec, &pb.HttpParams{Url: ep.Target}, results)
+		case "tcp":
+			a.runTCP(ctx, spec, &pb.TcpParams{Targets: []string{ep.Target}}, results)
+		default:
+			a.Logger.Warn("Unknown saas endpoint kind",
+				slog.String("test", spec.Name),
+				slog.String("service", params.Service),
+				slog.String("kind", ep.Kind),
+			)
+		}
+		if ctx.Err() != nil {
+			return
+		}
 	}
 }
 

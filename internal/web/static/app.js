@@ -18,6 +18,11 @@ let pendingTestForRule = null; // set when jumping to alertcfg with a test prese
 // anything failing. Loaded once at sign-in; see loadTestTypes().
 let testTypes = {};
 
+// saasServices is the server's catalog of checkable online services:
+// [{id, name, endpoints:[{kind, target}]}]. Loaded once at sign-in; see
+// loadSaasServices().
+let saasServices = [];
+
 // testTypeOf returns a type's registry entry, or an empty object so a type
 // the server doesn't know about degrades to blank labels rather than
 // throwing mid-render.
@@ -90,6 +95,7 @@ async function showApp() {
   $("#server-version").textContent = me.serverVersion ? "net-lama " + me.serverVersion : "";
   $("#admin-panel").classList.toggle("hidden", !me.isAdmin);
   await loadTestTypes();
+  await loadSaasServices();
   if (me.isAdmin) {
     tenants = await api("GET", "/api/v1/tenants");
     const sel = $("#tenant-context");
@@ -501,6 +507,32 @@ async function loadTestTypes() {
   testTypes = Object.fromEntries(list.map((t) => [t.type, t]));
 }
 
+// loadSaasServices fills the saas catalog and the Service dropdown. Like
+// the test-type registry it is the same for every tenant, so it is fetched
+// once at sign-in.
+async function loadSaasServices() {
+  saasServices = await api("GET", "/api/v1/saas-services");
+  $("#t-saas-service").innerHTML = saasServices
+    .map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`)
+    .join("");
+  updateSaasEndpointHint();
+}
+
+function saasServiceName(id) {
+  const svc = saasServices.find((s) => s.id === id);
+  return svc ? svc.name : id || "";
+}
+
+// updateSaasEndpointHint shows what the picked service actually checks, so
+// the operator sees the endpoints before creating the test.
+function updateSaasEndpointHint() {
+  const svc = saasServices.find((s) => s.id === $("#t-saas-service").value);
+  $("#t-saas-endpoints").textContent = svc
+    ? "Checks: " + svc.endpoints.map((e) => e.target).join(", ")
+    : "";
+}
+$("#t-saas-service").addEventListener("change", updateSaasEndpointHint);
+
 async function fetchSites() {
   sites = await api("GET", "/api/v1/sites" + tenantParam());
   return sites;
@@ -611,7 +643,7 @@ async function loadAgents() {
     // noise. Only the situational ones (WLAN sensing/active) get a badge;
     // perfmon reflector is handled separately below since it's not even a
     // self-reported capability.
-    const baselineCaps = new Set(["ping", "dns", "http", "tcp", "speedtest", "traceroute", "perfmon"]);
+    const baselineCaps = new Set(["ping", "dns", "http", "tcp", "saas", "speedtest", "traceroute", "perfmon"]);
     const capabilityLabel = (c) => ({ wlan: "WLAN", wlan_active: "WLAN active" })[c] || c;
     let caps = (a.capabilities || [])
       .filter((c) => !baselineCaps.has(c))
@@ -962,6 +994,24 @@ const UI_TYPES = {
         : `${esc(t.target)} · <span class="error">refused</span>`,
     series: (t, add) => {
       if (t.connected) add(t.target, t.connectMs);
+    },
+  },
+
+  saas: {
+    // A saas run emits ordinary http and tcp results, one per endpoint, so
+    // this is the one entry that reads two payload keys. `details` is never
+    // reached: resultDetails matches the http/tcp entries first, which
+    // render exactly the right line for each endpoint anyway.
+    payload: ["http", "tcp"],
+    summary: (p) => saasServiceName(p.service),
+    write: (p) => {
+      $("#t-saas-service").value = p.service || $("#t-saas-service").value;
+      updateSaasEndpointHint();
+    },
+    read: () => ({ service: $("#t-saas-service").value }),
+    series: (p, add) => {
+      if (p.url) add(p.url, p.totalMs);
+      else add(p.target, p.connectMs);
     },
   },
 
@@ -1763,9 +1813,13 @@ function buildSeries(results) {
   const spec = UI_TYPES[type];
   const unit = (spec && spec.unit) || "ms";
   if (spec && spec.series) {
+    // Most types read one payload key; saas reads http and tcp both.
+    const keys = Array.isArray(spec.payload) ? spec.payload : [spec.payload];
     for (const r of asc) {
-      const payload = (r.payload || {})[spec.payload];
-      if (payload) spec.series(payload, (key, v) => add(key, r, v));
+      for (const key of keys) {
+        const payload = (r.payload || {})[key];
+        if (payload) spec.series(payload, (k, v) => add(k, r, v));
+      }
     }
   }
 

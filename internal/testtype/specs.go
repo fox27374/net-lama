@@ -54,6 +54,34 @@ func init() {
 		Subject: func(r *pb.TestResult) string { return r.GetTcp().GetTarget() },
 	})
 
+	// saas reuses the http and tcp result messages rather than duplicating
+	// their fields, so every reader here has to handle both. That is also
+	// why a result's type comes from its test definition and not from the
+	// payload shape — see docs/adr/0001-test-type-from-definition.md.
+	register(&Spec{
+		Type:               "saas",
+		Unit:               "ms",
+		MinIntervalSeconds: 60,
+		NewParams:          func() Params { return &SaasParams{} },
+		Primary:            saasLatency,
+		Metrics: map[string]Metric{
+			"latency_ms": saasLatency,
+			// https endpoints only; a tcp endpoint reports no certificate.
+			"cert_expiry_days": func(r *pb.TestResult) (float64, bool) {
+				if r.GetHttp() == nil {
+					return 0, false
+				}
+				return r.GetHttp().GetCertExpiryDays(), true
+			},
+		},
+		Subject: func(r *pb.TestResult) string {
+			if url := r.GetHttp().GetUrl(); url != "" {
+				return url
+			}
+			return r.GetTcp().GetTarget()
+		},
+	})
+
 	register(&Spec{
 		Type:               "speedtest",
 		Unit:               "Mbps",
@@ -166,6 +194,15 @@ func resultTypeName(r *pb.TestResult) string {
 		return "wlan_active"
 	}
 	return ""
+}
+
+// saasLatency is how long one saas endpoint took: the full request for an
+// https endpoint, the TCP handshake for a tcp one.
+func saasLatency(r *pb.TestResult) (float64, bool) {
+	if r.GetHttp() != nil {
+		return positive(r.GetHttp().GetTotalMs())
+	}
+	return positive(r.GetTcp().GetConnectMs())
 }
 
 // maxChannelUtil is the busiest channel's utilization in a passive sweep.

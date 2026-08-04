@@ -108,6 +108,7 @@ message TestSpec {
     WlanPassiveParams wlan_passive = 12;
     WlanActiveParams wlan_active = 13;
     PerfmonParams perfmon = 14;
+    SaasParams saas = 15;
   }
 }
 
@@ -137,6 +138,25 @@ message HttpParams {
 message TcpParams {
   repeated string targets = 1; // host:port
   uint32 timeout_seconds = 2;
+}
+
+// SaasParams checks one curated online service (Microsoft Teams, AWS, ...)
+// from the agent's vantage point. The service catalog lives on the server:
+// the stored test carries only the service id, and the server expands it
+// into endpoints on every push, so fixing or extending a service is a
+// server release and never a fleet rollout. The agent runs what it is
+// handed and knows nothing about services.
+message SaasParams {
+  string service = 1;               // catalog id, e.g. "ms-teams"
+  repeated SaasEndpoint endpoints = 2;
+}
+
+// SaasEndpoint is one thing to check for a service. https endpoints report
+// an HttpResult, tcp endpoints a TcpResult — a saas run emits one result
+// per endpoint, the way a ping test emits one per target.
+message SaasEndpoint {
+  string kind = 1;   // "https" or "tcp"
+  string target = 2; // URL for https, host:port for tcp
 }
 
 // WlanScanParams is reserved (previously used for managed-mode scans)

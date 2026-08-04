@@ -14,19 +14,15 @@ import (
 // test, tracking consecutive breaches so a rule only fires after its
 // configured count, and resolves a firing alert when a good result arrives.
 // Implements hysteresis: clear_threshold + clear_count with dead-band semantics.
-func (s *Server) evaluateAlerts(conn *connectedAgent, result *pb.TestResult) {
+// test is the result's definition (nil if it no longer exists), already
+// looked up by the caller for the stored result's type.
+func (s *Server) evaluateAlerts(conn *connectedAgent, result *pb.TestResult, test *store.TestDef) {
 	if result.TestId == "" {
 		return
 	}
 	rules, err := s.Store.RulesForTest(result.TestId)
 	if err != nil || len(rules) == 0 {
 		return
-	}
-
-	// Get test definition for state computation
-	var test *store.TestDef
-	if testDef, err := s.Store.GetTest(result.TestId); err == nil {
-		test = testDef
 	}
 
 	// Some tests emit several results per run (one per target/query); the

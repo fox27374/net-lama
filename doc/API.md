@@ -277,6 +277,37 @@ A type the client doesn't recognise should degrade gracefully rather than
 being special-cased; the registry is the source of truth for all of the
 above, on the server and in the browser.
 
+### `GET /api/v1/saas-services`
+
+The catalog a `saas` test picks from: which online services can be checked
+and what each one actually checks. Like the test-type registry it is the
+same for every tenant and takes no `tenantId`.
+
+```json
+[{
+  "id": "ms-teams",
+  "name": "Microsoft Teams",
+  "endpoints": [
+    { "kind": "https", "target": "https://teams.microsoft.com" },
+    { "kind": "https", "target": "https://login.microsoftonline.com" },
+    { "kind": "tcp",   "target": "portal.azure.com:443" }
+  ]
+}]
+```
+
+- `id` — what a `saas` test stores in `params.service`. Ids are permanent:
+  endpoints inside a service change with server releases, but an id that
+  has shipped is never renamed or removed, because stored tests reference it.
+- `kind` — `https` endpoints are fetched and report an `http` result
+  (status, DNS/connect/TLS/TTFB/total ms, certificate expiry); `tcp`
+  endpoints are connected to and report a `tcp` result (connect ms). API
+  hosts that answer `401`/`403` to an unauthenticated request are listed as
+  `tcp` on purpose — a 4xx would otherwise be recorded as a failure.
+
+A `saas` result is therefore an ordinary `http` or `tcp` payload, one per
+endpoint, stored under `testType: "saas"` — the type comes from the test
+definition, not from the payload shape.
+
 ### `GET /api/v1/tests`
 
 Query: `tenantId` (same admin/tenant-user rules as Sites). Returns
@@ -331,6 +362,7 @@ the resulting config to previously-affected agents. `204`.
 | `traceroute` | `target: string`, `protocol: "tcp"\|"icmp"\|"udp"`, `port: uint32`, `maxHops: uint32`, `probesPerHop: uint32` | `target` required; `protocol` default `tcp`; `port` default 443 for tcp/udp; `maxHops` default 30 (max 64); `probesPerHop` default 5; interval ≥ 30s |
 | `wlan_scan` | `{}` | interval ≥ 30s |
 | `speedtest` | `provider: "ookla"\|"ndt7"\|"cloudflare"` | `provider` default (and empty string) is `ookla`; interval ≥ 60s |
+| `saas` | `service: string` | a service id from `GET /api/v1/saas-services`; the endpoint list is expanded server-side on every push, so it is never stored on the test; interval ≥ 60s |
 
 All types require `intervalSeconds >= 5` (higher minimums noted above for
 `wlan_scan`/`traceroute`/`speedtest`).

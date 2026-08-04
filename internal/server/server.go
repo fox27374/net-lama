@@ -559,7 +559,16 @@ func (s *Server) handleAgentLog(logger *slog.Logger, conn *connectedAgent, log *
 func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result *pb.TestResult) {
 	s.Metrics.Record(conn.tenant, conn.agent.SiteName, conn.agent.Name, result)
 
+	// A test's type comes from its definition, not from the shape of the
+	// payload: saas results are HttpResult/TcpResult values and would
+	// otherwise be filed as http/tcp. TypeOf is the fallback for a result
+	// whose test is gone — deleted mid-flight, or from an unclaimed agent.
+	// See docs/adr/0001-test-type-from-definition.md.
+	test, _ := s.Store.GetTest(result.TestId)
 	testType := testtype.TypeOf(result)
+	if test != nil {
+		testType = test.Type
+	}
 
 	payload, err := testtype.EncodeResult(result)
 	if err != nil {
@@ -585,7 +594,7 @@ func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result 
 	}
 
 	// Evaluate alert rules against this result.
-	s.evaluateAlerts(conn, result)
+	s.evaluateAlerts(conn, result, test)
 
 	if result.Error != "" {
 		logger.Warn("Test failed on agent",

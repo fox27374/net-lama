@@ -10,6 +10,7 @@ import (
 
 	"github.com/fox27374/net-lama/internal/store"
 	pb "github.com/fox27374/net-lama/proto"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestConfigForAgent_FilteringByCapability(t *testing.T) {
@@ -554,5 +555,86 @@ func TestConfigForAgent_PerfmonPinnedToSourceAgent(t *testing.T) {
 	}
 	if len(cfg.Tests) != 0 {
 		t.Fatalf("expected the non-source agent of the same site to get 0 tests, got %d", len(cfg.Tests))
+	}
+}
+
+// TestHandleResultTypeFromDefinition pins the rule that lets a test type
+// reuse another type's result message: a stored result's type comes from
+// its test definition, not from the shape of the payload. A saas run emits
+// HttpResult values, and filing those as "http" would hide them from the
+// Results page and the ?type=saas filter.
+// See docs/adr/0001-test-type-from-definition.md.
+func TestHandleResultTypeFromDefinition(t *testing.T) {
+	tmpfile, err := os.CreateTemp("", "netlama-test-*.db")
+	if err != nil {
+		t.Fatalf("temp file: %v", err)
+	}
+	tmpfile.Close()
+	defer os.Remove(tmpfile.Name())
+
+	st, err := store.Open(tmpfile.Name())
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	server := &Server{
+		Store:   st,
+		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Metrics: NewMetrics(prometheus.NewRegistry()),
+	}
+
+	tenant, err := st.CreateTenant("t")
+	if err != nil {
+		t.Fatalf("create tenant: %v", err)
+	}
+	site, err := st.CreateSite(tenant.ID, "s")
+	if err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	agent, err := st.CreateAgent(tenant.ID, site.ID, "a")
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	saasTest, err := st.CreateTest(&store.TestDef{
+		TenantID: tenant.ID, Name: "Teams", Type: "saas",
+		IntervalSeconds: 60, Params: json.RawMessage(`{"service":"ms-teams"}`),
+	})
+	if err != nil {
+		t.Fatalf("create test: %v", err)
+	}
+
+	conn := &connectedAgent{agent: agent, tenant: tenant.Name}
+	result := &pb.TestResult{
+		TestId: saasTest.ID, TestName: "Teams",
+		Result: &pb.TestResult_Http{Http: &pb.HttpResult{
+			Url: "https://teams.microsoft.com", StatusCode: 200, TotalMs: 96,
+		}},
+	}
+	server.handleResult(server.Logger, conn, result)
+
+	rows, err := st.ListResults(store.ResultFilter{TenantID: tenant.ID, AgentID: agent.ID, Limit: 10})
+	if err != nil {
+		t.Fatalf("list results: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("stored %d results, want 1", len(rows))
+	}
+	if rows[0].TestType != "saas" {
+		t.Errorf("stored type = %q, want saas (payload shape says http)", rows[0].TestType)
+	}
+
+	// A result whose test is gone still gets filed, by payload shape.
+	orphan := &pb.TestResult{
+		TestId: "deleted", TestName: "Gone",
+		Result: &pb.TestResult_Http{Http: &pb.HttpResult{Url: "https://example.com", StatusCode: 200}},
+	}
+	server.handleResult(server.Logger, conn, orphan)
+	rows, err = st.ListResults(store.ResultFilter{TenantID: tenant.ID, AgentID: agent.ID, TestID: "deleted", Limit: 10})
+	if err != nil {
+		t.Fatalf("list orphan results: %v", err)
+	}
+	if len(rows) != 1 || rows[0].TestType != "http" {
+		t.Fatalf("orphan result: got %d rows, type %v; want 1 row of type http", len(rows), rows)
 	}
 }

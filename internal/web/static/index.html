@@ -634,6 +634,7 @@
           <option value="dns">DNS</option>
           <option value="http">HTTP(S)</option>
           <option value="tcp">TCP connect</option>
+          <option value="saas">SaaS / cloud service</option>
           <option value="traceroute">Traceroute (path)</option>
           <option value="wlan_passive">WLAN passive (monitor mode)</option>
           <option value="wlan_active">WLAN active (connect test)</option>
@@ -665,6 +666,18 @@
         <label>Timeout (s) <input type="number" id="t-tcp-timeout" min="1" value="5"></label>
       </div>
       <label>Targets (host:port) <textarea id="t-tcp-targets" rows="2" placeholder="one per line, e.g. 10.0.0.1:443"></textarea></label>
+    </div>
+    <div id="t-params-saas" class="hidden">
+      <p class="muted">Checks a curated set of endpoints for one online service
+      from this site — sign-in, web front door and API hosts. The endpoint list
+      ships with the server, so it stays current without touching the agents
+      (min. interval 60s).</p>
+      <label>Service
+        <!-- Options are filled from the catalog by populateSaasServices();
+             see GET /api/v1/saas-services. -->
+        <select id="t-saas-service"></select>
+      </label>
+      <p class="muted" id="t-saas-endpoints"></p>
     </div>
     <div id="t-params-wlan_passive" class="hidden">
       <p class="muted">Passively senses nearby networks and client stations in

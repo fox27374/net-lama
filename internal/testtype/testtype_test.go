@@ -239,6 +239,7 @@ func TestEveryTypeParamsRoundTrip(t *testing.T) {
 		"speedtest":    `{"provider":"ndt7"}`,
 		"perfmon":      `{"sourceAgentId":"a1","target":"10.0.0.2:5201"}`,
 		"traceroute":   `{"target":"1.1.1.1"}`,
+		"saas":         `{"service":"ms-teams"}`,
 		"wlan_passive": `{}`,
 		"wlan_active":  `{"ssid":"corp","security":"psk","password":"hunter2"}`,
 	}
