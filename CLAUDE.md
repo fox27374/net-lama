@@ -62,6 +62,12 @@ Changes are pushed live to affected connected agents (`PushConfigs`).
   `cmd/*/main.go`, and update all of: README, ROADMAP.md checkbox, **both**
   compose files (`compose.yaml` and `compose.sensor.yaml`). Prefer a
   zero-external-dependency default (e.g. self-signed cert, built-in agent CA).
+- **Container builds need `--build-arg VERSION=...`** or the image reports
+  version `dev` (`ARG VERSION=dev` in the Containerfile). CI passes
+  `git describe`; a deploy from a `git archive` tarball has no `.git`, so it
+  reads the `VERSION` file instead — git's export-subst fills it with the
+  describe string on archive. In a working tree that file holds the literal
+  `$Format:...$` placeholder, so treat a value starting with `$Format` as unset.
 - Completed roadmap items get checked off in ROADMAP.md and a dated entry in
   PROGRESS.md.
 - The traceroute and WLAN probes shell out to `mtr` and `iw` and need raw

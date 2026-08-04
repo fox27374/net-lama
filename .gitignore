@@ -148,3 +148,6 @@ dmypy.json
 # stray go build outputs at repo root
 /agent
 /server
+
+# Deploy artifacts
+netlama-src.tar.gz
