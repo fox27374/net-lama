@@ -438,7 +438,11 @@ async function renderDashboardWireless(siteId) {
           const strongest = networks[0]; // Already sorted by RSSI
           const rssi = strongest.rssiDbm || 0;
           const sigClass = signalClass(rssi);
-          const apCountText = networks.length > 1 ? ` <span class="ap-count">${networks.length} APs</span>` : "";
+          // BSSIDs, not physical APs: a dual-band AP broadcasts the same
+          // SSID from each radio, so one box shows up as two BSSIDs.
+          const apCountText = networks.length > 1
+            ? ` <span class="ap-count" title="Radios broadcasting this SSID. A dual-band AP appears once per band.">${networks.length} BSSIDs</span>`
+            : "";
 
           const tr = document.createElement("tr");
           tr.classList.add("clickable-row");
@@ -2696,7 +2700,9 @@ function renderWirelessNetworks(result) {
       // Single AP: render as plain row without chevron
       tbody.appendChild(renderNetworkRow(networks[0]));
     } else {
-      // Multiple APs: summary group row; expanding lists every AP underneath
+      // Multiple BSSIDs: summary group row, expanding lists each one
+      // underneath. The count is of BSSIDs, not of physical access points —
+      // a dual-band AP broadcasts the same SSID from each radio.
       const strongest = networks[0]; // Already sorted by RSSI
       const channels = [...new Set(networks.map((n) => n.channel).filter(Boolean))].sort((a, b) => a - b);
       const bands = [...new Set(networks.map((n) => bandLabel(n.freqMhz || 0)))];
@@ -2706,8 +2712,8 @@ function renderWirelessNetworks(result) {
       const groupTr = document.createElement("tr");
       groupTr.className = "wl-group-row";
       groupTr.innerHTML = `
-        <td><span class="chevron">▸</span> ${esc(ssid)} <span class="ap-count">${networks.length} APs</span></td>
-        <td class="muted">${networks.length} BSSIDs</td>
+        <td><span class="chevron">▸</span> ${esc(ssid)}</td>
+        <td class="muted" title="Radios broadcasting this SSID. A dual-band AP appears once per band.">${networks.length} BSSIDs</td>
         <td class="num"><span class="health ${signalClass(strongest.rssiDbm)}">${strongest.rssiDbm || 0}</span> ${renderSignalBar(strongest.rssiDbm)}</td>
         <td class="num">${channels.join(", ") || "—"}</td>
         <td>${bands.join(" / ")}</td>
@@ -2718,7 +2724,7 @@ function renderWirelessNetworks(result) {
       groupTr.style.cursor = "pointer";
       tbody.appendChild(groupTr);
 
-      // All APs of the SSID as child rows, hidden until expanded
+      // Every BSSID of the SSID as child rows, hidden until expanded
       let expanded = false;
       const childRows = networks.map((n) => {
         const childTr = renderNetworkRow(n, true);
