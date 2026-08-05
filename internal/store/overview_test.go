@@ -189,3 +189,67 @@ func TestListTestsNullThresholds(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", tests)
 	}
 }
+
+// TestOverviewTestsScopedToSite reproduces the dashboard showing every
+// tenant test when a site is selected: the other sites' tests appeared as
+// permanent "No data" rows, because only their own site's agents run them.
+func TestOverviewTestsScopedToSite(t *testing.T) {
+	s := openTestStore(t)
+
+	tenant, err := s.CreateTenant("t")
+	if err != nil {
+		t.Fatalf("creating tenant: %v", err)
+	}
+	site1, err := s.CreateSite(tenant.ID, "site1")
+	if err != nil {
+		t.Fatalf("creating site1: %v", err)
+	}
+	site2, err := s.CreateSite(tenant.ID, "site2")
+	if err != nil {
+		t.Fatalf("creating site2: %v", err)
+	}
+
+	mkTest := func(name string) *TestDef {
+		t.Helper()
+		def, err := s.CreateTest(&TestDef{
+			TenantID: tenant.ID, Name: name, Type: "ping", IntervalSeconds: 60,
+			Params: json.RawMessage(`{"targets":["8.8.8.8"],"count":5}`),
+		})
+		if err != nil {
+			t.Fatalf("creating test %s: %v", name, err)
+		}
+		return def
+	}
+	here, elsewhere := mkTest("here"), mkTest("elsewhere")
+
+	if err := s.SetSiteTests(site1.ID, []string{here.ID}); err != nil {
+		t.Fatalf("assigning to site1: %v", err)
+	}
+	if err := s.SetSiteTests(site2.ID, []string{elsewhere.ID}); err != nil {
+		t.Fatalf("assigning to site2: %v", err)
+	}
+
+	ov, err := s.TenantOverview(tenant.ID, site1.ID)
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	var names []string
+	for _, h := range ov.TestHealth {
+		names = append(names, h.Name)
+	}
+	if len(names) != 1 || names[0] != "here" {
+		t.Errorf("site1 overview lists %v, want only [here]", names)
+	}
+	if ov.Tests != 1 {
+		t.Errorf("site1 test count = %d, want 1", ov.Tests)
+	}
+
+	// Unfiltered still sees the whole tenant.
+	ov, err = s.TenantOverview(tenant.ID, "")
+	if err != nil {
+		t.Fatalf("overview unfiltered: %v", err)
+	}
+	if ov.Tests != 2 {
+		t.Errorf("tenant test count = %d, want 2", ov.Tests)
+	}
+}

@@ -114,7 +114,15 @@ func (s *Store) TenantOverview(tenantID, siteID string) (*Overview, error) {
 		}
 	}
 
-	tests, err := s.ListTests(tenantID)
+	// A site filter means "this site", including which tests exist there:
+	// listing every tenant test would show the other sites' tests as rows
+	// that can never have data, since only their own site's agents run them.
+	var tests []*TestDef
+	if siteID != "" {
+		tests, err = s.TestsForSite(siteID)
+	} else {
+		tests, err = s.ListTests(tenantID)
+	}
 	if err != nil {
 		return nil, err
 	}
