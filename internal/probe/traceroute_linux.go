@@ -163,6 +163,12 @@ func tcpProbe(addr [4]byte, port, ttl uint32, flowID uint16) probeReply {
 	if err := syscall.SetNonblock(fd, true); err != nil {
 		return probeReply{}
 	}
+	// One SYN, no retransmits. The kernel owns retransmission for TCP, and
+	// its ~1s retry turns a router's rate-limited (dropped) ICMP reply into
+	// a hop that appears to take a second instead of a probe that was lost:
+	// measured against ICMP mode, one LAN hop read 815ms where it truly
+	// answers in 0.3ms. This probe counts its own losses.
+	_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_SYNCNT, 1)
 
 	start := time.Now()
 	err = syscall.Connect(fd, &syscall.SockaddrInet4{Port: int(port), Addr: addr})
