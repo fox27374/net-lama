@@ -314,6 +314,30 @@ time for tcp ones — not the total. A vendor front door redirects a few
 times and serves a few hundred KB, so its total tracks page weight rather
 than reachability; the total is still recorded and alertable as `total_ms`.
 
+### `GET /api/v1/asn`
+
+Resolves IP addresses to the network announcing them, from an embedded copy
+of the global routing table. `GET /api/v1/asn?ips=1.1.1.1,8.8.8.8` — batched
+because a path view resolves a whole trace at once. Like `/api/v1/oui` it
+describes the internet rather than anyone's data, so it needs authentication
+but no `tenantId`.
+
+```json
+{
+  "1.1.1.1":        { "asn": 13335, "owner": "Cloudflare, Inc.", "country": "US" },
+  "194.112.158.53": { "asn": 3330,  "owner": "eww ag",           "country": "AT" }
+}
+```
+
+Addresses that are not announced — the private hops at the start of every
+trace, and IPv6, which these tables do not cover — are **omitted from the
+response** rather than returned with empty fields.
+
+`country` is where the **AS is registered**, not where the router sits: a
+Level 3 router in Vienna reports `US`. Per-hop geolocation would need a
+licensed geo database and a much larger one; this is deliberately only the
+registration country.
+
 ### `GET /api/v1/tests`
 
 Query: `tenantId` (same admin/tenant-user rules as Sites). Returns

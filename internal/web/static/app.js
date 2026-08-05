@@ -3095,14 +3095,52 @@ function renderPathResult(r, agent) {
     tr.innerHTML = `
       <td class="num">${h.ttl}</td>
       <td>${host}</td>
+      <td class="asn-cell" data-ip="${esc(h.host || "")}"><span class="muted">–</span></td>
       <td>${latencyCell}</td>
       <td>${lossBarCell}</td>
       <td>${jitterBarCell}</td>`;
     tbody.appendChild(tr);
   }
+  enrichPathASN(hops, tbody);
 
   // Waterfall chart
   renderPathWaterfall(hops);
+}
+
+// enrichPathASN fills the Network column from the embedded routing table.
+// It runs after the hops are already on screen and never throws: knowing who
+// operates hop 7 is useful, but not at the cost of the path itself failing
+// to render. Hops inside the same AS as the hop above are shown as a
+// continuation, which is what turns a list of routers into "three hops
+// through Telia, then Arelion".
+async function enrichPathASN(hops, tbody) {
+  const ips = [...new Set(hops.filter((h) => h.host).map((h) => h.host))];
+  if (!ips.length) return;
+
+  let table;
+  try {
+    table = await api("GET", "/api/v1/asn?ips=" + encodeURIComponent(ips.join(",")));
+  } catch {
+    return;
+  }
+
+  let prevASN = null;
+  for (const cell of tbody.querySelectorAll("td.asn-cell")) {
+    const info = table[cell.dataset.ip];
+    if (!info) {
+      // Private and unrouted hops have no AS — the LAN side of every trace.
+      cell.innerHTML = '<span class="muted">–</span>';
+      prevASN = null;
+      continue;
+    }
+    const name = esc(info.owner || "AS" + info.asn);
+    const country = info.country ? ` <span class="muted">${esc(info.country)}</span>` : "";
+    cell.innerHTML = info.asn === prevASN
+      ? `<span class="muted">↳ ${name}</span>`
+      : `<div>${name}${country}</div>` +
+        `<div class="muted" style="font-size: var(--text-xs); font-family: monospace;">AS${info.asn}</div>`;
+    prevASN = info.asn;
+  }
 }
 
 // Render waterfall chart showing latency contribution by hop (horizontal APM-style)

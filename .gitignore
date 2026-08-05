@@ -151,3 +151,7 @@ dmypy.json
 
 # Deploy artifacts
 netlama-src.tar.gz
+
+# ASN table generator inputs (fetched on demand, see internal/asn)
+data-raw-table
+data-used-autnums

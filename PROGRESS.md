@@ -1665,6 +1665,32 @@ and [docs/adr/0002-native-traceroute-engine.md](docs/adr/0002-native-traceroute-
   `open`, ICMP → `echoed`, TCP to a closed port → `closed`.
 - Stages 2 (ASN enrichment) and 3 (path-change detection) are still to come.
 
+## 2026-08-05 — Traceroute Phase 2, stage 2: hops say whose network they are
+
+- **`internal/asn`** resolves an IP to the AS announcing it, its operator and
+  the AS registration country, from embedded tables — the `internal/oui`
+  pattern. `GET /api/v1/asn?ips=a,b,c` serves it, batched so a path view
+  resolves a whole trace in one request; the Path view gains a **Network**
+  column, with hops inside the same AS shown as a continuation so a trace
+  reads as "three hops through eww ag, then Cloudflare".
+- **The data source changed from the plan.** iptoasn.com (named in the plan,
+  CC0) is unreachable from here — Cloudflare serves a "Suspected Phishing"
+  block page instead of the file. APNIC publishes the equivalent snapshot
+  openly (`thyme.apnic.net/current/data-raw-table` + `data-used-autnums`),
+  which is what `internal/asn/gen` now consumes.
+- **Bigger than planned: 3.7 MB embedded, not ~2 MB.** The raw table is 1.07M
+  prefixes; merging contiguous ranges announced by the same AS collapses it
+  to 368k (2.6 MB gz), plus 78k AS names for the ASNs that actually appear
+  (1.1 MB gz). Without the merge it would have been unshippable.
+- Verified against the real hops of tpr06's own paths: `194.112.158.53` →
+  AS3330 eww ag (AT), `89.105.161.39` → AS39555 Stadtwerke Schwaz (AT),
+  `1.1.1.1` → AS13335 Cloudflare (US); private hops correctly absent;
+  unauthenticated requests get 401.
+- **Not verified:** the rendered Path page. The browser extension was not
+  connected, so the Network column was checked as data and code, not as
+  pixels.
+- No agent change and no proto change — server-side only.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register
