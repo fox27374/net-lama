@@ -128,11 +128,20 @@ type TracerouteBaseline struct {
 	// address the window has already seen at that TTL is that alternation,
 	// not the route moving somewhere new.
 	Seen []map[string]bool
+	// Lengths is every path length the window observed. The same
+	// alternation shows up as the path being 13 hops one run and 14 the
+	// next, which reports as a change at the TTL that appeared or vanished
+	// and has no address to match against.
+	Lengths map[int]bool
 }
 
-// baselineRuns is how many past runs are consulted. Enough to see through a
-// few rate-limited gaps, small enough that ingest stays one cheap query.
-const baselineRuns = 5
+// baselineRuns is how many past runs are consulted. Measured on rp01: a
+// 5-run window was too short for streaky ECMP alternation — a path that sat
+// on one branch for six runs made the other branch look new again, so a hop
+// that only ever flips between two routers still produced an event every few
+// hours. 20 runs covers those streaks and is still one cheap indexed query
+// per traceroute ingest (they arrive at test interval, ≥30s).
+const baselineRuns = 20
 
 // TracerouteBaselineFor returns the per-TTL baseline for this agent and
 // test, newest answer per hop wins. Called on ingest before the new result
@@ -147,7 +156,7 @@ func (s *Store) TracerouteBaselineFor(agentID, testID string) (TracerouteBaselin
 	}
 	defer rows.Close()
 
-	var base TracerouteBaseline
+	base := TracerouteBaseline{Lengths: map[int]bool{}}
 	for rows.Next() {
 		var payload string
 		if err := rows.Scan(&payload); err != nil {
@@ -157,6 +166,7 @@ func (s *Store) TracerouteBaselineFor(agentID, testID string) (TracerouteBaselin
 		if !ok {
 			continue
 		}
+		base.Lengths[len(hosts)] = true
 		for i, h := range hosts {
 			for len(base.Hosts) <= i {
 				base.Hosts = append(base.Hosts, "*")

@@ -200,15 +200,45 @@ func TestDetectPathChangeThroughIngest(t *testing.T) {
 		t.Error("a hop alternating back to a recently seen address was reported as a change")
 	}
 
+	// The same flapping seen as a length change: a path that has already
+	// been both 2 and 3 hops long in the window is alternating, not growing.
+	run("10.0.0.1", "1.0.0.1", "8.8.4.4", "1.1.1.1") // 3 intermediate hops
+	before, err := st.ListPathChanges(store.PathChangeFilter{TenantID: tenant.ID})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	shrunk := run("10.0.0.1", "1.0.0.1", "1.1.1.1") // back to 2
+	if shrunk.GetTraceroute().GetPathChanged() {
+		t.Error("a path length the window had already seen was reported as a change")
+	}
+	after, err := st.ListPathChanges(store.PathChangeFilter{TenantID: tenant.ID})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(after) != len(before) {
+		t.Errorf("length flapping recorded %d extra events", len(after)-len(before))
+	}
+
 	changes, err := st.ListPathChanges(store.PathChangeFilter{TenantID: tenant.ID})
 	if err != nil {
 		t.Fatalf("list path changes: %v", err)
 	}
-	if len(changes) != 1 {
-		t.Fatalf("recorded %d changes, want exactly 1", len(changes))
+	// Two events are expected: the reroute at TTL 2, and the run that grew
+	// to a length never seen before (which is a real change — only a length
+	// the window has already observed is flapping).
+	if len(changes) != 2 {
+		t.Fatalf("recorded %d changes, want 2 (the reroute and the new length)", len(changes))
 	}
-	c := changes[0]
-	if c.FirstDiffTTL != 2 || c.FromHop != "1.0.0.1" || c.ToHop != "8.8.8.8" {
+	var c *store.PathChange
+	for _, ch := range changes {
+		if ch.ToHop == "8.8.8.8" {
+			c = ch
+		}
+	}
+	if c == nil {
+		t.Fatalf("the reroute to 8.8.8.8 was not recorded; got %+v", changes)
+	}
+	if c.FirstDiffTTL != 2 || c.FromHop != "1.0.0.1" {
 		t.Errorf("event = ttl %d, %s -> %s; want ttl 2, 1.0.0.1 -> 8.8.8.8",
 			c.FirstDiffTTL, c.FromHop, c.ToHop)
 	}

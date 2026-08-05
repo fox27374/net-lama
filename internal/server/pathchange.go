@@ -170,6 +170,13 @@ func (s *Server) detectPathChange(conn *connectedAgent, result *pb.TestResult, t
 	if seenRecently(base, ttl, toHop) {
 		return
 	}
+	// The same alternation seen as a length change: the path is 13 hops one
+	// run and 14 the next, which has no address to match against. A length
+	// the window has already observed is that flapping, not the route
+	// growing somewhere new.
+	if (toHop == "" || fromHop == "") && base.Lengths[len(current)] {
+		return
+	}
 
 	tr.PathChanged = true
 	scope, fromNet, toNet := classifyChange(fromHop, toHop)

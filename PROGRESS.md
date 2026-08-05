@@ -1721,6 +1721,13 @@ and [docs/adr/0002-native-traceroute-engine.md](docs/adr/0002-native-traceroute-
   unprivileged ICMP datagram socket lets the kernel own the echo id and
   recompute the checksum — so `tcp`/`udp` mode is the recommendation when
   route stability matters.
+- **A 6-hour soak then found the first fix was half a fix.** 32 events, of
+  which 16 were the same two ECMP branches alternating (a 5-run window is too
+  short when a path sits on one branch for six runs) and 13 were the path
+  flapping between 13 and 14 hops — a length change has no address to match
+  against, so the address check never applied. The window is now 20 runs, and
+  a path length the window has already observed is treated as flapping too.
+  Growing to a length never seen before is still a change.
 - Events are bounded per agent+test (500) like results are, since a flapping
   route is exactly what would otherwise grow the table without limit.
 - **Tests**: signature construction, the diff rules (silence, replacement,
