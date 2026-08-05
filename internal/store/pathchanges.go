@@ -122,6 +122,12 @@ func (s *Store) ListPathChanges(f PathChangeFilter) ([]*PathChange, error) {
 type TracerouteBaseline struct {
 	// Hosts is indexed by TTL-1; "*" means no run in the window saw it.
 	Hosts []string
+	// Seen is every address the window observed at each TTL. Under ECMP a
+	// hop legitimately alternates between routers run after run — measured
+	// on rp01, hop 5 flipped between .18 and .19 every minute — and an
+	// address the window has already seen at that TTL is that alternation,
+	// not the route moving somewhere new.
+	Seen []map[string]bool
 }
 
 // baselineRuns is how many past runs are consulted. Enough to see through a
@@ -154,10 +160,14 @@ func (s *Store) TracerouteBaselineFor(agentID, testID string) (TracerouteBaselin
 		for i, h := range hosts {
 			for len(base.Hosts) <= i {
 				base.Hosts = append(base.Hosts, "*")
+				base.Seen = append(base.Seen, map[string]bool{})
 			}
 			// Newest run is seen first, so only fill gaps afterwards.
 			if base.Hosts[i] == "*" && h != "*" {
 				base.Hosts[i] = h
+			}
+			if h != "*" {
+				base.Seen[i][h] = true
 			}
 		}
 	}

@@ -1711,6 +1711,16 @@ and [docs/adr/0002-native-traceroute-engine.md](docs/adr/0002-native-traceroute-
   as A, goes quiet, answers as B — B is compared against `*` and matches, so
   the reroute is never reported. The baseline is now the most recent *answer*
   per TTL across the last 5 runs (`store.TracerouteBaselineFor`).
+- **Live traffic found a fourth rule within minutes of deploying.** rp01's
+  ICMP path test recorded `89.105.160.18 -> .19` and `.19 -> .18` in
+  consecutive runs: ECMP alternation, one false event per minute, exactly the
+  noise the design set out to avoid. An address the recent window has already
+  seen at that TTL is now treated as alternation rather than a change; the
+  first appearance of a genuinely new address still reports. The Paris flow
+  pinning that prevents this for tcp/udp cannot work for icmp — an
+  unprivileged ICMP datagram socket lets the kernel own the echo id and
+  recompute the checksum — so `tcp`/`udp` mode is the recommendation when
+  route stability matters.
 - Events are bounded per agent+test (500) like results are, since a flapping
   route is exactly what would otherwise grow the table without limit.
 - **Tests**: signature construction, the diff rules (silence, replacement,

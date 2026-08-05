@@ -368,6 +368,15 @@ the previous runs established. Two things deliberately do **not** count:
 - **The destination's own address.** An anycast target answers from a
   different address most runs, which is DNS and load balancing rather than a
   route change, so the destination hop is excluded from the comparison.
+- **A hop alternating between routers.** Under ECMP a hop flips between
+  addresses run after run (measured live: hop 5 alternating between
+  `89.105.160.18` and `.19` every minute). An address the recent window has
+  already seen at that TTL is that alternation; the first appearance of a
+  genuinely new address still reports. Pinning the flow prevents this for
+  `tcp`/`udp` probes, but not for `icmp` — on an unprivileged ICMP datagram
+  socket the kernel owns the echo id and recomputes the checksum, so there is
+  nothing left to hold constant. **Prefer `tcp` or `udp` mode when route
+  stability matters.**
 
 `scope` is `inter-as` when the changed hop moved to a different network,
 `intra-as` when it stayed inside one operator, and `unknown` when either

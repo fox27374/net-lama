@@ -193,6 +193,13 @@ func TestDetectPathChangeThroughIngest(t *testing.T) {
 		t.Error("a replaced hop was not reported as a route change")
 	}
 
+	// ECMP: hop 2 flips back to the address it used before. The window has
+	// already seen it at that TTL, so that is alternation, not a reroute.
+	back := run("10.0.0.1", "1.0.0.1", "1.1.1.1")
+	if back.GetTraceroute().GetPathChanged() {
+		t.Error("a hop alternating back to a recently seen address was reported as a change")
+	}
+
 	changes, err := st.ListPathChanges(store.PathChangeFilter{TenantID: tenant.ID})
 	if err != nil {
 		t.Fatalf("list path changes: %v", err)

@@ -71,6 +71,16 @@ func diffSignatures(from, to []string) (ttl uint32, fromHop, toHop string, ok bo
 	return 0, "", "", false
 }
 
+// seenRecently reports whether this address already appeared at this TTL in
+// the baseline window.
+func seenRecently(base store.TracerouteBaseline, ttl uint32, hop string) bool {
+	i := int(ttl) - 1
+	if hop == "" || i < 0 || i >= len(base.Seen) {
+		return false
+	}
+	return base.Seen[i][hop]
+}
+
 // classifyChange labels a change by whether it moved traffic to a different
 // network, using the embedded routing table from stage 2. An operator cares
 // much more about leaving their transit provider than about a reroute
@@ -144,6 +154,20 @@ func (s *Server) detectPathChange(conn *connectedAgent, result *pb.TestResult, t
 	}
 	ttl, fromHop, toHop, changed := diffSignatures(base.Hosts, current)
 	if !changed {
+		return
+	}
+	// Under ECMP a hop alternates between routers rather than moving: on
+	// rp01, hop 5 flipped between 89.105.160.18 and .19 every minute, which
+	// produced an event every run. An address this test has already seen at
+	// this TTL recently is that alternation. The first appearance of a
+	// genuinely new address still reports, because the window has not seen
+	// it yet.
+	//
+	// Pinning the flow (Paris-style) prevents this for tcp/udp probes, but
+	// not for icmp: on an unprivileged ICMP datagram socket the kernel owns
+	// the echo id and recomputes the checksum, so there is nothing left to
+	// hold constant.
+	if seenRecently(base, ttl, toHop) {
 		return
 	}
 
