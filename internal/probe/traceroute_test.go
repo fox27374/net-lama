@@ -1,65 +1,88 @@
 package probe
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
-const mtrReached = `{
-  "report": {
-    "mtr": {"src": "10.0.0.5", "dst": "8.8.8.8", "tests": 5},
-    "hubs": [
-      {"count": 1, "host": "192.168.1.1", "Loss%": 0.0, "Snt": 5, "Avg": 0.7, "Best": 0.5, "Wrst": 1.2, "StDev": 0.25},
-      {"count": 2, "host": "???", "Loss%": 100.0, "Snt": 5, "Avg": 0.0, "Best": 0.0, "Wrst": 0.0, "StDev": 0.0},
-      {"count": 3, "host": "72.14.204.68", "Loss%": 0.0, "Snt": 5, "Avg": 12.4, "Best": 11.9, "Wrst": 14.1, "StDev": 0.85},
-      {"count": 4, "host": "8.8.8.8", "Loss%": 0.0, "Snt": 5, "Avg": 15.1, "Best": 14.8, "Wrst": 16.0, "StDev": 0.65}
-    ]
-  }
-}`
+// The mtr JSON parser these tests used to cover is gone: the native engine
+// builds hops from its own probes, so what needs pinning now is how probe
+// samples become a hop and how the destination's answer is classified.
 
-func TestParseMTRReached(t *testing.T) {
-	res, err := parseMTR([]byte(mtrReached), "dns.google", 30)
-	if err != nil {
-		t.Fatal(err)
+func TestRttStats(t *testing.T) {
+	avg, best, worst, jitter := rttStats([]float64{10, 12, 14})
+	if avg != 12 || best != 10 || worst != 14 {
+		t.Errorf("avg/best/worst = %v/%v/%v, want 12/10/14", avg, best, worst)
 	}
-	if !res.Reached || res.Status != "reached" {
-		t.Errorf("expected reached, got %q reached=%v", res.Status, res.Reached)
+	// Standard deviation, which is what mtr reported as StDev — history
+	// spanning the engine change has to stay comparable.
+	if want := math.Sqrt(8.0 / 3.0); math.Abs(jitter-want) > 1e-9 {
+		t.Errorf("jitter = %v, want %v (population stddev)", jitter, want)
 	}
-	if len(res.Hops) != 4 {
-		t.Fatalf("expected 4 hops, got %d", len(res.Hops))
-	}
-	if res.Hops[1].Host != "" || res.Hops[1].LossPercent != 100 {
-		t.Errorf("anonymous hop 2 parsed wrong: %+v", res.Hops[1])
-	}
-	if res.RttMs != 15.1 {
-		t.Errorf("expected destination RTT 15.1, got %v", res.RttMs)
-	}
-	if res.Hops[0].JitterMs != 0.25 {
-		t.Errorf("expected hop 1 jitter 0.25, got %v", res.Hops[0].JitterMs)
-	}
-	if res.Hops[3].JitterMs != 0.65 {
-		t.Errorf("expected hop 4 jitter 0.65, got %v", res.Hops[3].JitterMs)
+
+	if avg, best, worst, jitter := rttStats(nil); avg != 0 || best != 0 || worst != 0 || jitter != 0 {
+		t.Errorf("no samples gave %v/%v/%v/%v, want zeros", avg, best, worst, jitter)
 	}
 }
 
-const mtrStalled = `{
-  "report": {
-    "mtr": {"src": "10.0.0.5", "dst": "203.0.113.9", "tests": 5},
-    "hubs": [
-      {"count": 1, "host": "192.168.1.1", "Loss%": 0.0, "Snt": 5, "Avg": 0.7, "Best": 0.5, "Wrst": 1.2, "StDev": 0.25},
-      {"count": 2, "host": "84.116.130.1", "Loss%": 0.0, "Snt": 5, "Avg": 8.5, "Best": 8.0, "Wrst": 9.1, "StDev": 0.55},
-      {"count": 3, "host": "???", "Loss%": 100.0, "Snt": 5, "Avg": 0.0, "Best": 0.0, "Wrst": 0.0, "StDev": 0.0},
-      {"count": 4, "host": "???", "Loss%": 100.0, "Snt": 5, "Avg": 0.0, "Best": 0.0, "Wrst": 0.0, "StDev": 0.0}
-    ]
-  }
-}`
+// TestClassifyICMP pins the distinction the native engine exists to make:
+// an intermediate router versus the destination answering for itself, and
+// which answer it gave.
+func TestClassifyICMP(t *testing.T) {
+	cases := []struct {
+		name      string
+		icmpType  uint8
+		icmpCode  uint8
+		wantKind  replyKind
+		wantState string
+	}{
+		{"time exceeded is a hop", 11, 0, replyTimeExceeded, ""},
+		{"port unreachable is the target", 3, 3, replyDestination, DestEchoed},
+		{"admin prohibited is filtering", 3, 13, replyDestination, DestFiltered},
+		{"host unreachable", 3, 1, replyDestination, DestUnreachable},
+		{"echo reply is the target", 0, 0, replyDestination, DestEchoed},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			kind, state := classifyICMP(c.icmpType, c.icmpCode)
+			if kind != c.wantKind || state != c.wantState {
+				t.Errorf("classifyICMP(%d,%d) = (%v,%q), want (%v,%q)",
+					c.icmpType, c.icmpCode, kind, state, c.wantKind, c.wantState)
+			}
+		})
+	}
+}
 
-func TestParseMTRStalled(t *testing.T) {
-	res, err := parseMTR([]byte(mtrStalled), "203.0.113.9", 4)
-	if err != nil {
-		t.Fatal(err)
+// TestFlowPortIsStablePerFlow covers the property the whole ECMP story
+// rests on: the same test always probes from the same source port, so every
+// run follows the same branch, while different tests can differ.
+func TestFlowPortIsStablePerFlow(t *testing.T) {
+	if flowPort(1234) != flowPort(1234) {
+		t.Error("same flow id gave different ports")
 	}
-	if res.Reached || res.Status != "stalled" {
-		t.Errorf("expected stalled, got %q reached=%v", res.Status, res.Reached)
+	if flowPort(1234) == flowPort(4321) {
+		t.Error("different flow ids collided; two tests would share a branch")
 	}
-	if res.FailureHop != 2 {
-		t.Errorf("expected failure at hop 2 (last responder), got %d", res.FailureHop)
+	for _, id := range []uint16{0, 1, 65535, 2000, 1999} {
+		if p := flowPort(id); p < 33000 || p > 34999 {
+			t.Errorf("flowPort(%d) = %d, outside the intended range", id, p)
+		}
+	}
+}
+
+func TestTracerouteDemoModeFillsNewFields(t *testing.T) {
+	t.Setenv("NETLAMA_TRACEROUTE_DEMO", "1")
+	res := demoTraceroute("example.com", "tcp", 443)
+	if res.Engine != "native" {
+		t.Errorf("demo engine = %q, want native", res.Engine)
+	}
+	if res.DestinationState == "" {
+		t.Error("demo result has no destination state; the UI would show a blank")
+	}
+	if res.Reached && res.DestinationState != DestOpen {
+		t.Errorf("reached tcp demo has state %q, want %q", res.DestinationState, DestOpen)
+	}
+	if !res.Reached && res.DestinationState != DestFiltered {
+		t.Errorf("stalled demo has state %q, want %q", res.DestinationState, DestFiltered)
 	}
 }

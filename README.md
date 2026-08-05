@@ -170,7 +170,7 @@ for amd64, arm64 and armv7 are attached to every
 [CI](.github/workflows/packages.yml):
 
 ```sh
-# 1. Install (apt pulls in the probe tools: mtr, iw, iproute2, wpa_supplicant)
+# 1. Install (apt pulls in the probe tools: iw, iproute2, wpa_supplicant)
 sudo apt install ./netlama-agent_<version>_arm64.deb     # or: sudo dnf install ./netlama-agent-<version>.aarch64.rpm
 
 # 2. In the UI: create the agent -> copy the token
@@ -306,8 +306,8 @@ exported as the Prometheus gauge `netlama_agent_health` (values: 0=healthy, 1=de
 ### Agent capabilities and test dispatch
 
 Agents report which test types they can run: the slim agent (distroless) can run
-all built-in tests (ping, DNS, HTTP, TCP, saas, speedtest); the sensor agent additionally
-supports WLAN scanning and traceroute if `iw` and `mtr` are available in the container
+all built-in tests (ping, DNS, HTTP, TCP, saas, speedtest, traceroute); the sensor agent additionally
+supports WLAN scanning if `iw` is available in the container
 or if their demo modes are enabled. The server uses this capability reporting to
 avoid pushing unsupported tests to agents—**an old agent that never re-registered
 still receives all tests (backward compatible)**. The web UI shows capability badges
@@ -373,23 +373,27 @@ reflector enabled and a reachable advertise host), spanning sites — source
 and destination can be in the same site or different sites. The dialog also
 shows the destination's port so a firewall admin can open it if needed.
 
-The WLAN passive and traceroute probes shell out to external tools (`iw`, `mtr`) that
-are **not** in the default distroless agent image and need raw-socket access. Use
+The WLAN probes shell out to external tools (`iw`, `wpa_supplicant`) that are
+**not** in the default distroless agent image and need raw-socket access. Use
 the ready-made [compose.sensor.yaml](compose.sensor.yaml), which runs the agent as:
 
-1. **the sensor image** (`agent-sensor` target — Debian-slim with `iw` + `mtr`);
-2. with **`cap_add: [NET_RAW, NET_ADMIN]`** — `NET_RAW` for traceroute (custom-TTL
-   packets + receiving ICMP), `NET_ADMIN` for WLAN passive scanning; and
-3. with **`network_mode: host`**. This is required for path tracing: rootless
-   user-mode network stacks (`slirp4netns` / `pasta`) NAT everything, so the agent
-   would only ever see the destination and *none* of the intermediate routers. With
-   host networking the probe packets traverse the real routing table.
+1. **the sensor image** (`agent-sensor` target — Debian-slim with `iw`);
+2. with **`cap_add: [NET_RAW, NET_ADMIN]`** for WLAN sensing; and
+3. with **`network_mode: host`**.
+
+**Traceroute needs none of that.** The native engine probes with ordinary
+sockets — it sets `IP_TTL` and reads the ICMP replies off the socket error
+queue (`IP_RECVERR`) — so path tests run unprivileged on the slim distroless
+image with no added capabilities. Two caveats: it is **Linux-only** (on
+darwin, only `NETLAMA_TRACEROUTE_DEMO=1` produces results), and **TCP-mode
+tracing needs host networking**, because rootless user-mode network stacks
+(`slirp4netns` / `pasta`) terminate TCP locally and ignore the TTL, making
+every hop look like the destination. UDP and ICMP modes work either way.
 
 Run the agent container **with an init process** (`init: true` in the compose
-files, or `podman run --init`): the traceroute/WLAN probes exec external tools
-whose orphaned children must be reaped — without an init they accumulate as
-zombies until the container can no longer fork (symptom: `parsing mtr json:
-unexpected end of JSON input` after hours/days of uptime).
+files, or `podman run --init`): the WLAN probes exec external tools whose
+orphaned children must be reaped — without an init they accumulate as zombies
+until the container can no longer fork.
 
 This runs **rootless — no sudo/rootful needed** (verified with podman-compose). Keep
 `net.ipv4.ping_group_range` open on the host (as for ping), and `loginctl

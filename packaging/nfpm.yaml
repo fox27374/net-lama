@@ -18,14 +18,12 @@ section: net
 # Weak dependencies: apt and dnf pull them in by default, but an agent that
 # only pings/resolves/fetches works fine without any of them.
 recommends:
-  - mtr-tiny
   - iw
   - iproute2
   - wpasupplicant
 overrides:
   rpm:
     recommends:
-      - mtr
       - iw
       - iproute
       - wpa_supplicant

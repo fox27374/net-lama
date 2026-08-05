@@ -11,11 +11,12 @@ ExecStart=/usr/bin/netlama-agent
 Restart=always
 RestartSec=10s
 
-# The probes shell out to mtr, iw, ip and wpa_supplicant: raw sockets for
-# path tracing, interface control for WLAN sensing, and route/address
-# changes for the active WLAN test. That needs root on the sensor host.
-# An agent that only runs ping/dns/http/tcp/speedtest can run unprivileged
-# instead — replace this block with:
+# The WLAN probes shell out to iw, ip and wpa_supplicant: interface control
+# for sensing, and route/address changes for the active WLAN test. That needs
+# root on the sensor host. Path tracing does NOT — the native traceroute
+# engine probes with ordinary sockets. An agent that only runs
+# ping/dns/http/tcp/saas/speedtest/traceroute can run unprivileged instead —
+# replace this block with:
 #   User=netlama
 #   AmbientCapabilities=CAP_NET_RAW
 # (and create the user; unprivileged ICMP also needs net.ipv4.ping_group_range).

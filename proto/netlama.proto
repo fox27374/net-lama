@@ -450,6 +450,16 @@ message TracerouteResult {
   double rtt_ms = 6;      // RTT to the destination (or last responder)
   bool demo = 7;
   repeated Hop hops = 8;
+  // destination_state is what the target itself said, which only the native
+  // engine can distinguish: "open" (TCP SYN-ACK), "closed" (RST), "filtered"
+  // (no reply or ICMP admin-prohibited), "unreachable" (ICMP destination
+  // unreachable), "echoed" (ICMP echo reply). Empty when the path never
+  // reached the destination, or from agents predating the native engine.
+  string destination_state = 9;
+  // engine names what produced this result: "native" for the in-process
+  // engine, empty for the mtr shell-out it replaced. Kept so a step in a
+  // latency history has an explanation rather than being a mystery.
+  string engine = 10;
 }
 
 message Hop {

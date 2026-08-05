@@ -1624,6 +1624,47 @@ cross, and the tests that had been *simulating* them now drive the real code.
   payload — saas payloads are http/tcp on purpose);
   `TestOverviewTestsScopedToSite`, verified to fail before the fix.
 
+## 2026-08-05 — Traceroute Phase 2, stage 1: a native engine replaces mtr
+
+Design and the decisions behind it: [doc/plan-traceroute-phase2.md](doc/plan-traceroute-phase2.md)
+and [docs/adr/0002-native-traceroute-engine.md](docs/adr/0002-native-traceroute-engine.md).
+
+- **The path probe no longer shells out.** `internal/probe/traceroute_linux.go`
+  sends ordinary UDP/TCP/ICMP-datagram probes with `IP_TTL` set and reads the
+  ICMP time-exceeded replies off the socket error queue (`IP_RECVERR`), so
+  path tracing needs **no external tool, no raw sockets and no NET_RAW** on
+  Linux. `mtr` is gone from the sensor image, the packages' recommends and
+  the compose comments; `parseMTR` and its tests are deleted.
+- **Proved before it was built.** A stdlib-only spike ran on tpr06 (x86_64)
+  and rp02 (aarch64), as an unprivileged user and inside the distroless image
+  with `--cap-drop=ALL`. One limitation found and documented rather than
+  worked around: under rootless *bridge* networking the user-mode stack
+  terminates TCP locally, so TCP-mode tracing needs host networking (which is
+  how agents run); UDP and ICMP are fine either way.
+- **Better than parity, measured against mtr on the same host.** ICMP mode
+  reproduces mtr's hop sequence and RTTs exactly (hop 1: 0.7 ms both, same
+  anonymous hop 7). TCP mode is *better*: mtr reported every intermediate hop
+  as `???` because it cannot match ICMP replies to its raw SYN probes here,
+  while the error-queue engine resolves all nine hops.
+- **Caught by that comparison:** a first cut polled the error queue on a 2 ms
+  sleep, which inflated LAN hops from 0.7 ms to 2.3 ms — invisible without an
+  A/B, and enough to make a latency threshold meaningless. Replaced with
+  `poll(2)` (`golang.org/x/sys/unix`, already an indirect dependency).
+- **Paris-style constant flow**: the source port is derived from the test id
+  and held fixed across TTLs and runs, so each test always traces the same
+  ECMP branch. The spike had already shown the branches differ — TTL 5 was
+  `.18` over UDP and `.19` over TCP in the same second.
+- **`destination_state`** joins the result: `open` (SYN-ACK), `closed` (RST),
+  `filtered`, `unreachable`, `echoed`. `reached`/`status` keep their old
+  meaning so stored results and the Path view stay valid; the UI shows only
+  the surprising verdicts. **`engine`** records what produced each result.
+- **Capability**: traceroute is now baseline on Linux (any agent, slim image
+  included); on darwin only demo mode reports it. The old check was `mtr in
+  PATH`.
+- Verified live on tpr06 for all three protocols: TCP to 1.1.1.1:443 →
+  `open`, ICMP → `echoed`, TCP to a closed port → `closed`.
+- Stages 2 (ASN enrichment) and 3 (path-change detection) are still to come.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

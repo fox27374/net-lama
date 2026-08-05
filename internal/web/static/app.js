@@ -1095,7 +1095,7 @@ const UI_TYPES = {
     details: (t) => {
       const hops = (t.hops || []).length;
       return t.reached
-        ? `${esc(t.target)} · reached in ${hops} hops · ${fmt(t.rttMs)} ms`
+        ? `${esc(t.target)} · reached in ${hops} hops · ${fmt(t.rttMs)} ms${destState(t)}`
         : `${esc(t.target)} · <span class="error">stalled at hop ${t.failureHop || "?"}</span> of ${hops}`;
     },
     // Hop count is the type's primary metric, but the timeline plots the
@@ -1699,6 +1699,20 @@ function updateRunNowBtn() {
 
 const fmt = (v, digits = 1) =>
   v === undefined || v === null ? "–" : Number(v).toFixed(digits);
+
+// destState renders what the destination itself said, which only the native
+// engine can tell apart. "echoed"/"open" are the ordinary healthy answers
+// and would just be noise, so only the surprising verdicts are shown: the
+// path arrived but the service refused or filtered it.
+function destState(t) {
+  const labels = {
+    closed: "port closed (RST)",
+    filtered: "filtered",
+    unreachable: "unreachable",
+  };
+  const label = labels[t.destinationState];
+  return label ? ` · <span class="error">${label}</span>` : "";
+}
 
 function resultDetails(r) {
   if (r.error) return `<span class="error">${esc(r.error)}</span>`;

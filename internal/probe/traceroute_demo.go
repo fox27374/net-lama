@@ -31,7 +31,7 @@ func demoTraceroute(target, protocol string, port uint32) *TracerouteResult {
 	}
 
 	res := &TracerouteResult{
-		Target: target, TargetIP: targetIP, Demo: true,
+		Target: target, TargetIP: targetIP, Demo: true, Engine: "native",
 	}
 	var lastResponder *Hop
 	for i, p := range path {
@@ -64,8 +64,15 @@ func demoTraceroute(target, protocol string, port uint32) *TracerouteResult {
 		res.Reached = true
 		res.Status = "reached"
 		res.RttMs = res.Hops[len(res.Hops)-1].AvgRttMs
+		// Mirror what the real engine reports per protocol: a TCP probe
+		// that arrives gets a handshake verdict, ICMP/UDP an echo.
+		res.DestinationState = DestEchoed
+		if protocol == "tcp" || protocol == "" {
+			res.DestinationState = DestOpen
+		}
 	} else {
 		res.Status = "stalled"
+		res.DestinationState = DestFiltered
 		if lastResponder != nil {
 			res.FailureHop = lastResponder.TTL
 			res.RttMs = lastResponder.AvgRttMs

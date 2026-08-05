@@ -2,7 +2,7 @@
 #
 #   podman build --target server        -t netlama-server .
 #   podman build --target agent         -t netlama-agent .
-#   podman build --target agent-sensor  -t netlama-agent-sensor .   # + iw, mtr
+#   podman build --target agent-sensor  -t netlama-agent-sensor .   # + iw
 
 FROM docker.io/library/golang:1.25 AS build
 ARG VERSION=dev
@@ -26,13 +26,15 @@ ENTRYPOINT ["/netlama-agent"]
 
 # agent-sensor bundles the external tools the probes shell out to: iw + ip
 # (iproute2) for WLAN scan/monitor-mode sensing, wpasupplicant for active
-# WLAN connect tests, mtr for traceroute. Larger and not distroless; use
-# this variant on agents that do WLAN sensing or path tracing. Needs
-# CAP_NET_RAW (and CAP_NET_ADMIN for WLAN); see the README for the
-# host/network requirements.
+# WLAN connect tests. Larger and not distroless; use this variant on agents
+# that do WLAN sensing. Needs CAP_NET_ADMIN (and CAP_NET_RAW for WLAN
+# sensing); see the README for the host/network requirements.
+#
+# Path tracing no longer needs this image: the native traceroute engine
+# probes with ordinary sockets and runs unprivileged on the slim agent.
 FROM debian:12-slim AS agent-sensor
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends iw iproute2 mtr-tiny wpasupplicant ca-certificates && \
+    apt-get install -y --no-install-recommends iw iproute2 wpasupplicant ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/netlama-agent /netlama-agent
 ENTRYPOINT ["/netlama-agent"]

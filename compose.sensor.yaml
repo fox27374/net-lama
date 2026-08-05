@@ -1,6 +1,6 @@
 # Sensor deployment.
 #
-# The agent runs the sensor image (bundles iw + mtr) with HOST networking
+# The agent runs the sensor image (bundles iw) with HOST networking
 # and CAP_NET_RAW, so real traceroute — and, with a wireless adapter, WLAN
 # scanning — work. This runs rootless; no sudo needed.
 #
@@ -54,7 +54,7 @@ services:
     restart: unless-stopped
 
   agent:
-    # Reap zombie processes from exec'd tools (mtr, iw) — without an
+    # Reap zombie processes from exec'd tools (iw) — without an
     # init, orphaned children pile up until the container cannot fork.
     init: true
     image: ${NETLAMA_AGENT_IMAGE:-ghcr.io/fox27374/netlama-agent-sensor}:${NETLAMA_IMAGE_TAG:-latest}

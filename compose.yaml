@@ -51,7 +51,7 @@ services:
   # The agent needs a token that only exists after it was created in
   # the UI — start the server alone first (see header).
   agent:
-    # Reap zombie processes from exec'd tools (mtr, iw) — without an
+    # Reap zombie processes from exec'd tools (iw) — without an
     # init, orphaned children pile up until the container cannot fork.
     init: true
     image: ${NETLAMA_AGENT_IMAGE:-ghcr.io/fox27374/netlama-agent}:${NETLAMA_IMAGE_TAG:-latest}
@@ -76,8 +76,9 @@ services:
       # monitor-mode capture (needs a monitor-capable interface + NET_ADMIN).
       NETLAMA_WLAN_DEMO: ${NETLAMA_WLAN_DEMO:-}
       # Set NETLAMA_TRACEROUTE_DEMO=1 to emit synthetic path data (for the
-      # Path UI) where raw-socket traceroute is not available. Leave unset
-      # for real traceroute (needs mtr in the image + CAP_NET_RAW; see README).
+      # Path UI) on hosts where the native engine cannot run (non-Linux).
+      # Leave unset for real traceroute: it needs no extra tools and no
+      # capabilities, but TCP mode needs host networking (see README).
       NETLAMA_TRACEROUTE_DEMO: ${NETLAMA_TRACEROUTE_DEMO:-}
     sysctls:
       # Allow unprivileged ICMP ping inside the container

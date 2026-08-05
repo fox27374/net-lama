@@ -20,8 +20,12 @@ func DetectCapabilities(hasWireless bool, wifaces []WirelessInterface) []string 
 	// it needs nothing this agent does not already have.
 	caps := []string{"ping", "dns", "http", "tcp", "speedtest", "perfmon", "saas"}
 
-	// traceroute: needs mtr in PATH or demo mode enabled
-	if _, err := exec.LookPath("mtr"); err == nil || tracerouteDemo() {
+	// traceroute: the native engine needs no external tool and no
+	// privileges on Linux (IP_TTL + IP_RECVERR on ordinary sockets), so it
+	// is baseline there — including on the slim image with no NET_RAW.
+	// Elsewhere the unprivileged path does not exist and only demo mode
+	// can stand in.
+	if tracerouteSupported() || tracerouteDemo() {
 		caps = append(caps, "traceroute")
 	}
 

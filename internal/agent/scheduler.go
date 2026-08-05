@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"sort"
 	"time"
@@ -750,7 +751,12 @@ func (a *Agent) runPerfmon(ctx context.Context, spec *pb.TestSpec, params *pb.Pe
 }
 
 func (a *Agent) runTraceroute(ctx context.Context, spec *pb.TestSpec, params *pb.TracerouteParams, results chan<- *pb.TestResult) {
-	res, err := probe.Traceroute(ctx, params.Target, params.Protocol, params.Port, params.MaxHops, params.ProbesPerHop)
+	// The flow id pins the ECMP branch this test traces. Deriving it from
+	// the test id means every run of one test follows the same branch, so a
+	// changed hop is a routing change rather than a different hash bucket —
+	// and two tests to the same target can legitimately see different paths.
+	res, err := probe.Traceroute(ctx, params.Target, params.Protocol, params.Port,
+		params.MaxHops, params.ProbesPerHop, flowIDFor(spec.Id))
 
 	result := newResult(spec)
 	if err != nil {
@@ -793,8 +799,18 @@ func (a *Agent) runTraceroute(ctx context.Context, spec *pb.TestSpec, params *pb
 		RttMs:      res.RttMs,
 		Demo:       res.Demo,
 		Hops:       hops,
+
+		DestinationState: res.DestinationState,
+		Engine:           res.Engine,
 	}}
 	sendResult(ctx, results, result)
+}
+
+// flowIDFor derives a stable ECMP flow identifier from a test id.
+func flowIDFor(testID string) uint16 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(testID))
+	return uint16(h.Sum32())
 }
 
 func sendResult(ctx context.Context, results chan<- *pb.TestResult, result *pb.TestResult) {

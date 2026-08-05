@@ -2,11 +2,9 @@ package probe
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"math"
 	"net"
-	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +31,38 @@ type TracerouteResult struct {
 	RttMs      float64
 	Demo       bool
 	Hops       []Hop
+	// DestinationState is what the target said: open | closed | filtered |
+	// unreachable | echoed. Empty while the path never got there.
+	DestinationState string
+	Engine           string // "native"
+}
+
+// Destination states. A path can reach the destination host and still be
+// refused by it, which is a different operational problem from a path that
+// breaks in the middle — the reason these are not folded into Status.
+const (
+	DestOpen        = "open"        // TCP SYN-ACK: host up, port serving
+	DestClosed      = "closed"      // TCP RST: host up, port shut
+	DestFiltered    = "filtered"    // silence, or ICMP administratively prohibited
+	DestUnreachable = "unreachable" // ICMP destination unreachable
+	DestEchoed      = "echoed"      // ICMP echo reply, or UDP port unreachable
+)
+
+// replyKind is what came back for one probe.
+type replyKind int
+
+const (
+	replyNone         replyKind = iota // nothing arrived before the deadline
+	replyTimeExceeded                  // an intermediate router
+	replyDestination                   // the target answered; see destState
+)
+
+// probeReply is one probe's outcome.
+type probeReply struct {
+	kind      replyKind
+	from      net.IP
+	rtt       time.Duration
+	destState string // set when kind == replyDestination
 }
 
 func tracerouteDemo() bool {
@@ -42,9 +72,14 @@ func tracerouteDemo() bool {
 // TracerouteDemoMode reports whether traceroute results are synthetic.
 func TracerouteDemoMode() bool { return tracerouteDemo() }
 
-// Traceroute traces the path to target using mtr and classifies where a
-// failing path breaks. protocol is icmp|tcp|udp.
-func Traceroute(ctx context.Context, target, protocol string, port, maxHops, probes uint32) (*TracerouteResult, error) {
+// Traceroute traces the path to target and classifies where a failing path
+// breaks and what the destination itself said. protocol is icmp|tcp|udp.
+//
+// flowID pins the ECMP branch: the probe keeps the flow tuple identical
+// across every TTL and every run (Paris-style), so consecutive hops really
+// are on one path and a changed hop means the route changed rather than the
+// load balancer hashing us elsewhere. Callers derive it from the test id.
+func Traceroute(ctx context.Context, target, protocol string, port, maxHops, probes uint32, flowID uint16) (*TracerouteResult, error) {
 	if tracerouteDemo() {
 		return demoTraceroute(target, protocol, port), nil
 	}
@@ -54,33 +89,124 @@ func Traceroute(ctx context.Context, target, protocol string, port, maxHops, pro
 	if probes == 0 {
 		probes = 5
 	}
-
-	args := []string{"--json", "-n", "-c", strconv.Itoa(int(probes)), "-m", strconv.Itoa(int(maxHops))}
-	switch protocol {
-	case "tcp":
-		args = append(args, "--tcp")
-		if port > 0 {
-			args = append(args, "--port", strconv.Itoa(int(port)))
-		}
-	case "udp":
-		args = append(args, "--udp")
-		if port > 0 {
-			args = append(args, "--port", strconv.Itoa(int(port)))
-		}
+	if protocol == "" {
+		protocol = "tcp"
 	}
-	args = append(args, target)
 
-	out, err := exec.CommandContext(ctx, "mtr", args...).Output()
+	addr, err := net.ResolveIPAddr("ip4", target)
 	if err != nil {
-		return nil, fmt.Errorf("running mtr: %w", err)
+		return nil, fmt.Errorf("resolving %s: %w", target, err)
+	}
+	dst := addr.IP.To4()
+	if dst == nil {
+		return nil, fmt.Errorf("%s is not an IPv4 address", target)
 	}
 
-	res, err := parseMTR(out, target, maxHops)
-	if err != nil {
-		return nil, err
+	res := &TracerouteResult{Target: target, TargetIP: dst.String(), Engine: "native"}
+
+	for ttl := uint32(1); ttl <= maxHops; ttl++ {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		hop, arrived, state := probeTTL(ctx, dst, protocol, port, ttl, probes, flowID)
+		res.Hops = append(res.Hops, hop)
+		if arrived {
+			res.Reached = true
+			res.Status = "reached"
+			res.DestinationState = state
+			res.RttMs = hop.AvgRttMs
+			if hop.Host != "" {
+				res.TargetIP = hop.Host
+			}
+			break
+		}
 	}
+
+	if !res.Reached {
+		res.Status = "stalled"
+		for i := len(res.Hops) - 1; i >= 0; i-- {
+			if res.Hops[i].Host != "" && res.Hops[i].LossPercent < 100 {
+				res.FailureHop = res.Hops[i].TTL
+				res.RttMs = res.Hops[i].AvgRttMs
+				break
+			}
+		}
+		// The path ran out without the target answering. Silence at the
+		// destination is a filtering verdict, not an unknown.
+		res.DestinationState = DestFiltered
+	}
+
 	resolveHopNames(ctx, res.Hops)
 	return res, nil
+}
+
+// probeTTL sends probes packets at one TTL and aggregates them into a Hop.
+// arrived reports whether the destination itself answered, in which case
+// destState carries its verdict.
+func probeTTL(ctx context.Context, dst net.IP, protocol string, port, ttl, probes uint32, flowID uint16) (hop Hop, arrived bool, destState string) {
+	hop = Hop{TTL: ttl, Sent: probes}
+
+	var rtts []float64
+	var responder net.IP
+	for i := uint32(0); i < probes; i++ {
+		if ctx.Err() != nil {
+			break
+		}
+		reply := sendProbe(ctx, dst, protocol, port, ttl, flowID, uint16(i))
+		if reply.kind == replyNone {
+			continue
+		}
+		rtts = append(rtts, float64(reply.rtt.Microseconds())/1000)
+		if responder == nil {
+			responder = reply.from
+		}
+		if reply.kind == replyDestination {
+			arrived = true
+			destState = reply.destState
+			if responder == nil || responder.IsUnspecified() {
+				responder = dst
+			}
+		}
+	}
+
+	if responder != nil && !responder.IsUnspecified() {
+		hop.Host = responder.String()
+	} else if arrived {
+		// TCP handshakes complete without an ICMP message to carry a
+		// source address; the responder is the destination by definition.
+		hop.Host = dst.String()
+	}
+	hop.LossPercent = float64(probes-uint32(len(rtts))) / float64(probes) * 100
+	hop.AvgRttMs, hop.BestRttMs, hop.WorstRttMs, hop.JitterMs = rttStats(rtts)
+	return hop, arrived, destState
+}
+
+// rttStats returns avg, best, worst and jitter for a hop's samples. Jitter
+// is the standard deviation, matching what mtr reported as StDev so history
+// spanning the engine change stays comparable.
+func rttStats(rtts []float64) (avg, best, worst, jitter float64) {
+	if len(rtts) == 0 {
+		return 0, 0, 0, 0
+	}
+	best, worst = rtts[0], rtts[0]
+	var sum float64
+	for _, v := range rtts {
+		sum += v
+		if v < best {
+			best = v
+		}
+		if v > worst {
+			worst = v
+		}
+	}
+	avg = sum / float64(len(rtts))
+
+	var sq float64
+	for _, v := range rtts {
+		sq += (v - avg) * (v - avg)
+	}
+	jitter = math.Sqrt(sq / float64(len(rtts)))
+	return avg, best, worst, jitter
 }
 
 // resolveHopNames performs best-effort parallel reverse-DNS resolution on hop IPs.
@@ -111,76 +237,41 @@ func resolveHopNames(ctx context.Context, hops []Hop) {
 	wg.Wait()
 }
 
-// mtrReport mirrors the relevant parts of `mtr --json` output.
-type mtrReport struct {
-	Report struct {
-		Mtr struct {
-			Dst string `json:"dst"`
-		} `json:"mtr"`
-		Hubs []struct {
-			Count int     `json:"count"`
-			Host  string  `json:"host"`
-			Loss  float64 `json:"Loss%"`
-			Snt   int     `json:"Snt"`
-			Avg   float64 `json:"Avg"`
-			Best  float64 `json:"Best"`
-			Wrst  float64 `json:"Wrst"`
-			StDev float64 `json:"StDev"`
-		} `json:"hubs"`
-	} `json:"report"`
+// ICMP types and codes the engine reacts to.
+const (
+	icmpEchoReply   = 0
+	icmpDestUnreach = 3
+	icmpTimeExceed  = 11
+	icmpPortUnreach = 3  // code within destination-unreachable
+	icmpAdminProhib = 13 // code within destination-unreachable
+)
+
+// classifyICMP turns an ICMP type/code into either an intermediate hop or a
+// verdict about the destination. This is the distinction the native engine
+// exists to make: mtr could only say "something answered".
+func classifyICMP(icmpType, icmpCode uint8) (replyKind, string) {
+	switch icmpType {
+	case icmpTimeExceed:
+		return replyTimeExceeded, ""
+	case icmpDestUnreach:
+		switch icmpCode {
+		case icmpPortUnreach:
+			// Classic UDP traceroute: the target itself answered.
+			return replyDestination, DestEchoed
+		case icmpAdminProhib:
+			return replyDestination, DestFiltered
+		default:
+			return replyDestination, DestUnreachable
+		}
+	case icmpEchoReply:
+		return replyDestination, DestEchoed
+	}
+	return replyTimeExceeded, ""
 }
 
-func parseMTR(data []byte, target string, maxHops uint32) (*TracerouteResult, error) {
-	var m mtrReport
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("parsing mtr json: %w", err)
-	}
-
-	res := &TracerouteResult{Target: target}
-	var lastResponder *Hop
-	for _, h := range m.Report.Hubs {
-		host := h.Host
-		if host == "???" {
-			host = ""
-		}
-		hop := Hop{
-			TTL:         uint32(h.Count),
-			Host:        host,
-			LossPercent: h.Loss,
-			AvgRttMs:    h.Avg,
-			BestRttMs:   h.Best,
-			WorstRttMs:  h.Wrst,
-			JitterMs:    h.StDev,
-			Sent:        uint32(h.Snt),
-		}
-		res.Hops = append(res.Hops, hop)
-		if host != "" && h.Loss < 100 {
-			hcopy := hop
-			lastResponder = &hcopy
-		}
-	}
-
-	// mtr stops incrementing TTL only once it reaches the destination, so a
-	// report that ends before maxHops with a responding final hop means the
-	// target was reached — and that final hop is its real address. If it ran
-	// all the way to maxHops, the path stalled before the destination.
-	// (Intermediate hops may still be anonymous, e.g. routers that don't send
-	// ICMP Time Exceeded to TCP-SYN probes — that is not a failure.)
-	if len(res.Hops) > 0 {
-		last := res.Hops[len(res.Hops)-1]
-		if last.Host != "" && last.LossPercent < 100 && uint32(len(res.Hops)) < maxHops {
-			res.Reached = true
-			res.Status = "reached"
-			res.TargetIP = last.Host
-			res.RttMs = last.AvgRttMs
-		}
-	}
-	if !res.Reached {
-		res.Status = "stalled"
-		if lastResponder != nil {
-			res.FailureHop = lastResponder.TTL
-			res.RttMs = lastResponder.AvgRttMs
-		}
-	}
-	return res, nil
+// flowPort maps a flow id onto a stable source port. Holding the source
+// port fixed is what keeps every probe of a run on the same ECMP branch,
+// and deriving it from the test id keeps it fixed across runs too.
+func flowPort(flowID uint16) int {
+	return 33000 + int(flowID%2000)
 }

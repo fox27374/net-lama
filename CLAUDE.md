@@ -70,10 +70,13 @@ Changes are pushed live to affected connected agents (`PushConfigs`).
   `$Format:...$` placeholder, so treat a value starting with `$Format` as unset.
 - Completed roadmap items get checked off in ROADMAP.md and a dated entry in
   PROGRESS.md.
-- The traceroute and WLAN probes shell out to `mtr` and `iw` and need raw
-  sockets — locally they usually fail; use the demo env vars above, or
-  `compose.sensor.yaml` (agent-sensor image, host network, NET_RAW/NET_ADMIN)
-  for real runs.
+- The WLAN probes shell out to `iw` and need raw sockets — locally they
+  usually fail; use the demo env vars above, or `compose.sensor.yaml`
+  (agent-sensor image, host network, NET_RAW/NET_ADMIN) for real runs.
+  Traceroute no longer does: since the native engine it probes with ordinary
+  sockets (`IP_TTL` + `IP_RECVERR`) and runs unprivileged on Linux, so it
+  works on the slim image with no added capabilities — but it is Linux-only,
+  so on darwin only `NETLAMA_TRACEROUTE_DEMO=1` produces path results.
 - End-to-end verification pattern: build both binaries, start the server with
   `NETLAMA_TLS_SELF_SIGNED=1`, create tenant/site/agent via the JSON API
   (login cookie from `POST /api/v1/login`; the agent token is in the

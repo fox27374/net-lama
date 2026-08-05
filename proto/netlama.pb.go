@@ -3494,11 +3494,21 @@ type TracerouteResult struct {
 	Reached  bool                   `protobuf:"varint,3,opt,name=reached,proto3" json:"reached,omitempty"`
 	// status: "reached" (target answered), "stalled" (path broke before
 	// the target), or "error" (probe could not run).
-	Status        string  `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
-	FailureHop    uint32  `protobuf:"varint,5,opt,name=failure_hop,json=failureHop,proto3" json:"failure_hop,omitempty"` // TTL of the last responding hop when stalled
-	RttMs         float64 `protobuf:"fixed64,6,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`               // RTT to the destination (or last responder)
-	Demo          bool    `protobuf:"varint,7,opt,name=demo,proto3" json:"demo,omitempty"`
-	Hops          []*Hop  `protobuf:"bytes,8,rep,name=hops,proto3" json:"hops,omitempty"`
+	Status     string  `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	FailureHop uint32  `protobuf:"varint,5,opt,name=failure_hop,json=failureHop,proto3" json:"failure_hop,omitempty"` // TTL of the last responding hop when stalled
+	RttMs      float64 `protobuf:"fixed64,6,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`               // RTT to the destination (or last responder)
+	Demo       bool    `protobuf:"varint,7,opt,name=demo,proto3" json:"demo,omitempty"`
+	Hops       []*Hop  `protobuf:"bytes,8,rep,name=hops,proto3" json:"hops,omitempty"`
+	// destination_state is what the target itself said, which only the native
+	// engine can distinguish: "open" (TCP SYN-ACK), "closed" (RST), "filtered"
+	// (no reply or ICMP admin-prohibited), "unreachable" (ICMP destination
+	// unreachable), "echoed" (ICMP echo reply). Empty when the path never
+	// reached the destination, or from agents predating the native engine.
+	DestinationState string `protobuf:"bytes,9,opt,name=destination_state,json=destinationState,proto3" json:"destination_state,omitempty"`
+	// engine names what produced this result: "native" for the in-process
+	// engine, empty for the mtr shell-out it replaced. Kept so a step in a
+	// latency history has an explanation rather than being a mystery.
+	Engine        string `protobuf:"bytes,10,opt,name=engine,proto3" json:"engine,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3587,6 +3597,20 @@ func (x *TracerouteResult) GetHops() []*Hop {
 		return x.Hops
 	}
 	return nil
+}
+
+func (x *TracerouteResult) GetDestinationState() string {
+	if x != nil {
+		return x.DestinationState
+	}
+	return ""
+}
+
+func (x *TracerouteResult) GetEngine() string {
+	if x != nil {
+		return x.Engine
+	}
+	return ""
 }
 
 type Hop struct {
@@ -4196,7 +4220,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\tactive_ms\x18\x03 \x01(\x04R\bactiveMs\x12\x17\n" +
 	"\abusy_ms\x18\x04 \x01(\x04R\x06busyMs\x12'\n" +
 	"\x0futilization_pct\x18\x05 \x01(\x01R\x0eutilizationPct\x12\x16\n" +
-	"\x06frames\x18\x06 \x01(\rR\x06frames\"\xea\x01\n" +
+	"\x06frames\x18\x06 \x01(\rR\x06frames\"\xaf\x02\n" +
 	"\x10TracerouteResult\x12\x16\n" +
 	"\x06target\x18\x01 \x01(\tR\x06target\x12\x1b\n" +
 	"\ttarget_ip\x18\x02 \x01(\tR\btargetIp\x12\x18\n" +
@@ -4206,7 +4230,10 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"failureHop\x12\x15\n" +
 	"\x06rtt_ms\x18\x06 \x01(\x01R\x05rttMs\x12\x12\n" +
 	"\x04demo\x18\a \x01(\bR\x04demo\x12#\n" +
-	"\x04hops\x18\b \x03(\v2\x0f.netlama.v1.HopR\x04hops\"\xfc\x01\n" +
+	"\x04hops\x18\b \x03(\v2\x0f.netlama.v1.HopR\x04hops\x12+\n" +
+	"\x11destination_state\x18\t \x01(\tR\x10destinationState\x12\x16\n" +
+	"\x06engine\x18\n" +
+	" \x01(\tR\x06engine\"\xfc\x01\n" +
 	"\x03Hop\x12\x10\n" +
 	"\x03ttl\x18\x01 \x01(\rR\x03ttl\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12!\n" +
