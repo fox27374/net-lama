@@ -272,3 +272,38 @@ func TestEveryTypeParamsRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+// TestSaasPrimaryIsTimeToFirstByte pins the one type whose primary metric
+// is deliberately not its result message's obvious number. A saas endpoint
+// is a vendor front door: its total is mostly redirect hops and landing-page
+// bytes (teams.microsoft.com is 3 redirects and ~230 KB), so a threshold on
+// it would fire when Microsoft reworks a page. TTFB is the reachability
+// signal. tcp endpoints have no TTFB and keep the handshake time.
+//
+// This type cannot join TestPrimaryMetrics: that table also asserts
+// OfResult resolves the payload back to the same spec, and saas results are
+// http/tcp payloads on purpose.
+func TestSaasPrimaryIsTimeToFirstByte(t *testing.T) {
+	spec := Get("saas")
+	if spec == nil {
+		t.Fatal("no spec registered for saas")
+	}
+
+	httpResult := &pb.TestResult{Result: &pb.TestResult_Http{Http: &pb.HttpResult{
+		TtfbMs: 304, TotalMs: 509,
+	}}}
+	if got, ok := spec.Primary(httpResult); got != 304 || !ok {
+		t.Errorf("Primary(https) = (%v, %v), want (304, true) — the total, not TTFB?", got, ok)
+	}
+	if got, ok := spec.Metrics["total_ms"](httpResult); got != 509 || !ok {
+		t.Errorf("total_ms = (%v, %v), want (509, true)", got, ok)
+	}
+
+	tcpResult := &pb.TestResult{Result: &pb.TestResult_Tcp{Tcp: &pb.TcpResult{ConnectMs: 31}}}
+	if got, ok := spec.Primary(tcpResult); got != 31 || !ok {
+		t.Errorf("Primary(tcp) = (%v, %v), want (31, true)", got, ok)
+	}
+	if _, ok := spec.Metrics["total_ms"](tcpResult); ok {
+		t.Error("total_ms reported a value for a tcp endpoint, which has no total")
+	}
+}

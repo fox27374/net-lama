@@ -1009,8 +1009,10 @@ const UI_TYPES = {
       updateSaasEndpointHint();
     },
     read: () => ({ service: $("#t-saas-service").value }),
+    // Plots time-to-first-byte, matching the type's primary metric: a
+    // vendor front door's total is mostly redirects and landing-page bytes.
     series: (p, add) => {
-      if (p.url) add(p.url, p.totalMs);
+      if (p.url) add(p.url, p.ttfbMs);
       else add(p.target, p.connectMs);
     },
   },

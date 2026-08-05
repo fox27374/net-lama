@@ -66,6 +66,15 @@ func init() {
 		Primary:            saasLatency,
 		Metrics: map[string]Metric{
 			"latency_ms": saasLatency,
+			// The whole fetch, redirects and body included — worth alerting
+			// on when a front door gets slow to *finish*, not just to start.
+			// https endpoints only; a tcp endpoint has nothing to total.
+			"total_ms": func(r *pb.TestResult) (float64, bool) {
+				if r.GetHttp() == nil {
+					return 0, false
+				}
+				return positive(r.GetHttp().GetTotalMs())
+			},
 			// https endpoints only; a tcp endpoint reports no certificate.
 			"cert_expiry_days": func(r *pb.TestResult) (float64, bool) {
 				if r.GetHttp() == nil {
@@ -196,11 +205,19 @@ func resultTypeName(r *pb.TestResult) string {
 	return ""
 }
 
-// saasLatency is how long one saas endpoint took: the full request for an
-// https endpoint, the TCP handshake for a tcp one.
+// saasLatency is how long one saas endpoint took to start answering: time
+// to first byte for an https endpoint, the TCP handshake for a tcp one.
+//
+// Deliberately not the total: a saas endpoint is a vendor's front door, and
+// its total is dominated by redirect hops and a few hundred KB of landing
+// page (teams.microsoft.com is 3 redirects and ~230 KB), so it moves when
+// Microsoft reworks a page rather than when the service degrades. TTFB
+// answers "is the service responding to this site", which is what a
+// threshold on a reachability check should watch. The total is still
+// recorded in every result and available as the total_ms metric.
 func saasLatency(r *pb.TestResult) (float64, bool) {
 	if r.GetHttp() != nil {
-		return positive(r.GetHttp().GetTotalMs())
+		return positive(r.GetHttp().GetTtfbMs())
 	}
 	return positive(r.GetTcp().GetConnectMs())
 }

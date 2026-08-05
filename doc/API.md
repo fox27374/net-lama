@@ -308,6 +308,12 @@ A `saas` result is therefore an ordinary `http` or `tcp` payload, one per
 endpoint, stored under `testType: "saas"` — the type comes from the test
 definition, not from the payload shape.
 
+The type's primary metric (what the dashboard plots and `warn`/`crit`
+compare against) is **time to first byte** for https endpoints and connect
+time for tcp ones — not the total. A vendor front door redirects a few
+times and serves a few hundred KB, so its total tracks page weight rather
+than reachability; the total is still recorded and alertable as `total_ms`.
+
 ### `GET /api/v1/tests`
 
 Query: `tenantId` (same admin/tenant-user rules as Sites). Returns

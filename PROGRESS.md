@@ -1603,6 +1603,27 @@ cross, and the tests that had been *simulating* them now drive the real code.
   under `testType: "saas"` and all OK — including the API hosts that would
   have failed as https. "Run now" triggers a saas run.
 
+## 2026-08-05 — SaaS latency reads TTFB, dashboard tests follow the site filter
+
+- **`saas` primary metric is now time to first byte** (https endpoints;
+  tcp keeps connect time). First live results sat above 500 ms and the
+  cause was page weight, not the network: a vendor front door redirects
+  1-3 times and serves a few hundred KB, and `probe.HTTPCheck` drains up
+  to 1 MiB so the transfer is real (measured: `teams.microsoft.com`
+  ttfb 304 ms / total 509 ms over 3 redirects and ~230 KB). A threshold on
+  the total would fire when Microsoft reworks a landing page. The total is
+  still recorded in every result and exposed as the new `total_ms` alert
+  metric; the results chart plots TTFB to match.
+- **The dashboard's Tests table honours the site filter.** `TenantOverview`
+  listed every tenant test regardless of `siteID`, so selecting a site
+  showed the other sites' tests as permanent "No data" rows (only their own
+  site's agents run them). It now uses `TestsForSite`, and the Tests tile
+  counts the same set.
+- **Tests**: `TestSaasPrimaryIsTimeToFirstByte` (it cannot join
+  `TestPrimaryMetrics`, which also asserts `OfResult` round-trips the
+  payload — saas payloads are http/tcp on purpose);
+  `TestOverviewTestsScopedToSite`, verified to fail before the fix.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

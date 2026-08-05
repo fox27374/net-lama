@@ -40,11 +40,21 @@ service actually depends on, and one test row represents one service.
    works anywhere; the server's capability filter means an old agent never
    receives a spec it would silently ignore. After that one rollout,
    decision 2 holds.
-8. **`Primary` is latency in ms** (`total_ms` for https, `connect_ms` for
-   tcp), same unit and threshold semantics as `http`/`tcp`. Outages are
-   covered by the existing type-independent `unhealthy` alert rule.
-   `Subject` is the url/target, so alerts land per endpoint instead of
-   flapping across a service.
+8. **`Primary` is latency in ms** — **`ttfb_ms` for https**, `connect_ms`
+   for tcp. Outages are covered by the existing type-independent `unhealthy`
+   alert rule. `Subject` is the url/target, so alerts land per endpoint
+   instead of flapping across a service.
+
+   *Revised after first live data (2026-08-05):* this was `total_ms`
+   originally, for consistency with the `http` type. Real results came in
+   above 500 ms and the reason was not the network — a vendor front door
+   redirects 1–3 times and ships a few hundred KB of landing page
+   (`teams.microsoft.com`: 3 redirects, ~230 KB), and `probe.HTTPCheck`
+   drains up to 1 MiB so the transfer time is real. The total therefore
+   moves when Microsoft reworks a page. TTFB answers "is the service
+   responding to this site", which is what a reachability check should
+   threshold on. The total is still recorded in every result and exposed as
+   the `total_ms` alert metric.
 9. **No service-level verdict in v1.** A rollup ("MS Teams is degraded:
    1 of 3 endpoints down") needs aggregation across results, which nothing
    in the registry does today — every `Metric` reads a single result.
