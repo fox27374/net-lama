@@ -570,6 +570,11 @@ func (s *Server) handleResult(logger *slog.Logger, conn *connectedAgent, result 
 		testType = test.Type
 	}
 
+	// Route-change detection reads the *previous* run, so it has to happen
+	// before this result is stored. It may set PathChanged on the result,
+	// which is why it also runs before the payload is encoded.
+	s.detectPathChange(conn, result, test)
+
 	payload, err := testtype.EncodeResult(result)
 	if err != nil {
 		logger.Error("Marshalling result failed", slog.Any("error", err))

@@ -3028,6 +3028,52 @@ async function renderPath() {
 
   // Attach click handler to heatmap (once at init)
   renderPathHeatmap(historyResults);
+  renderPathChanges(agentId, $("#pa-test").value);
+}
+
+// renderPathChanges lists the route changes the server recorded for this
+// agent + test. Silence at a hop is not a change and neither is an anycast
+// destination answering from a different address — see
+// internal/server/pathchange.go — so a row here means the route really moved.
+async function renderPathChanges(agentId, testId) {
+  const card = $("#pa-changes-card");
+  const tbody = $("#pa-changes-table tbody");
+  tbody.innerHTML = "";
+  card.classList.add("hidden");
+  if (!agentId || !testId) return;
+
+  let changes;
+  try {
+    const params = new URLSearchParams({ agentId, testId, limit: "20" });
+    const tid = tenantParam("");
+    if (tid) params.set("tenantId", tid.split("=")[1]);
+    changes = await api("GET", "/api/v1/path-changes?" + params.toString());
+  } catch {
+    return;
+  }
+  if (!changes.length) return;
+
+  for (const c of changes) {
+    const tr = document.createElement("tr");
+    const scope = c.scope === "inter-as"
+      ? '<span class="chip">different network</span>'
+      : c.scope === "intra-as"
+        ? '<span class="chip muted">same network</span>'
+        : '<span class="muted">–</span>';
+    const side = (hop, net) => {
+      if (!hop) return '<span class="muted">(none)</span>';
+      const network = net ? `<div class="muted" style="font-size: var(--text-xs);">${esc(net)}</div>` : "";
+      return `<div style="font-family: monospace;">${esc(hop)}</div>${network}`;
+    };
+    tr.innerHTML = `
+      <td>${new Date(c.time).toLocaleString()}</td>
+      <td class="num">${c.firstDiffTtl}</td>
+      <td>${side(c.fromHop, c.fromNetwork)}</td>
+      <td>${side(c.toHop, c.toNetwork)}</td>
+      <td>${scope}</td>`;
+    tbody.appendChild(tr);
+  }
+  card.classList.remove("hidden");
 }
 
 // Render one path result (status, hops table, waterfall)

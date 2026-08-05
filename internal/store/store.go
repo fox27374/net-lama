@@ -104,6 +104,27 @@ func (s *Store) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_results_test ON results (test_id, time DESC);
 	-- Serves the per-agent-per-test prune that runs on every result insert.
 	CREATE INDEX IF NOT EXISTS idx_results_agent_test ON results (agent_id, test_id, id DESC);
+	-- One row per detected route change; see internal/server/pathchange.go
+	-- for what counts as one (anonymous hops are wildcards, and the
+	-- destination hop is excluded because anycast targets answer from a
+	-- different address most runs).
+	CREATE TABLE IF NOT EXISTS path_changes (
+		id             INTEGER PRIMARY KEY AUTOINCREMENT,
+		agent_id       TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+		test_id        TEXT NOT NULL DEFAULT '',
+		test_name      TEXT NOT NULL DEFAULT '',
+		time           TIMESTAMP NOT NULL,
+		first_diff_ttl INTEGER NOT NULL DEFAULT 0,
+		from_hop       TEXT NOT NULL DEFAULT '',
+		to_hop         TEXT NOT NULL DEFAULT '',
+		from_sig       TEXT NOT NULL DEFAULT '',
+		to_sig         TEXT NOT NULL DEFAULT '',
+		scope          TEXT NOT NULL DEFAULT 'unknown',
+		from_network   TEXT,
+		to_network     TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_path_changes_test
+		ON path_changes (test_id, agent_id, time DESC);
 	CREATE TABLE IF NOT EXISTS alert_rules (
 		id          TEXT PRIMARY KEY,
 		tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

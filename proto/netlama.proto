@@ -460,6 +460,11 @@ message TracerouteResult {
   // engine, empty for the mtr shell-out it replaced. Kept so a step in a
   // latency history has an explanation rather than being a mystery.
   string engine = 10;
+  // path_changed is set by the SERVER, never by an agent: on ingest the
+  // hop signature is compared with this test's previous run from the same
+  // agent. It rides on the result so the UI can mark a run and so alert
+  // rules can watch it through the ordinary metric machinery.
+  bool path_changed = 11;
 }
 
 message Hop {

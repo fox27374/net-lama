@@ -386,6 +386,16 @@
           <div class="section-head"><h3 id="pa-waterfall-title">Round-trip time by hop</h3></div>
           <div id="pa-waterfall"></div>
         </div>
+        <div class="card table-card hidden" id="pa-changes-card">
+          <div class="section-head">
+            <h3>Route changes</h3>
+            <span class="muted">the path this test takes, when it differed from the run before</span>
+          </div>
+          <table id="pa-changes-table">
+            <thead><tr><th>When</th><th>Hop</th><th>From</th><th>To</th><th>Scope</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
         <div class="card table-card">
           <div class="section-head"><h3>Hops</h3><span class="muted" id="pa-meta"></span></div>
           <table id="pa-hop-table">

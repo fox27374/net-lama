@@ -3508,7 +3508,12 @@ type TracerouteResult struct {
 	// engine names what produced this result: "native" for the in-process
 	// engine, empty for the mtr shell-out it replaced. Kept so a step in a
 	// latency history has an explanation rather than being a mystery.
-	Engine        string `protobuf:"bytes,10,opt,name=engine,proto3" json:"engine,omitempty"`
+	Engine string `protobuf:"bytes,10,opt,name=engine,proto3" json:"engine,omitempty"`
+	// path_changed is set by the SERVER, never by an agent: on ingest the
+	// hop signature is compared with this test's previous run from the same
+	// agent. It rides on the result so the UI can mark a run and so alert
+	// rules can watch it through the ordinary metric machinery.
+	PathChanged   bool `protobuf:"varint,11,opt,name=path_changed,json=pathChanged,proto3" json:"path_changed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3611,6 +3616,13 @@ func (x *TracerouteResult) GetEngine() string {
 		return x.Engine
 	}
 	return ""
+}
+
+func (x *TracerouteResult) GetPathChanged() bool {
+	if x != nil {
+		return x.PathChanged
+	}
+	return false
 }
 
 type Hop struct {
@@ -4220,7 +4232,7 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\tactive_ms\x18\x03 \x01(\x04R\bactiveMs\x12\x17\n" +
 	"\abusy_ms\x18\x04 \x01(\x04R\x06busyMs\x12'\n" +
 	"\x0futilization_pct\x18\x05 \x01(\x01R\x0eutilizationPct\x12\x16\n" +
-	"\x06frames\x18\x06 \x01(\rR\x06frames\"\xaf\x02\n" +
+	"\x06frames\x18\x06 \x01(\rR\x06frames\"\xd2\x02\n" +
 	"\x10TracerouteResult\x12\x16\n" +
 	"\x06target\x18\x01 \x01(\tR\x06target\x12\x1b\n" +
 	"\ttarget_ip\x18\x02 \x01(\tR\btargetIp\x12\x18\n" +
@@ -4233,7 +4245,8 @@ const file_proto_netlama_proto_rawDesc = "" +
 	"\x04hops\x18\b \x03(\v2\x0f.netlama.v1.HopR\x04hops\x12+\n" +
 	"\x11destination_state\x18\t \x01(\tR\x10destinationState\x12\x16\n" +
 	"\x06engine\x18\n" +
-	" \x01(\tR\x06engine\"\xfc\x01\n" +
+	" \x01(\tR\x06engine\x12!\n" +
+	"\fpath_changed\x18\v \x01(\bR\vpathChanged\"\xfc\x01\n" +
 	"\x03Hop\x12\x10\n" +
 	"\x03ttl\x18\x01 \x01(\rR\x03ttl\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12!\n" +

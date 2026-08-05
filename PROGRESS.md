@@ -1691,6 +1691,37 @@ and [docs/adr/0002-native-traceroute-engine.md](docs/adr/0002-native-traceroute-
   pixels.
 - No agent change and no proto change — server-side only.
 
+## 2026-08-05 — Traceroute Phase 2, stage 3: the path says when it moved
+
+- **Route changes are detected on ingest and stored as events.**
+  `internal/server/pathchange.go` compares each traceroute run against what
+  earlier runs established, writes a `path_changes` row when they differ, and
+  sets `pathChanged` on the result. The Path page gains a **Route changes**
+  card (when, which TTL, from/to hop with their networks, and whether the
+  change left the network); `GET /api/v1/path-changes` serves it; the
+  traceroute type exposes a `path_changed` metric, so alerting on reroutes
+  needs no new machinery.
+- **Two rules keep it from crying wolf, both from real traces rather than
+  guesses.** A hop going silent is not a change (routers rate-limit ICMP —
+  tpr06's own paths have a permanently anonymous hop 7). The destination's
+  address is not part of the comparison (`www.google.com` answered from three
+  different addresses in three consecutive runs).
+- **A test caught a third rule we had not thought of.** Comparing against
+  only the previous run lets silence mask a change permanently: hop 2 answers
+  as A, goes quiet, answers as B — B is compared against `*` and matches, so
+  the reroute is never reported. The baseline is now the most recent *answer*
+  per TTL across the last 5 runs (`store.TracerouteBaselineFor`).
+- Events are bounded per agent+test (500) like results are, since a flapping
+  route is exactly what would otherwise grow the table without limit.
+- **Tests**: signature construction, the diff rules (silence, replacement,
+  path grew/shrank), AS classification against the embedded table, and
+  `TestDetectPathChangeThroughIngest` driving three runs through the real
+  ingest path — the one that found the masking bug.
+- Server-side only: no agent change. The proto gains `path_changed`, set by
+  the server on ingest and never by an agent.
+- Phase 2 is complete: native engine (stage 1), ASN enrichment (stage 2),
+  route-change detection (stage 3).
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

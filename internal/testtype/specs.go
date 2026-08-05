@@ -138,6 +138,19 @@ func init() {
 		},
 		Metrics: map[string]Metric{
 			"latency_ms": func(r *pb.TestResult) (float64, bool) { return r.GetTraceroute().GetRttMs(), true },
+			// 1 on a run whose route differs from the previous one. Set by
+			// the server on ingest, not by the agent — see
+			// internal/server/pathchange.go. A rule of "path_changed > 0"
+			// alerts on reroutes with no new alerting machinery.
+			"path_changed": func(r *pb.TestResult) (float64, bool) {
+				if r.GetTraceroute() == nil {
+					return 0, false
+				}
+				if r.GetTraceroute().GetPathChanged() {
+					return 1, true
+				}
+				return 0, true
+			},
 		},
 		Subject: func(r *pb.TestResult) string { return r.GetTraceroute().GetTarget() },
 	})

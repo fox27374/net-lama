@@ -338,6 +338,43 @@ Level 3 router in Vienna reports `US`. Per-hop geolocation would need a
 licensed geo database and a much larger one; this is deliberately only the
 registration country.
 
+### `GET /api/v1/path-changes`
+
+Route changes recorded for traceroute tests, newest first. Query:
+`tenantId` (required for admins), `agentId`, `testId`, `since` (RFC3339),
+`limit` (default 200, max 1000).
+
+```json
+[{
+  "id": 12, "agentId": "...", "agentName": "tpr06-sensor",
+  "testId": "...", "testName": "Path ICMP",
+  "time": "2026-08-05T05:41:02Z",
+  "firstDiffTtl": 6,
+  "fromHop": "194.112.158.53", "toHop": "80.243.161.233",
+  "fromNetwork": "eww ag (AS3330)", "toNetwork": "eww ag (AS21013)",
+  "fromSig": "10.140.60.254 192.168.178.1 ... ", "toSig": "...",
+  "scope": "inter-as"
+}]
+```
+
+The server records an event on ingest when a run's route differs from what
+the previous runs established. Two things deliberately do **not** count:
+
+- **A hop going silent.** Routers rate-limit ICMP, so an anonymous hop
+  matches anything. The baseline is the most recent *answer* per TTL across
+  the last few runs, not simply the previous run — otherwise a hop that goes
+  quiet and then changes would be compared against silence forever and the
+  change would never be reported.
+- **The destination's own address.** An anycast target answers from a
+  different address most runs, which is DNS and load balancing rather than a
+  route change, so the destination hop is excluded from the comparison.
+
+`scope` is `inter-as` when the changed hop moved to a different network,
+`intra-as` when it stayed inside one operator, and `unknown` when either
+side is unannounced (a private hop). Results also carry `pathChanged` on the
+run that changed, and the traceroute type exposes a `path_changed` metric so
+an ordinary alert rule can watch for reroutes.
+
 ### `GET /api/v1/tests`
 
 Query: `tenantId` (same admin/tenant-user rules as Sites). Returns
