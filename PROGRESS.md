@@ -1746,8 +1746,8 @@ and [docs/adr/0002-native-traceroute-engine.md](docs/adr/0002-native-traceroute-
   Setting a password deletes every session of that user, so a reset really
   logs them out; a self-change re-issues the caller's own cookie so they stay
   signed in. API keys are separate credentials and keep working.
-- UI: "Password" in the sidebar for your own, a per-row "Password" button on
-  the Access page for admins.
+- UI: "Change password" on the Access page for your own, a per-row "Password"
+  button in the users table there for admins resetting somebody else.
 
 ## Known issues
 
