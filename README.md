@@ -179,6 +179,11 @@ Three ways a password changes, all of them ending every session that user had:
   ```sh
   # prints the generated password; works while the server is running
   docker compose run --rm server -reset-password admin
+
+  # without compose (or with an older compose file that doesn't set
+  # NETLAMA_DB), name the database — `run` replaces the image's default
+  # command, which is where the path would otherwise come from:
+  docker compose run --rm server -db /data/netlama.db -reset-password admin
   ```
 
   Same semantics as an admin reset (sessions dropped, API keys revoked), and it

@@ -42,6 +42,10 @@ services:
       # How many log lines (Info+) to keep per scope (the server, and each
       # agent) for the Logs page. Default: 1000.
       NETLAMA_LOG_HISTORY: ${NETLAMA_LOG_HISTORY:-}
+      # Where the SQLite database lives inside the container. Set here rather
+      # than left to the image's default command, so that `compose run` — which
+      # replaces that command — still finds the same database.
+      NETLAMA_DB: ${NETLAMA_DB:-/data/netlama.db}
       # Lost the admin password? Reset it from the host with
       # `docker compose -f compose.sensor.yaml run --rm server -reset-password <username>`
       # (prints a generated password; drops that user's sessions and API keys).
