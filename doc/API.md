@@ -91,7 +91,9 @@ is `400`.
 
 No auth required. Body: `{"username": "...", "password": "..."}`. On
 success sets the session cookie and returns the `User` (see
-[Users](#users)). `401` on bad credentials.
+[Users](#users)). `401` on bad credentials, `429` once an attacker (or a
+forgetful user) burns 10 failures in a minute from the same username+IP —
+see [`POST /api/v1/users/{id}/password`](#post-apiv1usersidpassword).
 
 ### `POST /api/v1/logout`
 
@@ -205,17 +207,39 @@ you try to delete yourself. `204`.
 
 ### `POST /api/v1/users/{id}/password`
 
-Body: `{"currentPassword": "...", "password": "..."}`. Sets a user's password
-(≥ 8 characters) and invalidates all of that user's sessions; API keys keep
-working. Two callers:
+Sets a user's password (≥ 8 characters) and invalidates every session of that
+user. Two callers, and they differ in more than the credential they need:
 
-- **own user** (`{id}` = your own): `currentPassword` must match, `401`
-  otherwise. Your session cookie is replaced with a fresh one, so you stay
-  logged in.
-- **another user**: admin only (`403` otherwise), `currentPassword` ignored —
-  this is the reset path and it logs that user out everywhere.
+**Own user** (`{id}` = your own). Body:
+`{"currentPassword": "...", "password": "..."}` — both required,
+`401 current password is incorrect` otherwise (rate-limited, see below). Your
+session cookie is replaced with a fresh one, so you stay logged in, and your
+API keys keep working. `204`.
 
-`404` if the user doesn't exist. `204`.
+**Another user.** Admin only (`403` otherwise). Body: `{}` — the server
+generates the password. Supplying `{"password": "..."}` overrides it (the UI
+never does). This is the reset path: it signs that user out everywhere **and
+revokes all of their API keys**. Returns `200`:
+
+```json
+{"password": "3f1c9b7a2e5d4086", "apiKeysRevoked": 2}
+```
+
+The password is in the response body and nowhere else — it is not recoverable
+afterwards.
+
+`404` if the user doesn't exist.
+
+Failed logins and failed current-password checks are logged (username + client
+IP, never the attempted password) and throttled per username+IP: after 10
+failures inside a minute, both this route and `POST /api/v1/login` answer
+`429 too many failed attempts, try again later` until the window passes. A
+successful authentication clears the counter; a server restart clears all of
+them.
+
+A password lost to the point of nobody being able to log in is reset on the
+host instead: `docker compose run --rm server -reset-password <username>`,
+which prints a generated password and behaves like an admin reset.
 
 ---
 

@@ -34,6 +34,7 @@ func main() {
 	dbPath := flag.String("db", envOr("NETLAMA_DB", "netlama.db"), "Path to the SQLite database")
 	logHistory := flag.Int("log-history", envIntOr("NETLAMA_LOG_HISTORY", 1000), "Number of log lines kept per scope (the server, and each agent) for the Logs page")
 	issueAgentCert := flag.String("issue-agent-cert", "", "Issue an mTLS client certificate for the named agent (signed by the built-in agent CA) and exit")
+	resetPassword := flag.String("reset-password", "", "Reset the named user's password to a generated one (printed), revoke their API keys and sessions, then exit")
 	flag.Parse()
 
 	logger := newLogger()
@@ -59,6 +60,17 @@ func main() {
 		os.Exit(1)
 	}
 	defer st.Close()
+
+	// Before the log tee below on purpose: the generated password is printed
+	// to stdout for the operator running the command, and must not end up in
+	// the log table behind the Logs page.
+	if *resetPassword != "" {
+		if err := resetUserPassword(st, logger, *resetPassword); err != nil {
+			logger.Error("Resetting the password failed", slog.String("user", *resetPassword), slog.Any("error", err))
+			os.Exit(1)
+		}
+		return
+	}
 
 	st.SetLogHistory(*logHistory)
 	// Tee Info+ server logs into the store so they show up on the Logs
@@ -222,6 +234,34 @@ func main() {
 	logger.Info("Server exited")
 }
 
+// resetUserPassword is the recovery path for a lost password: it takes the
+// same route an admin reset in the UI does (sessions dropped, API keys
+// revoked), because reaching for the host binary means the account is out of
+// reach or in a bad state. Safe to run against a live server — SQLite is in
+// WAL mode with a busy timeout.
+func resetUserPassword(st *store.Store, logger *slog.Logger, username string) error {
+	user, err := st.UserByUsername(username)
+	if err != nil {
+		return err
+	}
+
+	password := store.NewPassword()
+	if err := st.SetPassword(user.ID, password); err != nil {
+		return err
+	}
+	revoked, err := st.DeleteAPIKeysForUser(user.ID)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("Password reset",
+		slog.String("username", user.Username),
+		slog.String("password", password),
+		slog.Int("apiKeysRevoked", revoked),
+		slog.String("note", "all sessions of this user were dropped; change it after logging in"))
+	return nil
+}
+
 // bootstrapAdmin creates the initial admin user on an empty database.
 // The password comes from NETLAMA_ADMIN_PASSWORD or is generated.
 func bootstrapAdmin(st *store.Store, logger *slog.Logger) error {
@@ -236,7 +276,7 @@ func bootstrapAdmin(st *store.Store, logger *slog.Logger) error {
 	password := os.Getenv("NETLAMA_ADMIN_PASSWORD")
 	generated := false
 	if password == "" {
-		password = store.NewToken()[:16]
+		password = store.NewPassword()
 		generated = true
 	}
 

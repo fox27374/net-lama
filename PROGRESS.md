@@ -1745,9 +1745,30 @@ and [docs/adr/0002-native-traceroute-engine.md](docs/adr/0002-native-traceroute-
   own password (current password verified) and an admin resetting anyone's.
   Setting a password deletes every session of that user, so a reset really
   logs them out; a self-change re-issues the caller's own cookie so they stay
-  signed in. API keys are separate credentials and keep working.
-- UI: "Change password" on the Access page for your own, a per-row "Password"
-  button in the users table there for admins resetting somebody else.
+  signed in.
+- **The two flows differ on API keys**, deliberately: a self-change keeps them
+  (you know your own keys are fine), an admin reset **revokes** them. A reset
+  is the "this account is in a bad state" path, and keys are separate
+  credentials that would otherwise sail straight through it.
+- **An admin reset picks the password server-side** and shows it once, the way
+  a new API key is shown — no `Welcome123` typed under pressure, and the UI,
+  the API and the CLI all behave identically.
+- **`-reset-password <username>` on the server binary** recovers a password
+  nobody can log in with (the case that previously meant hand-written SQL
+  against the production DB). Generates and prints it, admin-reset semantics,
+  exit 1 on an unknown user. Safe against a running server: WAL + busy timeout.
+- **Failed logins and failed current-password checks are now logged** (username
+  + client IP, never the attempted password) and throttled in memory: 10
+  failures per minute per username+IP, then `429`. Keyed on both so one noisy
+  IP cannot lock a real user out — a lockout would be a denial-of-service on a
+  system with no email recovery. `X-Forwarded-For` is deliberately not trusted
+  (no proxy in front, and anyone could forge a fresh budget).
+- UI: "Change password" on the Access page for your own (with a confirm field —
+  the cookie is re-issued, so a typo would only surface at the *next* login),
+  a per-row "Reset password" button in the users table for admins.
+- Not done, on the roadmap: email-based self-service reset (needs an email
+  column, reset tokens, and a public enumeration-safe route), and tenant-scoped
+  reset rights, which belong with the roles work.
 
 ## Known issues
 

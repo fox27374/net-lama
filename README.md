@@ -126,6 +126,9 @@ The UI (login with username/password, dark/light theme) has a fixed left sidebar
 * **API Keys** — every user creates and revokes their own bearer tokens
   (`nlk_...`) for scripted/CI access to the API; a key carries exactly the
   owning user's privileges, and the full secret is shown once, at creation.
+  The same page has **Change password** (your own; current password required)
+  and, for admins, a **Reset password** button per user in the users table.
+  See [Passwords](#passwords).
 
 The Path and Results pages also have a **Run now** button to trigger a test on a
 specific agent immediately instead of waiting for its interval.
@@ -159,6 +162,36 @@ oldest/newest entry rather than slowing down tests or the server's hot path.
 History is bounded per scope (the server is one scope, each agent is its own) by
 `NETLAMA_LOG_HISTORY` (default `1000` lines); older rows are pruned automatically,
 the same way results are.
+
+### Passwords
+
+Three ways a password changes, all of them ending every session that user had:
+
+* **Your own** — *API Keys* page → **Change password**. The current password is
+  required, and your own session is re-issued so you stay signed in. Your API
+  keys keep working: you know they're fine.
+* **Somebody else's** (admins) — **Reset password** next to the user. The server
+  picks the new password and shows it once, like a new API key. Because a reset
+  is the "something is wrong with this account" path, it **also revokes that
+  user's API keys** — otherwise a compromised account's keys would sail on.
+* **A lost password**, including the admin's, from the host:
+
+  ```sh
+  # prints the generated password; works while the server is running
+  docker compose run --rm server -reset-password admin
+  ```
+
+  Same semantics as an admin reset (sessions dropped, API keys revoked), and it
+  exits non-zero if no such user exists.
+
+Passwords must be at least 8 characters. Failed logins and failed
+current-password checks are logged (username and client IP, never the
+attempted password) and rate-limited to 10 failures per minute per
+username+IP, after which the endpoint answers `429` for the rest of the
+minute. The limiter lives in the server's memory, so a restart clears it.
+
+There is no email-based self-service reset — see the
+[roadmap](ROADMAP.md).
 
 ## Installing the agent natively (.deb / .rpm)
 

@@ -17,10 +17,12 @@ type API struct {
 	Server        *server.Server
 	Logger        *slog.Logger
 	SecureCookies bool
+
+	authThrottle *throttle
 }
 
 func New(st *store.Store, srv *server.Server, logger *slog.Logger, secureCookies bool) *API {
-	return &API{Store: st, Server: srv, Logger: logger, SecureCookies: secureCookies}
+	return &API{Store: st, Server: srv, Logger: logger, SecureCookies: secureCookies, authThrottle: newThrottle()}
 }
 
 // Register mounts all API routes on the mux.

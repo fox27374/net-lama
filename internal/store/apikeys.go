@@ -101,6 +101,18 @@ func (s *Store) DeleteAPIKey(id, userID string) error {
 	return nil
 }
 
+// DeleteAPIKeysForUser revokes every key a user owns and returns how many
+// went. Used by the password reset paths: keys are separate credentials, so
+// a reset that left them alone wouldn't actually lock anybody out.
+func (s *Store) DeleteAPIKeysForUser(userID string) (int, error) {
+	res, err := s.db.Exec(`DELETE FROM api_keys WHERE user_id = ?`, userID)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 // APIKeyUser hashes the presented secret, looks up the owning user and
 // updates last_used_at on a hit. The secret itself is never logged.
 func (s *Store) APIKeyUser(secret string) (*User, error) {

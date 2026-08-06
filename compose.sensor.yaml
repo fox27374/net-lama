@@ -42,6 +42,9 @@ services:
       # How many log lines (Info+) to keep per scope (the server, and each
       # agent) for the Logs page. Default: 1000.
       NETLAMA_LOG_HISTORY: ${NETLAMA_LOG_HISTORY:-}
+      # Lost the admin password? Reset it from the host with
+      # `docker compose -f compose.sensor.yaml run --rm server -reset-password <username>`
+      # (prints a generated password; drops that user's sessions and API keys).
       # SMTP configuration for email alert notifications.
       # Host is required to enable email notifications; others are optional.
       # Port default: 587. StartTLS default: enabled (1).

@@ -205,26 +205,23 @@ $("#logout").addEventListener("click", async () => {
   showLogin();
 });
 
-// --- Password (own change and admin reset) ---
-function openPassword(user) {
-  const self = user.id === me.id;
-  $("#pw-title").textContent = self ? "Change password" : `Reset password for ${user.username}`;
-  $("#pw-current-wrap").classList.toggle("hidden", !self);
-  $("#pw-current").required = self;
+// --- Password ---
+$("#btn-password").addEventListener("click", () => {
   $("#pw-current").value = "";
   $("#pw-new").value = "";
+  $("#pw-confirm").value = "";
   dialogError("#pw-error", "");
-  $("#dlg-password").dataset.userId = user.id;
   $("#dlg-password").showModal();
-}
-
-$("#btn-password").addEventListener("click", () => openPassword(me));
+});
 
 $("#form-password").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const id = $("#dlg-password").dataset.userId;
+  if ($("#pw-new").value !== $("#pw-confirm").value) {
+    dialogError("#pw-error", "The two new passwords do not match.");
+    return;
+  }
   try {
-    await api("POST", `/api/v1/users/${id}/password`, {
+    await api("POST", `/api/v1/users/${me.id}/password`, {
       currentPassword: $("#pw-current").value,
       password: $("#pw-new").value,
     });
@@ -232,6 +229,25 @@ $("#form-password").addEventListener("submit", async (e) => {
   } catch (err) {
     dialogError("#pw-error", err.message);
   }
+});
+
+// An admin reset picks the password on the server and shows it once, the way
+// a new API key is shown — nobody types "Welcome123" under pressure.
+async function resetPassword(user) {
+  if (!confirm(`Reset the password of "${user.username}"?\n\nThis signs them out everywhere and revokes all of their API keys.`)) return;
+  const res = await api("POST", `/api/v1/users/${user.id}/password`, {});
+  $("#pwr-user").textContent = user.username;
+  $("#pwr-value").textContent = res.password;
+  $("#pwr-note").textContent = res.apiKeysRevoked
+    ? `${res.apiKeysRevoked} API key(s) revoked, all sessions signed out.`
+    : "All sessions signed out.";
+  $("#dlg-password-reset").showModal();
+}
+
+$("#btn-copy-password").addEventListener("click", () => {
+  navigator.clipboard.writeText($("#pwr-value").textContent);
+  $("#btn-copy-password").textContent = "Copied!";
+  setTimeout(() => { $("#btn-copy-password").textContent = "Copy password"; }, 1500);
 });
 
 // --- Dashboard ---
@@ -4300,9 +4316,10 @@ async function loadAdmin() {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td><strong>${esc(u.username)}</strong></td><td class="muted">${esc(u.isAdmin ? "—" : tname)}</td>
       <td>${u.isAdmin ? '<span class="badge on">admin</span>' : '<span class="badge off">user</span>'}</td>
-      <td style="text-align:right"><button class="ghost" data-pw>Password</button>
-      ${u.id === me.id ? "" : ' <button class="danger" data-del>Delete</button>'}</td>`;
-    tr.querySelector("[data-pw]").addEventListener("click", () => openPassword(u));
+      <td style="text-align:right">${u.id === me.id ? "" :
+        '<button class="ghost" data-pw>Reset password</button> <button class="danger" data-del>Delete</button>'}</td>`;
+    const pw = tr.querySelector("[data-pw]");
+    if (pw) pw.addEventListener("click", () => resetPassword(u));
     const del = tr.querySelector("[data-del]");
     if (del) del.addEventListener("click", async () => {
       if (!confirm(`Delete user "${u.username}"?`)) return;

@@ -411,6 +411,12 @@ func NewToken() string {
 	return hex.EncodeToString(b)
 }
 
+// NewPassword returns a random password for the paths where the server picks
+// one: the initial admin, an admin reset, and the -reset-password flag.
+func NewPassword() string {
+	return NewToken()[:16]
+}
+
 // NewEnrollToken returns a random per-tenant enrollment token, prefixed like
 // API keys' "nlk_" so it's visually distinguishable from a per-agent token.
 func NewEnrollToken() string {

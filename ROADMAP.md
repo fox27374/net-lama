@@ -162,10 +162,19 @@ Planned work, roughly grouped. Not ordered by priority yet.
       auto-refresh. Later: log download, DEBUG-level capture, retention by age.
 - [x] Password change / user self-service in the UI: "Change password" on the
       Access page changes your own (current password required, session
-      re-issued), admins reset any user from the users table there — a change
-      drops every session of that user (`POST /api/v1/users/{id}/password`)
+      re-issued), admins reset any user from the users table there (server
+      picks the password, shown once, and the target's API keys are revoked
+      with it), `-reset-password <username>` on the server binary recovers a
+      lost admin password, and failed logins/current-password checks are
+      logged and throttled (10/min per username+IP)
+- [ ] Email-based self-service password reset: needs an email column on users,
+      a reset-token table with expiry, and a public enumeration-safe route —
+      deliberately deferred, admin reset and `-reset-password` cover recovery
 - [ ] Roles and permissions: finer-grained access than the current
-      admin / tenant-user split (e.g. read-only viewer, per-site operator)
+      admin / tenant-user split (e.g. read-only viewer, per-site operator).
+      Password reset is one of the permissions to re-scope here — today it is
+      global-admin-only, so a tenant has to come to a global admin for every
+      forgotten password
 - [x] On-demand test runs (`RUN_TEST`) from the UI — "Run now" on the Path and
       Results pages
 - [ ] Optional result forwarding (e.g. Splunk HEC, port of `legacy/hec-forwarder`)

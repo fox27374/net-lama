@@ -950,15 +950,27 @@
 
 <dialog id="dlg-password">
   <form id="form-password">
-    <h3 id="pw-title">Change password</h3>
-    <label id="pw-current-wrap">Current password <input type="password" id="pw-current"></label>
+    <h3>Change password</h3>
+    <label>Current password <input type="password" id="pw-current" required></label>
     <label>New password <input type="password" id="pw-new" minlength="8" required></label>
+    <label>Confirm new password <input type="password" id="pw-confirm" minlength="8" required></label>
     <p class="error hidden" id="pw-error"></p>
     <div class="row end">
       <button type="button" class="ghost" data-close>Cancel</button>
       <button type="submit" class="primary">Save</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="dlg-password-reset">
+  <h3>Password reset</h3>
+  <p>New password for <strong id="pwr-user"></strong>, shown <strong>only once</strong>:</p>
+  <pre id="pwr-value" class="token"></pre>
+  <p class="muted" id="pwr-note"></p>
+  <div class="row end">
+    <button class="ghost" id="btn-copy-password">Copy password</button>
+    <button class="primary" onclick="this.closest('dialog').close()">Done</button>
+  </div>
 </dialog>
 
 <script src="vendor/echarts.min.js"></script>

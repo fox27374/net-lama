@@ -96,6 +96,20 @@ func (s *Store) ListUsers() ([]*User, error) {
 	return users, rows.Err()
 }
 
+// UserByUsername looks a user up by name, for callers that have a name
+// instead of an ID (the -reset-password flag).
+func (s *Store) UserByUsername(username string) (*User, error) {
+	u := &User{}
+	err := s.db.QueryRow(
+		`SELECT id, COALESCE(tenant_id, ''), username, is_admin FROM users WHERE username = ?`,
+		username,
+	).Scan(&u.ID, &u.TenantID, &u.Username, &u.IsAdmin)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	return u, err
+}
+
 // SetPassword replaces a user's password and drops all their sessions, so a
 // reset actually locks out whoever was logged in. The caller issues a fresh
 // session when a user changes their own password.

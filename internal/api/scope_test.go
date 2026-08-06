@@ -175,6 +175,8 @@ func idRoutes() []idRoute {
 			func(o *tenantFixture) string { return "/api/v1/tenants/" + o.tenant.ID }, "", http.StatusForbidden},
 		{"DELETE", "DELETE /api/v1/users/{id}",
 			func(o *tenantFixture) string { return "/api/v1/users/" + o.user.ID }, "", http.StatusForbidden},
+		{"POST", "POST /api/v1/users/{id}/password",
+			func(o *tenantFixture) string { return "/api/v1/users/" + o.user.ID + "/password" }, `{"password":"password123"}`, http.StatusForbidden},
 
 		// Tenant-scoped resources: another tenant's ID must look absent.
 		{"DELETE", "DELETE /api/v1/sites/{id}",
