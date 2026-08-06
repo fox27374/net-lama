@@ -160,7 +160,10 @@ Planned work, roughly grouped. Not ordered by priority yet.
       logs shipped over the existing control stream (buffered while
       disconnected), Logs UI page with agent/level/source filters and
       auto-refresh. Later: log download, DEBUG-level capture, retention by age.
-- [ ] Password change / user self-service in the UI
+- [x] Password change / user self-service in the UI: "Password" button in the
+      sidebar changes your own password (current password required, session
+      re-issued), admins reset any user from the Access page — a change drops
+      every session of that user (`POST /api/v1/users/{id}/password`)
 - [ ] Roles and permissions: finer-grained access than the current
       admin / tenant-user split (e.g. read-only viewer, per-site operator)
 - [x] On-demand test runs (`RUN_TEST`) from the UI — "Run now" on the Path and

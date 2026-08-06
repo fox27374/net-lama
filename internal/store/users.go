@@ -96,6 +96,25 @@ func (s *Store) ListUsers() ([]*User, error) {
 	return users, rows.Err()
 }
 
+// SetPassword replaces a user's password and drops all their sessions, so a
+// reset actually locks out whoever was logged in. The caller issues a fresh
+// session when a user changes their own password.
+func (s *Store) SetPassword(userID, password string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	res, err := s.db.Exec(`UPDATE users SET password_hash = ? WHERE id = ?`, string(hash), userID)
+	if err != nil {
+		return fmt.Errorf("setting password: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	_, err = s.db.Exec(`DELETE FROM sessions WHERE user_id = ?`, userID)
+	return err
+}
+
 func (s *Store) DeleteUser(id string) error {
 	_, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, id)
 	return err

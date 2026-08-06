@@ -36,6 +36,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/users", a.auth(a.admin(a.handleListUsers)))
 	mux.HandleFunc("POST /api/v1/users", a.auth(a.admin(a.handleCreateUser)))
 	mux.HandleFunc("DELETE /api/v1/users/{id}", a.auth(a.admin(a.handleDeleteUser)))
+	mux.HandleFunc("POST /api/v1/users/{id}/password", a.auth(a.handleSetPassword))
 
 	mux.HandleFunc("GET /api/v1/sites", a.auth(a.handleListSites))
 	mux.HandleFunc("POST /api/v1/sites", a.auth(a.handleCreateSite))

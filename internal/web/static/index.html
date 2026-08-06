@@ -65,6 +65,7 @@
       <span id="server-version" class="muted mono"></span>
       <div class="sidebar-actions">
         <button id="theme-toggle" class="icon" title="Toggle dark mode" aria-label="Toggle dark mode"></button>
+        <button id="btn-password" class="ghost">Password</button>
         <button id="logout" class="ghost">Sign out</button>
       </div>
     </div>
@@ -943,6 +944,19 @@
     <div class="row end">
       <button type="button" class="ghost" data-close>Cancel</button>
       <button type="submit" class="primary">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-password">
+  <form id="form-password">
+    <h3 id="pw-title">Change password</h3>
+    <label id="pw-current-wrap">Current password <input type="password" id="pw-current"></label>
+    <label>New password <input type="password" id="pw-new" minlength="8" required></label>
+    <p class="error hidden" id="pw-error"></p>
+    <div class="row end">
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="primary">Save</button>
     </div>
   </form>
 </dialog>

@@ -205,6 +205,35 @@ $("#logout").addEventListener("click", async () => {
   showLogin();
 });
 
+// --- Password (own change and admin reset) ---
+function openPassword(user) {
+  const self = user.id === me.id;
+  $("#pw-title").textContent = self ? "Change password" : `Reset password for ${user.username}`;
+  $("#pw-current-wrap").classList.toggle("hidden", !self);
+  $("#pw-current").required = self;
+  $("#pw-current").value = "";
+  $("#pw-new").value = "";
+  dialogError("#pw-error", "");
+  $("#dlg-password").dataset.userId = user.id;
+  $("#dlg-password").showModal();
+}
+
+$("#btn-password").addEventListener("click", () => openPassword(me));
+
+$("#form-password").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = $("#dlg-password").dataset.userId;
+  try {
+    await api("POST", `/api/v1/users/${id}/password`, {
+      currentPassword: $("#pw-current").value,
+      password: $("#pw-new").value,
+    });
+    $("#dlg-password").close();
+  } catch (err) {
+    dialogError("#pw-error", err.message);
+  }
+});
+
 // --- Dashboard ---
 const HEALTH_LABEL = { healthy: "Healthy", degraded: "Degraded", failing: "Failing", nodata: "No data" };
 
@@ -4271,7 +4300,9 @@ async function loadAdmin() {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td><strong>${esc(u.username)}</strong></td><td class="muted">${esc(u.isAdmin ? "—" : tname)}</td>
       <td>${u.isAdmin ? '<span class="badge on">admin</span>' : '<span class="badge off">user</span>'}</td>
-      <td style="text-align:right">${u.id === me.id ? "" : '<button class="danger" data-del>Delete</button>'}</td>`;
+      <td style="text-align:right"><button class="ghost" data-pw>Password</button>
+      ${u.id === me.id ? "" : ' <button class="danger" data-del>Delete</button>'}</td>`;
+    tr.querySelector("[data-pw]").addEventListener("click", () => openPassword(u));
     const del = tr.querySelector("[data-del]");
     if (del) del.addEventListener("click", async () => {
       if (!confirm(`Delete user "${u.username}"?`)) return;

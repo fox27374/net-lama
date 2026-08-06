@@ -1739,6 +1739,16 @@ and [docs/adr/0002-native-traceroute-engine.md](docs/adr/0002-native-traceroute-
 - Phase 2 is complete: native engine (stage 1), ASN enrichment (stage 2),
   route-change detection (stage 3).
 
+## 2026-08-06 — Password change and reset
+
+- `POST /api/v1/users/{id}/password` serves both flows: a user changing their
+  own password (current password verified) and an admin resetting anyone's.
+  Setting a password deletes every session of that user, so a reset really
+  logs them out; a self-change re-issues the caller's own cookie so they stay
+  signed in. API keys are separate credentials and keep working.
+- UI: "Password" in the sidebar for your own, a per-row "Password" button on
+  the Access page for admins.
+
 ## Known issues
 
 - The agent logs "Registered with server" right after *sending* the register

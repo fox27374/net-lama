@@ -203,6 +203,20 @@ username. Returns the created `User`.
 Deletes a user (and, via cascade, their sessions and API keys). `400` if
 you try to delete yourself. `204`.
 
+### `POST /api/v1/users/{id}/password`
+
+Body: `{"currentPassword": "...", "password": "..."}`. Sets a user's password
+(≥ 8 characters) and invalidates all of that user's sessions; API keys keep
+working. Two callers:
+
+- **own user** (`{id}` = your own): `currentPassword` must match, `401`
+  otherwise. Your session cookie is replaced with a fresh one, so you stay
+  logged in.
+- **another user**: admin only (`403` otherwise), `currentPassword` ignored —
+  this is the reset path and it logs that user out everywhere.
+
+`404` if the user doesn't exist. `204`.
+
 ---
 
 ## Sites
